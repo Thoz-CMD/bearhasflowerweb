@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { db } from '@/lib/firebase';
+import { db, auth } from '@/lib/firebase';
 import { 
   collection, 
   addDoc, 
@@ -10,8 +10,10 @@ import {
   onSnapshot, 
   updateDoc, 
   doc, 
-  serverTimestamp 
+  serverTimestamp,
+  where
 } from 'firebase/firestore';
+import { onAuthStateChanged } from 'firebase/auth';
 
 const STORAGE_CART = 'bear_flower_cart';
 
@@ -109,24 +111,43 @@ export default function CartPage() {
     }
     setIsLoaded(true);
 
-    // Check if Firebase is configured
-    try {
-      const q = query(collection(db, "orders"), orderBy("createdAt", "desc"));
-      const unsubscribe = onSnapshot(q, (snapshot) => {
-        const fetchedOrders = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data(),
-          date: doc.data().createdAt?.toDate().toLocaleString('th-TH') || 'กำลังประมวลผล...'
-        }));
-        setOrders(fetchedOrders);
-        setIsFirebaseEnabled(true);
-      }, (error) => {
+    // Check if Firebase is configured and user is logged in
+    let unsubscribe: () => void;
+    
+    const authUnsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        try {
+          const q = query(
+            collection(db, "orders"), 
+            where("userId", "==", user.uid),
+            orderBy("createdAt", "desc")
+          );
+          
+          unsubscribe = onSnapshot(q, (snapshot) => {
+            const fetchedOrders = snapshot.docs.map(doc => ({
+              id: doc.id,
+              ...doc.data(),
+              date: doc.data().createdAt?.toDate().toLocaleString('th-TH') || 'กำลังประมวลผล...'
+            }));
+            setOrders(fetchedOrders);
+            setIsFirebaseEnabled(true);
+          }, (error) => {
+            console.error("Firestore Error:", error);
+            setIsFirebaseEnabled(false);
+          });
+        } catch (e) {
+          console.error("Firebase Query Error:", e);
+        }
+      } else {
+        setOrders([]);
         setIsFirebaseEnabled(false);
-      });
-      return () => unsubscribe();
-    } catch (e) {
-      console.error("Firebase Init Error:", e);
-    }
+      }
+    });
+
+    return () => {
+      authUnsubscribe();
+      if (unsubscribe) unsubscribe();
+    };
   }, []);
 
   useEffect(() => {

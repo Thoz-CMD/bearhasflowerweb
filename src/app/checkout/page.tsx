@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { db } from '@/lib/firebase';
+import { db, auth } from '@/lib/firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { onAuthStateChanged } from 'firebase/auth';
 import generatePayload from 'promptpay-qr';
 import { QRCodeSVG } from 'qrcode.react';
 
@@ -18,6 +19,14 @@ export default function CheckoutPage() {
   const [payload, setPayload] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [showSuccessPopup, setShowSuccessPopup] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) setUserId(user.uid);
+    });
+    return () => unsubscribe();
+  }, []);
 
   useEffect(() => {
     setIsClient(true);
@@ -60,6 +69,7 @@ export default function CheckoutPage() {
       depositPaid: deposit,
       status: 'pending_verification', // รอตรวจสอบยอดเงิน
       createdAt: serverTimestamp(),
+      userId: userId || 'guest',
     };
 
     try {
