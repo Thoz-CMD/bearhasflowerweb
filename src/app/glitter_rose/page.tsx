@@ -103,13 +103,25 @@ export default function GlitterRose() {
           z-index: 9998;
           animation: fadeIn 0.2s ease-out;
         }
-        .flatpickr-calendar.open {
+        .flatpickr-calendar {
           position: fixed !important;
           top: 50% !important;
           left: 50% !important;
           transform: translate(-50%, -50%) !important;
           z-index: 9999 !important;
           margin: 0 !important;
+          transition: none !important; /* ปิด transition เพื่อไม่ให้มันดีดจากมุมจอมาตรงกลาง */
+          opacity: 0;
+          visibility: hidden;
+        }
+        .flatpickr-calendar.open {
+          opacity: 1 !important;
+          visibility: visible !important;
+          animation: modalFadeIn 0.2s ease-out !important;
+        }
+        @keyframes modalFadeIn {
+          from { opacity: 0; transform: translate(-50%, -45%); }
+          to { opacity: 1; transform: translate(-50%, -50%); }
         }
         @keyframes fadeIn {
           from { opacity: 0; }
