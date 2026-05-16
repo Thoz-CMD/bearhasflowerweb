@@ -562,7 +562,16 @@ export default function GlitterRose() {
         const a = document.getElementById('ipt-address');
         if (a) customerAddress = a.value;
         const d = document.getElementById('ipt-date');
-        if (d) deliveryDate = d.value;
+        if (d) {
+          const tmr = getTomorrowStr();
+          if (d.value && d.value < tmr) {
+            alert('ไม่สามารถเลือกวันจัดส่งย้อนหลังหรือวันปัจจุบันได้ ต้องสั่งล่วงหน้าอย่างน้อย 1 วันค่ะ');
+            d.value = '';
+            deliveryDate = '';
+          } else {
+            deliveryDate = d.value;
+          }
+        }
         const t = document.getElementById('ipt-time');
         if (t) deliveryTime = t.value;
         const note = document.getElementById('ipt-note');
