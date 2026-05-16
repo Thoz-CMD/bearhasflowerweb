@@ -3,20 +3,28 @@ import { useEffect } from 'react';
 
 export default function GlitterRose() {
   useEffect(() => {
-    // โหลด Air Datepicker CSS
-    if (!document.getElementById('air-datepicker-css')) {
+    // โหลด Flatpickr CSS
+    if (!document.getElementById('flatpickr-css')) {
       const link = document.createElement('link');
-      link.id = 'air-datepicker-css';
+      link.id = 'flatpickr-css';
       link.rel = 'stylesheet';
-      link.href = 'https://cdn.jsdelivr.net/npm/air-datepicker@3.3.5/air-datepicker.min.css';
+      link.href = 'https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css';
       document.head.appendChild(link);
     }
-    // โหลด Air Datepicker JS
-    if (!document.getElementById('air-datepicker-js')) {
+    // โหลด Flatpickr JS
+    if (!document.getElementById('flatpickr-js')) {
       const js = document.createElement('script');
-      js.id = 'air-datepicker-js';
-      js.src = 'https://cdn.jsdelivr.net/npm/air-datepicker@3.3.5/air-datepicker.min.js';
+      js.id = 'flatpickr-js';
+      js.src = 'https://cdn.jsdelivr.net/npm/flatpickr';
       document.head.appendChild(js);
+      
+      // Load Thai locale after main script
+      js.onload = () => {
+        const thJs = document.createElement('script');
+        thJs.id = 'flatpickr-th';
+        thJs.src = 'https://npmcdn.com/flatpickr/dist/l10n/th.js';
+        document.head.appendChild(thJs);
+      };
     }
 
     const script = document.createElement('script');
@@ -578,9 +586,11 @@ export default function GlitterRose() {
         const a = document.getElementById('ipt-address');
         if (a) customerAddress = a.value;
         const d = document.getElementById('ipt-date');
-        if (d) deliveryDate = d.value;
-        const t = document.getElementById('ipt-time');
-        if (t) deliveryTime = t.value;
+        if (d) {
+          const parts = d.value.split(' ');
+          if (parts.length >= 1) deliveryDate = parts[0];
+          if (parts.length >= 2) deliveryTime = parts[1];
+        }
         const note = document.getElementById('ipt-note');
         if (note) additionalNote = note.value;
         saveState();
@@ -623,9 +633,8 @@ export default function GlitterRose() {
             
             <div class="form-group">
               <label>วันที่และเวลาที่ต้องการรับสินค้า</label>
-              <div style="display:flex; gap:10px;">
-                <input type="text" id="ipt-date" placeholder="เลือกวันที่จัดส่ง" value="\${deliveryDate}" style="flex:1; background: var(--glass-bg); border: 1px solid var(--glass-border); padding: 12px; border-radius: 12px; color: var(--text-color);" readonly>
-                <input type="text" id="ipt-time" placeholder="เลือกเวลา" value="\${deliveryTime}" style="flex:1; background: var(--glass-bg); border: 1px solid var(--glass-border); padding: 12px; border-radius: 12px; color: var(--text-color);" readonly>
+              <div style="width:100%;">
+                <input type="text" id="ipt-date" placeholder="เลือกวันที่และเวลาจัดส่ง" value="\${deliveryDate ? deliveryDate + (deliveryTime ? ' ' + deliveryTime : '') : ''}" style="width:100%; background: var(--glass-bg); border: 1px solid var(--glass-border); padding: 12px; border-radius: 12px; color: var(--text-color);" readonly>
               </div>
               <span style="font-size:.75rem; color:var(--text-muted); margin-top:6px; display:block; line-height:1.4;">
                 * ไม่สามารถเลือกวันย้อนหลังหรือวันปัจจุบันได้ ต้องสั่งล่วงหน้าอย่างน้อย 1 วัน
@@ -639,59 +648,35 @@ export default function GlitterRose() {
           </div>
         \`;
 
-        // บังคับใช้ Air Datepicker
+        // บังคับใช้ Flatpickr
         setTimeout(() => {
           const dateInput = document.getElementById('ipt-date');
-          if (dateInput && typeof window.AirDatepicker !== 'undefined') {
+          if (dateInput && typeof window.flatpickr !== 'undefined') {
             const tmrDate = new Date();
             tmrDate.setDate(tmrDate.getDate() + 1);
             
-            new window.AirDatepicker('#ipt-date', {
-              locale: {
-                  days: ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์'],
-                  daysShort: ['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส'],
-                  daysMin: ['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส'],
-                  months: ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน', 'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'],
-                  monthsShort: ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'],
-                  today: 'วันนี้',
-                  clear: 'ล้าง',
-                  dateFormat: 'yyyy-MM-dd',
-                  firstDay: 0
-              },
+            window.flatpickr('#ipt-date', {
+              enableTime: true,
+              dateFormat: "Y-m-d H:i",
               minDate: tmrDate,
-              autoClose: true,
-              isMobile: true, // ทำให้เหมาะกับมือถือ
-              onSelect(data) {
-                const formattedDate = data.formattedDate;
-                const el = document.getElementById('ipt-date');
-                if (el) el.value = formattedDate;
-                deliveryDate = formattedDate;
-                updateFormState();
+              locale: window.flatpickr.l10ns ? window.flatpickr.l10ns.th : "default",
+              time_24hr: true,
+              disableMobile: true, // บังคับใช้หน้าตาของ Flatpickr เสมอบนมือถือ
+              onChange: function(selectedDates, dateStr, instance) {
+                if (selectedDates.length > 0) {
+                  const d = selectedDates[0];
+                  const dStr = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+                  const tStr = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+                  
+                  deliveryDate = dStr;
+                  deliveryTime = tStr;
+                  const el = document.getElementById('ipt-date');
+                  if (el) el.value = dStr + ' ' + tStr;
+                }
               }
             });
           }
-          
-          const timeInput = document.getElementById('ipt-time');
-          if (timeInput && typeof window.AirDatepicker !== 'undefined') {
-            new window.AirDatepicker('#ipt-time', {
-              timepicker: true,
-              onlyTimepicker: true,
-              timeFormat: 'HH:mm',
-              isMobile: true,
-              locale: {
-                  today: 'วันนี้',
-                  clear: 'ล้าง',
-              },
-              onSelect(data) {
-                const formattedDate = data.formattedDate;
-                const el = document.getElementById('ipt-time');
-                if (el) el.value = formattedDate;
-                deliveryTime = formattedDate;
-                updateFormState();
-              }
-            });
-          }
-        }, 300); // รอให้ script โหลดเสร็จและ DOM พร้อม
+        }, 500); // รอให้ script โหลดเสร็จและ DOM พร้อม
       }
 
       /* ---- main updateUI ---- */
