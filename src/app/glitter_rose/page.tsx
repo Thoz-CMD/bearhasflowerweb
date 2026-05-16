@@ -630,15 +630,15 @@ export default function GlitterRose() {
         setTimeout(() => {
           const dInput = document.getElementById('ipt-date');
           if (dInput) {
-            (dInput as any).min = tmr;
+            dInput.min = tmr;
             dInput.setAttribute('min', tmr);
             // Some mobile browsers need it re-applied on focus
             dInput.addEventListener('focus', function() {
-              (this as any).min = tmr;
+              this.min = tmr;
               this.setAttribute('min', tmr);
             });
             dInput.addEventListener('click', function() {
-              (this as any).min = tmr;
+              this.min = tmr;
               this.setAttribute('min', tmr);
             });
           }
