@@ -622,6 +622,15 @@ export default function GlitterRose() {
             </div>
           </div>
         \`;
+
+        // บังคับเซ็ต min ด้วย JavaScript หลังจาก render HTML เสร็จ (ตามวิธีที่ผู้ใช้แนะนำ)
+        setTimeout(() => {
+          const dateInput = document.getElementById('ipt-date');
+          if (dateInput) {
+            dateInput.min = tmr;
+            dateInput.setAttribute('min', tmr);
+          }
+        }, 10);
       }
 
       /* ---- main updateUI ---- */
