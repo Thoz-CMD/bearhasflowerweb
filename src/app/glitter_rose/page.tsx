@@ -625,6 +625,24 @@ export default function GlitterRose() {
             </div>
           </div>
         \`;
+
+        // Explicitly enforce the min date on the DOM element to ensure mobile browsers respect it
+        setTimeout(() => {
+          const dInput = document.getElementById('ipt-date');
+          if (dInput) {
+            (dInput as any).min = tmr;
+            dInput.setAttribute('min', tmr);
+            // Some mobile browsers need it re-applied on focus
+            dInput.addEventListener('focus', function() {
+              (this as any).min = tmr;
+              this.setAttribute('min', tmr);
+            });
+            dInput.addEventListener('click', function() {
+              (this as any).min = tmr;
+              this.setAttribute('min', tmr);
+            });
+          }
+        }, 10);
       }
 
       /* ---- main updateUI ---- */
