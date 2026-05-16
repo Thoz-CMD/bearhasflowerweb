@@ -27,6 +27,98 @@ export default function GlitterRose() {
       };
     }
 
+    // เพิ่ม CSS แต่ง Flatpickr ให้เข้ากับธีมของแอป (Rose Gold / Deep Brown)
+    if (!document.getElementById('flatpickr-custom-theme')) {
+      const style = document.createElement('style');
+      style.id = 'flatpickr-custom-theme';
+      style.innerHTML = `
+        .flatpickr-calendar {
+          background: rgba(255, 255, 255, 0.95) !important;
+          backdrop-filter: blur(10px) !important;
+          border: 1px solid var(--glass-border) !important;
+          border-radius: 16px !important;
+          box-shadow: 0 10px 25px rgba(0,0,0,0.08) !important;
+          font-family: inherit !important;
+          padding: 10px !important;
+        }
+        .flatpickr-day.selected, .flatpickr-day.selected:hover, .flatpickr-day.selected:focus {
+          background: var(--rose-gold) !important;
+          border-color: var(--rose-gold) !important;
+          color: white !important;
+          font-weight: bold;
+        }
+        .flatpickr-day:hover {
+          background: var(--soft-peach) !important;
+          color: var(--deep-brown) !important;
+        }
+        .flatpickr-months .flatpickr-month {
+          color: var(--deep-brown) !important;
+          fill: var(--deep-brown) !important;
+        }
+        .flatpickr-current-month .flatpickr-monthDropdown-months {
+          font-weight: bold !important;
+          color: var(--deep-brown) !important;
+          background: transparent !important;
+          border: none !important;
+          appearance: none !important;
+          -webkit-appearance: none !important;
+          -moz-appearance: none !important;
+          cursor: pointer !important;
+          padding: 2px 8px !important;
+          border-radius: 4px !important;
+          transition: background 0.2s !important;
+        }
+        .flatpickr-current-month .flatpickr-monthDropdown-months:hover {
+          background: var(--soft-peach) !important;
+        }
+        /* ซ่อนลูกศร Dropdown ของเดือน */
+        .flatpickr-current-month .flatpickr-monthDropdown-months::-ms-expand {
+          display: none !important;
+        }
+        .flatpickr-current-month .numInputWrapper span {
+          display: none !important; /* ซ่อนลูกศรขึ้นลงของปีถ้าต้องการความคลีน */
+        }
+        .flatpickr-current-month input.cur-year {
+          font-weight: bold !important;
+          color: var(--deep-brown) !important;
+        }
+        .flatpickr-weekday {
+          color: var(--deep-brown) !important;
+          font-weight: 600 !important;
+        }
+        .flatpickr-time {
+          border-top: 1px dashed var(--glass-border) !important;
+        }
+        .flatpickr-time input:hover, .flatpickr-time .flatpickr-am-pm:hover, .flatpickr-time input:focus, .flatpickr-time .flatpickr-am-pm:focus {
+          background: var(--soft-peach) !important;
+        }
+        
+        /* สไตล์สำหรับการแสดงผลแบบ Modal (กลางจอ) */
+        body.flatpickr-modal-open::after {
+          content: "";
+          position: fixed;
+          top: 0; left: 0; right: 0; bottom: 0;
+          background: rgba(0, 0, 0, 0.4);
+          backdrop-filter: blur(3px);
+          z-index: 9998;
+          animation: fadeIn 0.2s ease-out;
+        }
+        .flatpickr-calendar.open {
+          position: fixed !important;
+          top: 50% !important;
+          left: 50% !important;
+          transform: translate(-50%, -50%) !important;
+          z-index: 9999 !important;
+          margin: 0 !important;
+        }
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+      `;
+      document.head.appendChild(style);
+    }
+
     const script = document.createElement('script');
     script.innerHTML = `
       // ===== Price list (ดอก -> บาท) =====
@@ -615,17 +707,17 @@ export default function GlitterRose() {
           <div style="width:100%; margin-top:20px;">
             <div class="form-group">
               <label>ชื่อผู้รับ</label>
-              <input type="text" id="ipt-name" placeholder="ชื่อ-นามสกุล" value="\${customerName}" oninput="updateFormState()">
+              <input type="text" id="ipt-name" placeholder="ชื่อ-นามสกุล" value="\${customerName}" oninput="updateFormState()" style="font-size: 16px;">
             </div>
             
             <div class="form-group">
               <label>เบอร์โทรติดต่อ</label>
-              <input type="tel" id="ipt-phone" placeholder="06X-XXX-XXXX" value="\${customerPhone}" oninput="updateFormState()">
+              <input type="tel" id="ipt-phone" placeholder="06X-XXX-XXXX" value="\${customerPhone}" oninput="updateFormState()" style="font-size: 16px;">
             </div>
             
             <div class="form-group">
               <label>ที่อยู่จัดส่ง</label>
-              <textarea id="ipt-address" placeholder="ชื่อหอ.." oninput="updateFormState()">\${customerAddress}</textarea>
+              <textarea id="ipt-address" placeholder="ชื่อหอ.." oninput="updateFormState()" style="font-size: 16px;">\${customerAddress}</textarea>
               <div class="form-note">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5l10 -10"/></svg> ส่งฟรีบริเวณกำแพงแสน
               </div>
@@ -634,7 +726,7 @@ export default function GlitterRose() {
             <div class="form-group">
               <label>วันที่และเวลาที่ต้องการรับสินค้า</label>
               <div style="width:100%;">
-                <input type="text" id="ipt-date" placeholder="เลือกวันที่และเวลาจัดส่ง" value="\${deliveryDate ? deliveryDate + (deliveryTime ? ' ' + deliveryTime : '') : ''}" style="width:100%; background: var(--glass-bg); border: 1px solid var(--glass-border); padding: 12px; border-radius: 12px; color: var(--text-color);" readonly>
+                <input type="text" id="ipt-date" placeholder="เลือกวันที่และเวลาจัดส่ง" value="\${deliveryDate ? deliveryDate + (deliveryTime ? ' ' + deliveryTime : '') : ''}" style="width:100%; background: var(--glass-bg); border: 1px solid var(--glass-border); padding: 12px; border-radius: 12px; color: var(--text-color); font-size: 16px;" readonly>
               </div>
               <span style="font-size:.75rem; color:var(--text-muted); margin-top:6px; display:block; line-height:1.4;">
                 * ไม่สามารถเลือกวันย้อนหลังหรือวันปัจจุบันได้ ต้องสั่งล่วงหน้าอย่างน้อย 1 วัน
@@ -643,7 +735,7 @@ export default function GlitterRose() {
             
             <div class="form-group">
               <label>รายละเอียดเพิ่มเติม (ถ้ามี)</label>
-              <textarea id="ipt-note" placeholder="เช่น เวลาที่สะดวกรับ, ข้อความฝากเขียนการ์ด..." oninput="updateFormState()">\${additionalNote}</textarea>
+              <textarea id="ipt-note" placeholder="เช่น เวลาที่สะดวกรับ, ข้อความฝากเขียนการ์ด..." oninput="updateFormState()" style="font-size: 16px;">\${additionalNote}</textarea>
             </div>
           </div>
         \`;
@@ -662,6 +754,12 @@ export default function GlitterRose() {
               locale: window.flatpickr.l10ns ? window.flatpickr.l10ns.th : "default",
               time_24hr: true,
               disableMobile: true, // บังคับใช้หน้าตาของ Flatpickr เสมอบนมือถือ
+              onOpen: function() {
+                document.body.classList.add('flatpickr-modal-open');
+              },
+              onClose: function() {
+                document.body.classList.remove('flatpickr-modal-open');
+              },
               onChange: function(selectedDates, dateStr, instance) {
                 if (selectedDates.length > 0) {
                   const d = selectedDates[0];
