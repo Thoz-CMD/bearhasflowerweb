@@ -3,6 +3,22 @@ import { useEffect } from 'react';
 
 export default function GlitterRose() {
   useEffect(() => {
+    // โหลด Air Datepicker CSS
+    if (!document.getElementById('air-datepicker-css')) {
+      const link = document.createElement('link');
+      link.id = 'air-datepicker-css';
+      link.rel = 'stylesheet';
+      link.href = 'https://cdn.jsdelivr.net/npm/air-datepicker@3.3.5/air-datepicker.min.css';
+      document.head.appendChild(link);
+    }
+    // โหลด Air Datepicker JS
+    if (!document.getElementById('air-datepicker-js')) {
+      const js = document.createElement('script');
+      js.id = 'air-datepicker-js';
+      js.src = 'https://cdn.jsdelivr.net/npm/air-datepicker@3.3.5/air-datepicker.min.js';
+      document.head.appendChild(js);
+    }
+
     const script = document.createElement('script');
     script.innerHTML = `
       // ===== Price list (ดอก -> บาท) =====
@@ -608,8 +624,8 @@ export default function GlitterRose() {
             <div class="form-group">
               <label>วันที่และเวลาที่ต้องการรับสินค้า</label>
               <div style="display:flex; gap:10px;">
-                <input type="date" id="ipt-date" min="\${tmr}" value="\${deliveryDate}" onfocus="this.min='\${tmr}'" onchange="updateFormState()" style="flex:1;">
-                <input type="time" id="ipt-time" value="\${deliveryTime}" onchange="updateFormState()" style="flex:1;">
+                <input type="text" id="ipt-date" placeholder="เลือกวันที่จัดส่ง" value="\${deliveryDate}" style="flex:1; background: var(--glass-bg); border: 1px solid var(--glass-border); padding: 12px; border-radius: 12px; color: var(--text-color);" readonly>
+                <input type="text" id="ipt-time" placeholder="เลือกเวลา" value="\${deliveryTime}" style="flex:1; background: var(--glass-bg); border: 1px solid var(--glass-border); padding: 12px; border-radius: 12px; color: var(--text-color);" readonly>
               </div>
               <span style="font-size:.75rem; color:var(--text-muted); margin-top:6px; display:block; line-height:1.4;">
                 * ไม่สามารถเลือกวันย้อนหลังหรือวันปัจจุบันได้ ต้องสั่งล่วงหน้าอย่างน้อย 1 วัน
@@ -623,14 +639,59 @@ export default function GlitterRose() {
           </div>
         \`;
 
-        // บังคับเซ็ต min ด้วย JavaScript หลังจาก render HTML เสร็จ (ตามวิธีที่ผู้ใช้แนะนำ)
+        // บังคับใช้ Air Datepicker
         setTimeout(() => {
           const dateInput = document.getElementById('ipt-date');
-          if (dateInput) {
-            dateInput.min = tmr;
-            dateInput.setAttribute('min', tmr);
+          if (dateInput && typeof window.AirDatepicker !== 'undefined') {
+            const tmrDate = new Date();
+            tmrDate.setDate(tmrDate.getDate() + 1);
+            
+            new window.AirDatepicker('#ipt-date', {
+              locale: {
+                  days: ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์'],
+                  daysShort: ['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส'],
+                  daysMin: ['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส'],
+                  months: ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน', 'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'],
+                  monthsShort: ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'],
+                  today: 'วันนี้',
+                  clear: 'ล้าง',
+                  dateFormat: 'yyyy-MM-dd',
+                  firstDay: 0
+              },
+              minDate: tmrDate,
+              autoClose: true,
+              isMobile: true, // ทำให้เหมาะกับมือถือ
+              onSelect(data) {
+                const formattedDate = data.formattedDate;
+                const el = document.getElementById('ipt-date');
+                if (el) el.value = formattedDate;
+                deliveryDate = formattedDate;
+                updateFormState();
+              }
+            });
           }
-        }, 10);
+          
+          const timeInput = document.getElementById('ipt-time');
+          if (timeInput && typeof window.AirDatepicker !== 'undefined') {
+            new window.AirDatepicker('#ipt-time', {
+              timepicker: true,
+              onlyTimepicker: true,
+              timeFormat: 'HH:mm',
+              isMobile: true,
+              locale: {
+                  today: 'วันนี้',
+                  clear: 'ล้าง',
+              },
+              onSelect(data) {
+                const formattedDate = data.formattedDate;
+                const el = document.getElementById('ipt-time');
+                if (el) el.value = formattedDate;
+                deliveryTime = formattedDate;
+                updateFormState();
+              }
+            });
+          }
+        }, 300); // รอให้ script โหลดเสร็จและ DOM พร้อม
       }
 
       /* ---- main updateUI ---- */
