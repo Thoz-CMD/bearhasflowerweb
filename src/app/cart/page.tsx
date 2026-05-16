@@ -15,8 +15,8 @@ import {
 
 const STORAGE_CART = 'bear_flower_cart';
 
-const getRoseColorHex = (colorId) => {
-  const colors = {
+const getRoseColorHex = (colorId: string) => {
+  const colors: Record<string, string> = {
     red: '#E53935',
     pink: '#F48FB1',
     blue: '#1976D2',
@@ -27,7 +27,7 @@ const getRoseColorHex = (colorId) => {
   return colors[colorId] || '#F48FB1';
 };
 
-const BasketIcon = ({ colors = [], size = 46 }) => {
+const BasketIcon = ({ colors = [], size = 46 }: { colors: string[], size?: number }) => {
   const c1 = colors[0] || '#F48FB1';
   const c2 = colors[1] || c1;
   const c3 = colors[2] || (colors.length > 1 ? colors[0] : c1); // Cycle colors if only 2
@@ -91,8 +91,8 @@ const BasketIcon = ({ colors = [], size = 46 }) => {
 };
 
 export default function CartPage() {
-  const [cartItems, setCartItems] = useState([]);
-  const [orders, setOrders] = useState([]);
+  const [cartItems, setCartItems] = useState<any[]>([]);
+  const [orders, setOrders] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState('cart');
   const [isClient, setIsClient] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -135,7 +135,7 @@ export default function CartPage() {
     }
   }, [cartItems, isLoaded]);
 
-  const updateQty = (id, delta) => {
+  const updateQty = (id: string, delta: number) => {
     setCartItems(prev => prev.map(item => {
       if (item.id === id) {
         const newQty = Math.max(1, (item.qty || 1) + delta);
@@ -145,11 +145,11 @@ export default function CartPage() {
     }));
   };
 
-  const removeItem = (id) => {
+  const removeItem = (id: string) => {
     setCartItems(prev => prev.filter(item => item.id !== id));
   };
 
-  const handleEditItem = (item) => {
+  const handleEditItem = (item: any) => {
     if (item.type === 'glitter_rose' && item.config) {
       localStorage.setItem('bear_flower_v1', JSON.stringify(item.config));
       localStorage.setItem('editing_cart_id', item.id);
@@ -166,7 +166,7 @@ export default function CartPage() {
     window.location.href = '/checkout';
   };
 
-  const updateStatus = async (orderId, newStatus) => {
+  const updateStatus = async (orderId: string, newStatus: string) => {
     if (isFirebaseEnabled) {
       try {
         const orderRef = doc(db, "orders", orderId);
@@ -177,7 +177,7 @@ export default function CartPage() {
     }
   };
 
-  const getStatusLabel = (status) => {
+  const getStatusLabel = (status: string) => {
     switch (status) {
       case 'preparing': return { text: 'กำลังจัดช่อดอกไม้', color: '#ff9800', bg: '#fff3e0' };
       case 'shipping': return { text: 'รอจัดส่ง', color: '#2196f3', bg: '#e3f2fd' };
@@ -317,10 +317,10 @@ export default function CartPage() {
                 </div>
               ) : (
                 <div className="cart-list">
-                  {cartItems.map(item => {
+                  {cartItems.map((item: any) => {
                     const isGlitterRose = item.type === 'glitter_rose';
                     const itemColors = isGlitterRose && item.config?.selectedColors?.length > 0 
-                      ? item.config.selectedColors.map(id => getRoseColorHex(id))
+                      ? item.config.selectedColors.map((id: string) => getRoseColorHex(id))
                       : ['#F48FB1'];
                     
                     return (
@@ -360,7 +360,7 @@ export default function CartPage() {
                 </div>
               ) : (
                 <div className="order-list">
-                  {orders.map(order => {
+                  {orders.map((order: any) => {
                     const statusInfo = getStatusLabel(order.status);
                     return (
                       <div key={order.id} className="order-card">
@@ -374,7 +374,7 @@ export default function CartPage() {
                           </span>
                         </div>
                         <div style={{display:'flex',flexDirection:'column',gap:8}}>
-                          {(order.items || []).map((item, idx) => (
+                          {(order.items || []).map((item: any, idx: number) => (
                             <div key={idx} style={{display:'flex',justifyContent:'space-between',fontSize:'.85rem'}}>
                               <span>{item.name} x {item.qty}</span>
                               <span>{(item.price * item.qty).toLocaleString()} ฿</span>

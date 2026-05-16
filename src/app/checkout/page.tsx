@@ -11,7 +11,7 @@ const STORAGE_CART = 'bear_flower_cart';
 const PROMPTPAY_ID = '0656144703'; // TODO: เปลี่ยนเป็นเบอร์พร้อมเพย์ของคุณ
 
 export default function CheckoutPage() {
-  const [cartItems, setCartItems] = useState([]);
+  const [cartItems, setCartItems] = useState<any[]>([]);
   const [total, setTotal] = useState(0);
   const [deposit, setDeposit] = useState(0);
   const [isClient, setIsClient] = useState(false);
@@ -29,7 +29,7 @@ export default function CheckoutPage() {
         return;
       }
       setCartItems(items);
-      const calculatedTotal = items.reduce((acc, item) => acc + (item.price * (item.qty || 1)), 0);
+      const calculatedTotal = items.reduce((acc: number, item: any) => acc + (item.price * (item.qty || 1)), 0);
       setTotal(calculatedTotal);
       
       // คำนวณมัดจำ 50%
@@ -49,7 +49,7 @@ export default function CheckoutPage() {
     setIsProcessing(true);
     
     const orderData = {
-      items: cartItems.map(item => ({
+      items: cartItems.map((item: any) => ({
         name: item.name,
         price: item.price,
         qty: item.qty || 1,

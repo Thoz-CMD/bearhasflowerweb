@@ -2,10 +2,10 @@
 
 import { useEffect, useState } from 'react';
 import { auth } from '@/lib/firebase';
-import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { onAuthStateChanged, signOut, User } from 'firebase/auth';
 
 export default function Home() {
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -40,10 +40,16 @@ export default function Home() {
         if (slidesEl) slidesEl.style.transform = `translateX(-${currentSlide * 100}%)`;
         dots.forEach((d, i) => d.classList.toggle('active', i === currentSlide));
       }
-      function moveSlide(dir) {
+      function moveSlide(dir: number) {
         currentSlide = (currentSlide + dir + totalSlides) % totalSlides;
         updateSlide();
       }
+      function goSlide(n: number) {
+        currentSlide = n;
+        updateSlide();
+      }
+      (window as any).moveSlide = moveSlide;
+      (window as any).goSlide = goSlide;
 
       const slideshowInterval = setInterval(() => moveSlide(1), 5000);
 
@@ -51,8 +57,8 @@ export default function Home() {
       const bannerEl = document.querySelector('.banner-container');
       if (bannerEl) {
         let tsX = 0;
-        bannerEl.addEventListener('touchstart', e => { tsX = e.touches[0].clientX; }, { passive: true });
-        bannerEl.addEventListener('touchend', e => {
+        bannerEl.addEventListener('touchstart', (e: any) => { tsX = e.touches[0].clientX; }, { passive: true });
+        bannerEl.addEventListener('touchend', (e: any) => {
           const dx = e.changedTouches[0].clientX - tsX;
           if (Math.abs(dx) > 40) moveSlide(dx < 0 ? 1 : -1);
         }, { passive: true });
@@ -65,7 +71,7 @@ export default function Home() {
       const updateCartUI = () => {
         try {
           const cart = JSON.parse(localStorage.getItem(CART_KEY) || '[]');
-          const count = cart.reduce((acc, item) => acc + (item.qty || 1), 0);
+          const count = cart.reduce((acc: number, item: any) => acc + (item.qty || 1), 0);
           const cartEl = document.getElementById('cart-count');
           if (cartEl) cartEl.textContent = count;
         } catch (e) { }
@@ -89,16 +95,16 @@ export default function Home() {
       const cartBtn = document.getElementById('nav-cart-btn');
       if (cartBtn) cartBtn.onclick = () => { window.location.href = '/cart'; };
 
-      document.querySelectorAll('.product-wishlist').forEach(btn => {
-        btn.onclick = function () {
+      document.querySelectorAll('.product-wishlist').forEach((btn: any) => {
+        btn.onclick = function (this: HTMLElement) {
           const card = this.closest('.product-card');
           const id = card ? card.querySelector('.product-name')?.textContent?.trim().replace(/\s+/g, '_') : '';
           const name = card ? card.querySelector('.product-name')?.textContent?.trim() : '';
 
           let wishlist = JSON.parse(localStorage.getItem(WISHLIST_KEY) || '[]');
-          const exists = wishlist.find(i => i.id === id);
+          const exists = wishlist.find((i: any) => i.id === id);
           if (exists) {
-            wishlist = wishlist.filter(i => i.id !== id);
+            wishlist = wishlist.filter((i: any) => i.id !== id);
             this.querySelector('path')?.setAttribute('fill', 'none');
             this.style.color = '';
             this.style.borderColor = '';
@@ -143,23 +149,23 @@ export default function Home() {
 
         hamburger.onclick = toggleDrawer;
         backdrop.onclick = closeDrawer;
-        drawer.querySelectorAll('.drawer-link').forEach(a => a.onclick = closeDrawer);
+        drawer.querySelectorAll('.drawer-link').forEach((a: any) => a.onclick = closeDrawer);
       }
 
       // ===== Bottom Tab Bar =====
       const tabItems = document.querySelectorAll('.tab-item');
-      tabItems.forEach(tab => {
+      tabItems.forEach((tab: any) => {
         tab.onclick = () => {
-          tabItems.forEach(t => t.classList.remove('active'));
+          tabItems.forEach((t: any) => t.classList.remove('active'));
           tab.classList.add('active');
         };
       });
 
       // ===== Smooth Scroll =====
-      document.querySelectorAll('a[href^="#"]').forEach(anchor => {
-        anchor.onclick = function (e) {
+      document.querySelectorAll('a[href^="#"]').forEach((anchor: any) => {
+        anchor.onclick = function (this: HTMLElement, e: any) {
           e.preventDefault();
-          const target = document.querySelector(this.getAttribute('href'));
+          const target = document.querySelector(this.getAttribute('href') || '');
           if (target) target.scrollIntoView({ behavior: 'smooth' });
         };
       });
@@ -174,7 +180,7 @@ export default function Home() {
     const cleanup = initApp();
 
     // Export logout to window for HTML onclick
-    window.handleLogout = async () => {
+    (window as any).handleLogout = async () => {
       if (confirm('คุณต้องการออกจากระบบใช่หรือไม่?')) {
         await signOut(auth);
         window.location.reload();
@@ -226,7 +232,7 @@ export default function Home() {
       
       ${user ? `
         <div style="padding: 10px 10px; margin-bottom: 10px; font-size: 1rem; color: #a08a8e; border-bottom: 1px solid #fdf5f6; text-align: left;">
-          ID: <span style="color: #db8a9e; font-weight: 600;">${user.email.split('@')[0]}</span>
+          ID: <span style="color: #db8a9e; font-weight: 600;">${user.email?.split('@')[0] || 'User'}</span>
         </div>
       ` : ''}
 
@@ -430,7 +436,7 @@ export default function Home() {
           <div class="product-desc">ดอกกุหลาบประกาย พร้อมริบบิ้นทอง ห่อกระดาษลาย</div>
           <div class="product-footer">
             <div class="product-price">— <span>บาท</span></div>
-            <button class="add-cart-btn" onclick="addToCart(this)" aria-label="เพิ่มในตะกร้า">
+            <button class="add-cart-btn" onclick="window.location.href='/glitter_rose'" aria-label="เพิ่มในตะกร้า">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
                 <g stroke="white" stroke-width="2">
                   <path stroke-linejoin="round"

@@ -26,7 +26,7 @@ export default function LoginPage() {
     return () => unsubscribe();
   }, []);
 
-  const handleAuth = async (e) => {
+  const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setLoading(true);
@@ -43,7 +43,7 @@ export default function LoginPage() {
         await updateProfile(userCredential.user, { displayName: phoneNumber });
         alert('สมัครสมาชิกสำเร็จ!');
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
       if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
         setError('เบอร์โทรศัพท์หรือรหัสผ่านไม่ถูกต้อง');
