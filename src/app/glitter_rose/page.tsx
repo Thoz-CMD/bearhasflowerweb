@@ -562,16 +562,7 @@ export default function GlitterRose() {
         const a = document.getElementById('ipt-address');
         if (a) customerAddress = a.value;
         const d = document.getElementById('ipt-date');
-        if (d) {
-          const tmr = getTomorrowStr();
-          if (d.value && d.value < tmr) {
-            alert('ไม่สามารถเลือกวันจัดส่งย้อนหลังหรือวันปัจจุบันได้ ต้องสั่งล่วงหน้าอย่างน้อย 1 วันค่ะ');
-            d.value = '';
-            deliveryDate = '';
-          } else {
-            deliveryDate = d.value;
-          }
-        }
+        if (d) deliveryDate = d.value;
         const t = document.getElementById('ipt-time');
         if (t) deliveryTime = t.value;
         const note = document.getElementById('ipt-note');
@@ -582,6 +573,12 @@ export default function GlitterRose() {
       function renderStep5() {
         mainBox.style.justifyContent = 'flex-start';
         const tmr = getTomorrowStr();   
+        
+        // Ensure saved delivery date is not in the past
+        if (deliveryDate && deliveryDate < tmr) {
+          deliveryDate = '';
+          saveState();
+        }
 
         mainBox.innerHTML = \`
           <div class="qty-header">
@@ -611,7 +608,7 @@ export default function GlitterRose() {
             <div class="form-group">
               <label>วันที่และเวลาที่ต้องการรับสินค้า</label>
               <div style="display:flex; gap:10px;">
-                <input type="date" id="ipt-date" min="\${tmr}" value="\${deliveryDate}" onchange="updateFormState()" style="flex:1;">
+                <input type="date" id="ipt-date" min="\${tmr}" value="\${deliveryDate}" onfocus="this.min='\${tmr}'" onchange="updateFormState()" style="flex:1;">
                 <input type="time" id="ipt-time" value="\${deliveryTime}" onchange="updateFormState()" style="flex:1;">
               </div>
               <span style="font-size:.75rem; color:var(--text-muted); margin-top:6px; display:block; line-height:1.4;">
@@ -625,24 +622,6 @@ export default function GlitterRose() {
             </div>
           </div>
         \`;
-
-        // Explicitly enforce the min date on the DOM element to ensure mobile browsers respect it
-        setTimeout(() => {
-          const dInput = document.getElementById('ipt-date');
-          if (dInput) {
-            dInput.min = tmr;
-            dInput.setAttribute('min', tmr);
-            // Some mobile browsers need it re-applied on focus
-            dInput.addEventListener('focus', function() {
-              this.min = tmr;
-              this.setAttribute('min', tmr);
-            });
-            dInput.addEventListener('click', function() {
-              this.min = tmr;
-              this.setAttribute('min', tmr);
-            });
-          }
-        }, 10);
       }
 
       /* ---- main updateUI ---- */
@@ -739,6 +718,7 @@ export default function GlitterRose() {
             return;
           }
         } else if (current === 4) {
+          const tmr = getTomorrowStr();
           if (!customerName.trim() || !customerPhone.trim() || !customerAddress.trim() || !deliveryDate || !deliveryTime) {
             showToast('กรุณากรอกข้อมูลที่จำเป็นให้ครบถ้วน');
             const inputs = ['ipt-name', 'ipt-phone', 'ipt-address', 'ipt-date', 'ipt-time'];
@@ -749,6 +729,15 @@ export default function GlitterRose() {
                 setTimeout(() => { el.style.borderColor = 'var(--glass-border)'; }, 2000);
               }
             });
+            return;
+          }
+          if (deliveryDate < tmr) {
+            showToast('ต้องเลือกวันจัดส่งล่วงหน้าอย่างน้อย 1 วัน');
+            const el = document.getElementById('ipt-date');
+            if (el) {
+              el.style.borderColor = '#e53935';
+              setTimeout(() => { el.style.borderColor = 'var(--glass-border)'; }, 2000);
+            }
             return;
           }
         }
