@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Cormorant_Garamond, Noto_Sans_Thai, Italiana } from "next/font/google";
 import "./globals.css";
+import PresenceTracker from "@/components/PresenceTracker";
 
 const cormorant = Cormorant_Garamond({ 
   subsets: ["latin"],
@@ -35,6 +36,7 @@ export default function RootLayout({
     <html lang="th">
       <body className={`${cormorant.variable} ${notoSansThai.variable} ${italiana.variable}`}>
         {children}
+        <PresenceTracker />
       </body>
     </html>
   );

@@ -1,13 +1,14 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { auth } from '@/lib/firebase';
+import { auth, db } from '@/lib/firebase';
 import { 
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword,
   onAuthStateChanged,
   updateProfile
 } from 'firebase/auth';
+import { doc, setDoc } from 'firebase/firestore';
 
 export default function LoginPage() {
   const [phoneNumber, setPhoneNumber] = useState('');
@@ -23,6 +24,56 @@ export default function LoginPage() {
         window.location.href = '/';
       }
     });
+
+    if (typeof window !== 'undefined') {
+      (window as any).showBeautifulAlert = function(message: string, type: string = 'info', title: string = 'แจ้งเตือน') {
+        return new Promise((resolve) => {
+          const existing = document.getElementById('beautiful-alert-overlay');
+          if (existing) existing.remove();
+
+          const overlay = document.createElement('div');
+          overlay.id = 'beautiful-alert-overlay';
+          overlay.className = 'beautiful-alert-overlay';
+
+          let icon = '🌸';
+          if (type === 'success') icon = '✅';
+          if (type === 'error') icon = '❌';
+          if (type === 'warning') icon = '⚠️';
+
+          overlay.innerHTML = `
+            <div class="beautiful-alert-modal">
+              <div class="beautiful-alert-icon ${type}">${icon}</div>
+              <h3 class="beautiful-alert-title">${title}</h3>
+              <p class="beautiful-alert-message">${message}</p>
+              <div class="beautiful-alert-buttons">
+                <button class="beautiful-alert-btn confirm-btn">ตกลง</button>
+              </div>
+            </div>
+          `;
+
+          document.body.appendChild(overlay);
+          document.body.style.overflow = 'hidden';
+
+          setTimeout(() => overlay.classList.add('active'), 10);
+
+          const closeAlert = () => {
+            overlay.classList.remove('active');
+            overlay.classList.add('closing');
+            document.body.style.overflow = '';
+            setTimeout(() => {
+              overlay.remove();
+              resolve(true);
+            }, 300);
+          };
+
+          overlay.querySelector('.confirm-btn')?.addEventListener('click', closeAlert);
+          overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) closeAlert();
+          });
+        });
+      };
+    }
+
     return () => unsubscribe();
   }, []);
 
@@ -39,9 +90,22 @@ export default function LoginPage() {
         await signInWithEmailAndPassword(auth, fakeEmail, password);
       } else {
         const userCredential = await createUserWithEmailAndPassword(auth, fakeEmail, password);
-        // Optionally save phone number as display name
+        // Save phone number as display name
         await updateProfile(userCredential.user, { displayName: phoneNumber });
-        alert('สมัครสมาชิกสำเร็จ!');
+        
+        // Save user profile to Firestore users collection
+        const user = userCredential.user;
+        const trimmedPhone = phoneNumber.trim();
+        const isAdminPhone = trimmedPhone === '0656144703';
+        
+        await setDoc(doc(db, 'users', user.uid), {
+          uid: user.uid,
+          phoneNumber: trimmedPhone,
+          role: isAdminPhone ? 'admin' : 'user',
+          createdAt: new Date().toISOString()
+        });
+
+        await (window as any).showBeautifulAlert('สมัครสมาชิกสำเร็จ!', 'success', 'สร้างบัญชีผู้ใช้');
       }
     } catch (err: any) {
       console.error(err);

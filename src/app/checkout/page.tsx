@@ -40,11 +40,11 @@ export default function CheckoutPage() {
       setCartItems(items);
       const calculatedTotal = items.reduce((acc: number, item: any) => acc + (item.price * (item.qty || 1)), 0);
       setTotal(calculatedTotal);
-      
+
       // คำนวณมัดจำ 50%
       const depositAmount = Math.ceil(calculatedTotal * 0.5);
       setDeposit(depositAmount);
-      
+
       // สร้าง PromptPay QR Code Payload
       const qrPayload = generatePayload(PROMPTPAY_ID, { amount: depositAmount });
       setPayload(qrPayload);
@@ -56,7 +56,7 @@ export default function CheckoutPage() {
   const handleConfirmPayment = async () => {
     if (cartItems.length === 0 || isProcessing) return;
     setIsProcessing(true);
-    
+
     const orderData = {
       items: cartItems.map((item: any) => ({
         name: item.name,
@@ -74,6 +74,18 @@ export default function CheckoutPage() {
 
     try {
       await addDoc(collection(db, "orders"), orderData);
+
+      // Trigger LINE Notify
+      try {
+        await fetch('/api/line-notify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ orderData })
+        });
+      } catch (err) {
+        console.error("Failed to notify LINE:", err);
+      }
+
       localStorage.removeItem(STORAGE_CART);
       setShowSuccessPopup(true);
     } catch (e) {
@@ -100,14 +112,17 @@ export default function CheckoutPage() {
         .checkout-nav {
           background: #fff;
           height: 64px;
-          display: flex;
-          align-items: center;
           padding: 0 20px;
           box-shadow: 0 2px 10px rgba(0,0,0,0.05);
-          justify-content: space-between;
           position: sticky;
           top: 0;
           z-index: 100;
+        }
+
+        @media (min-width: 1024px) {
+          .checkout-nav {
+            padding: 0 40px;
+          }
         }
 
         .back-btn-circle {
@@ -316,19 +331,21 @@ export default function CheckoutPage() {
       `}</style>
 
       <nav className="checkout-nav">
-        <button className="back-btn-circle" onClick={() => window.location.href = '/cart'}>
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-            <path d="M15 18l-6-6 6-6" />
-          </svg>
-        </button>
-        <div className="nav-logo">Payment</div>
-        <div style={{ width: 40 }}></div>
+        <div className="navbar-inner">
+          <button className="back-btn-circle" onClick={() => window.location.href = '/cart'}>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <path d="M15 18l-6-6 6-6" />
+            </svg>
+          </button>
+          <div className="nav-logo">Payment</div>
+          <div style={{ width: 40 }}></div>
+        </div>
       </nav>
 
       <div className="content-wrap">
         <div className="page-title">
           <h1>ชำระเงินมัดจำ (50%)</h1>
-          <p>สแกน QR Code เพื่อชำระเงินผ่านแอปธนาคาร<br/>ระบบจะระบุจำนวนเงินให้โดยอัตโนมัติ</p>
+          <p>สแกน QR Code เพื่อชำระเงินผ่านแอปธนาคาร<br />ระบบจะระบุจำนวนเงินให้โดยอัตโนมัติ</p>
         </div>
 
         <div className="payment-card">
@@ -336,12 +353,12 @@ export default function CheckoutPage() {
             <span style={{ color: '#113566', fontWeight: 900, fontStyle: 'italic', fontSize: '1.4rem', fontFamily: 'Arial, sans-serif' }}>Prompt</span>
             <span style={{ color: '#f47b20', fontWeight: 900, fontStyle: 'italic', fontSize: '1.4rem', fontFamily: 'Arial, sans-serif' }}>Pay</span>
           </div>
-          
+
           <div className="qr-container">
             {payload ? (
               <QRCodeSVG value={payload} size={200} level="M" includeMargin={false} />
             ) : (
-              <div style={{width: 200, height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f5f5f5'}}>กำลังโหลด...</div>
+              <div style={{ width: 200, height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f5f5f5' }}>กำลังโหลด...</div>
             )}
           </div>
 
@@ -351,9 +368,9 @@ export default function CheckoutPage() {
           </div>
 
           <div className="info-box">
-            <h3><span style={{fontSize: '1.2rem'}}>✨</span> เงื่อนไขการชำระเงิน</h3>
+            <h3><span style={{ fontSize: '1.2rem' }}>✨</span> เงื่อนไขการชำระเงิน</h3>
             <p>
-              กรุณาชำระเงินมัดจำล่วงหน้า <strong>50%</strong> เพื่อเป็นการยืนยันออเดอร์ให้ทางร้านเริ่มจัดเตรียมดอกไม้ของคุณ 
+              กรุณาชำระเงินมัดจำล่วงหน้า <strong>50%</strong> เพื่อเป็นการยืนยันออเดอร์ให้ทางร้านเริ่มจัดเตรียมดอกไม้ของคุณ
               และหลังจากดอกไม้จัดเสร็จเรียบร้อยแล้ว คุณสามารถชำระส่วนที่เหลืออีก <strong>{(total - deposit).toLocaleString()} บาท</strong> ได้ในภายหลังค่ะ
             </p>
           </div>
@@ -368,20 +385,20 @@ export default function CheckoutPage() {
             <span>ยอดมัดจำ (50%)</span>
             <span>{deposit.toLocaleString()} บาท</span>
           </div>
-          <div className="summary-row" style={{color: '#a08a8e', fontSize: '0.85rem'}}>
+          <div className="summary-row" style={{ color: '#a08a8e', fontSize: '0.85rem' }}>
             <span>ค้างชำระ (จ่ายเมื่อเสร็จ)</span>
             <span>{(total - deposit).toLocaleString()} บาท</span>
           </div>
         </div>
 
-        <button 
-          className="confirm-btn" 
+        <button
+          className="confirm-btn"
           onClick={handleConfirmPayment}
           disabled={isProcessing}
         >
           {isProcessing ? 'กำลังดำเนินการ...' : 'ฉันได้สแกนชำระเงินแล้ว'}
         </button>
-        <p style={{textAlign: 'center', fontSize: '0.75rem', color: '#a08a8e', marginTop: '16px'}}>
+        <p style={{ textAlign: 'center', fontSize: '0.75rem', color: '#a08a8e', marginTop: '16px' }}>
           หลังจากกดปุ่ม ทางร้านจะตรวจสอบยอดเงินและอัปเดตสถานะให้เร็วที่สุดค่ะ
         </p>
       </div>
@@ -394,10 +411,11 @@ export default function CheckoutPage() {
                 <polyline points="20 6 9 17 4 12"></polyline>
               </svg>
             </div>
-            <h2 className="modal-title">ชำระเงินสำเร็จ!</h2>
+            <h2 className="modal-title">ขอบคุณสำหรับคำสั่งซื้อ</h2>
             <p className="modal-desc">
-              ระบบได้รับแจ้งการชำระเงินมัดจำแล้ว<br/>
-              ทางร้านจะรีบดำเนินการจัดช่อดอกไม้ให้คุณทันที 🌸
+              ได้รับออร์เดอร์ของคุณแล้ว!<br />
+              รอแอดมินตรวจสอบยอดมัดจำ<br />
+              เมื่อยืนยันแล้วจะเริ่มจัดช่อดอกไม้ให้ทันที
             </p>
             <button className="modal-btn" onClick={() => window.location.href = '/cart?tab=history'}>
               ดูประวัติการสั่งซื้อ

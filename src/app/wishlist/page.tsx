@@ -24,6 +24,81 @@ export default function Wishlist() {
     script.innerHTML = `
       const WISHLIST_KEY = 'bear_flower_wishlist';
 
+      const PRODUCTS_REGISTRY = {
+        'กุหลาบกลิตเตอร์ชมพู': {
+          emoji: '🌹',
+          badge: '50 ดอก',
+          name: 'กุหลาบกลิตเตอร์ชมพู',
+          desc: 'ดอกกุหลาบประกาย พร้อมริบบิ้นทอง ห่อกระดาษลาย',
+          price: '—',
+          link: '/glitter_rose'
+        },
+        'กุหลาบกลิตเตอร์แดง': {
+          emoji: '🌸',
+          badge: '30 ดอก',
+          name: 'กุหลาบกลิตเตอร์แดง',
+          desc: 'คลาสสิกสีแดงเลือดนกประกายทอง สวยงามโดดเด่น',
+          price: '—',
+          link: '/glitter_rose'
+        },
+        'ดอกไม้ลวดกำมะหยี่ม่วง': {
+          emoji: '🌼',
+          badge: '20 ดอก',
+          name: 'ดอกไม้ลวดกำมะหยี่ม่วง',
+          desc: 'ดอกไม้เพ้อฝัน สีม่วงลึก กำมะหยี่นุ่มละเอียด',
+          price: '—',
+          link: '/glitter_rose'
+        },
+        'ช่อใหญ่พิเศษ': {
+          emoji: '🌺',
+          badge: '50 ดอก',
+          name: 'ช่อใหญ่พิเศษ',
+          desc: 'ช่อดอกไม้ขนาดใหญ่ พร้อมบรรจุภัณฑ์เกรด A',
+          price: '—',
+          link: '/glitter_rose'
+        },
+        'ช่อมินิหวานใจ': {
+          emoji: '💐',
+          badge: '15 ดอก',
+          name: 'ช่อมินิหวานใจ',
+          desc: 'ช่อเล็กน้อยน่ารัก เหมาะเป็นของขวัญวาเลนไทน์',
+          price: '—',
+          link: '/glitter_rose'
+        },
+        'ทิวลิปกลิตเตอร์': {
+          emoji: '🌷',
+          badge: '40 ดอก',
+          name: 'ทิวลิปกลิตเตอร์',
+          desc: 'ทิวลิปประกายสีพาสเทล ดูอ่อนหวานเหมือนนิทาน',
+          price: '—',
+          link: '/glitter_rose'
+        },
+        'ทานตะวันกำมะหยี่': {
+          emoji: '🌻',
+          badge: '25 ดอก',
+          name: 'ทานตะวันกำมะหยี่',
+          desc: 'สีเหลืองอบอุ่น สว่างเหมือนแสงตะวัน นุ่มกำมะหยี่',
+          price: '—',
+          link: '/glitter_rose'
+        },
+        'ออกแบบเอง_(Custom)': {
+          emoji: '✨',
+          badge: 'Custom',
+          name: 'ออกแบบเอง (Custom)',
+          desc: 'เลือกสี ดอก และสไตล์ได้ตามใจ สร้างความทรงจำของคุณ',
+          price: '—',
+          link: '/glitter_rose'
+        },
+        'ออกแบบเอง': {
+          emoji: '✨',
+          badge: 'Custom',
+          name: 'ออกแบบเอง (Custom)',
+          desc: 'เลือกสี ดอก และสไตล์ได้ตามใจ สร้างความทรงจำของคุณ',
+          price: '—',
+          link: '/glitter_rose'
+        }
+      };
+
       function getWishlist() {
         try {
           return JSON.parse(localStorage.getItem(WISHLIST_KEY) || '[]');
@@ -65,24 +140,47 @@ export default function Wishlist() {
 
         if (emptyState) emptyState.style.display = 'none';
 
-        container.innerHTML = list.map(item => \`
-          <article class="wl-card">
-            <div class="wl-img">
-              <span class="wl-emoji">\${item.emoji || '🌹'}</span>
-              \${item.badge ? \`<span class="wl-badge">\${item.badge}</span>\` : ''}
-            </div>
-            <div class="wl-info">
-              <div class="wl-name">\${item.name}</div>
-              \${item.desc ? \`<div class="wl-desc">\${item.desc}</div>\` : ''}
-              <div class="wl-price">\${item.price ? item.price : '—'} \${item.price ? '<span>บาท</span>' : '<span>บาท</span>'}</div>
-            </div>
-            <button class="wl-remove" onclick="removeFromWishlist('\${item.id}')" aria-label="ลบออก">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M18 6 6 18M6 6l12 12"/>
-              </svg>
-            </button>
-          </article>
-        \`).join('');
+        container.innerHTML = list.map((item, idx) => {
+          const key = item.id;
+          const meta = PRODUCTS_REGISTRY[key] || {
+            emoji: '🌹',
+            badge: 'Custom',
+            name: item.name || 'สินค้าแนะนำ',
+            desc: 'สินค้าหมีมีดอกไม้คัดสรรพิเศษเพื่อคุณ',
+            price: '—',
+            link: '/glitter_rose'
+          };
+
+          return \`
+            <article class="product-card fade-in" style="animation-delay: \${0.05 * (idx + 1)}s">
+              <div class="product-image-wrap">
+                <div class="product-placeholder">\${meta.emoji}</div>
+                \${meta.badge ? '<span class="product-badge">' + meta.badge + '</span>' : ''}
+                <button class="product-wishlist" onclick="removeFromWishlist('\${item.id}')" aria-label="ลบออก" style="color: #e05c7a; border-color: #e05c7a;">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="#e05c7a" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12Z" />
+                  </svg>
+                </button>
+              </div>
+              <div class="product-info">
+                <div class="product-name">\${meta.name}</div>
+                <div class="product-desc">\${meta.desc}</div>
+                <div class="product-footer">
+                  <div class="product-price">\${meta.price} <span>บาท</span></div>
+                  <button class="add-cart-btn" onclick="window.location.href='\${meta.link}'" aria-label="เพิ่มในตะกร้า">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                      <g stroke="white" stroke-width="2">
+                        <path stroke-linejoin="round"
+                          d="M2.31 11.243A1 1 0 0 1 3.28 10h17.44a1 1 0 0 1 .97 1.242l-1.811 7.243A2 2 0 0 1 17.939 20H6.061a2 2 0 0 1-1.94-1.515z" />
+                        <path stroke-linecap="round" d="M9 14v2m6-2v2m-9-6l4-6m8 6l-4-6" />
+                      </g>
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            </article>
+          \`;
+        }).join('');
       }
 
       renderWishlist();
@@ -102,13 +200,15 @@ export default function Wishlist() {
     __html: `
 
     <!-- Navbar -->
-    <nav class="navbar" style="padding-left: 20px; padding-right: 20px;">
-      <button class="back-btn-circle" onclick="window.history.length > 1 ? window.history.back() : window.location.href='/'">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-          <path d="M15 18l-6-6 6-6" />
-        </svg>
-      </button>
-      <a href="/" class="nav-logo" style="position: absolute; left: 50%; transform: translateX(-50%);">Wishlist</a>
+    <nav class="navbar">
+      <div class="navbar-inner">
+        <button class="back-btn-circle" onclick="window.history.length > 1 ? window.history.back() : window.location.href='/'">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M15 18l-6-6 6-6" />
+          </svg>
+        </button>
+        <a href="/" class="nav-logo" style="position: absolute; left: 50%; transform: translateX(-50%);">Wishlist</a>
+      </div>
     </nav>
 
     <!-- Page Content -->
@@ -125,9 +225,7 @@ export default function Wishlist() {
       <!-- Empty State -->
       <div id="wishlist-empty" class="wl-empty">
         <div class="wl-empty-icon">
-          <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="var(--rose-light)" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
-          </svg>
+          <img src="/images/Empty State Icon.png" alt="Empty State" style="width: 180px; height: auto; display: block; margin: 0 auto;" />
         </div>
         <p class="wl-empty-title">ยังไม่มีรายการถูกใจ</p>
         <p class="wl-empty-sub">กดไอคอน ♡ ที่สินค้าที่คุณชอบเพื่อบันทึกไว้ที่นี่</p>
@@ -135,7 +233,7 @@ export default function Wishlist() {
       </div>
 
       <!-- Wishlist Grid -->
-      <div id="wishlist-container" class="wl-grid"></div>
+      <div id="wishlist-container" class="product-grid"></div>
 
     </div>
 
@@ -190,7 +288,7 @@ export default function Wishlist() {
       .wl-page-wrap {
         position: relative;
         z-index: 1;
-        max-width: 720px;
+        max-width: 1280px;
         margin: 0 auto;
         padding: 32px clamp(16px, 4vw, 32px) 120px;
       }
@@ -210,12 +308,12 @@ export default function Wishlist() {
       }
 
       .wl-heading h1 {
-        font-family: 'Cormorant Garamond', 'Noto Sans Thai', serif;
-        font-size: clamp(1.8rem, 4vw, 2.8rem);
-        font-weight: 400;
-        font-style: italic;
+        font-family: 'Noto Sans Thai', sans-serif;
+        font-size: clamp(1.8rem, 4vw, 2.5rem);
+        font-weight: 600;
+        font-style: normal;
         color: var(--deep-brown);
-        letter-spacing: .03em;
+        letter-spacing: .02em;
       }
 
       .wl-subtitle {
@@ -238,15 +336,15 @@ export default function Wishlist() {
       }
 
       .wl-empty-icon {
-        opacity: .4;
+        opacity: 1;
       }
 
       .wl-empty-title {
-        font-family: 'Cormorant Garamond', serif;
-        font-size: 1.4rem;
-        font-weight: 400;
+        font-family: 'Noto Sans Thai', sans-serif;
+        font-size: 1.3rem;
+        font-weight: 600;
         color: var(--mid-brown);
-        font-style: italic;
+        font-style: normal;
       }
 
       .wl-empty-sub {

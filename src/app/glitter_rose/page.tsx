@@ -2,6 +2,27 @@
 import { useEffect } from 'react';
 
 export default function GlitterRose() {
+  // Dynamic product preset loader helper
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      (window as any).fetchPresetProductHelper = async (presetId: string) => {
+        try {
+          const { db } = await import('@/lib/firebase');
+          const { doc, getDoc } = await import('firebase/firestore');
+          const docRef = doc(db, 'products', presetId);
+          const docSnap = await getDoc(docRef);
+          if (docSnap.exists()) {
+            return docSnap.data();
+          }
+          return null;
+        } catch (e) {
+          console.error("fetchPresetProductHelper Error:", e);
+          return null;
+        }
+      };
+    }
+  }, []);
+
   useEffect(() => {
     // โหลด Flatpickr CSS
     if (!document.getElementById('flatpickr-css')) {
@@ -17,7 +38,7 @@ export default function GlitterRose() {
       js.id = 'flatpickr-js';
       js.src = 'https://cdn.jsdelivr.net/npm/flatpickr';
       document.head.appendChild(js);
-      
+
       // Load Thai locale after main script
       js.onload = () => {
         const thJs = document.createElement('script');
@@ -149,45 +170,48 @@ export default function GlitterRose() {
       ];
 
       const ROSE_COLORS = [
-        { id: 'red', name: 'แดง', hex: '#E53935' },
-        { id: 'pink', name: 'ชมพู', hex: '#F48FB1' },
-        { id: 'blue', name: 'น้ำเงิน', hex: '#1976D2' },
-        { id: 'white', name: 'ขาว', hex: '#F9F9F9', border: '#e0e0e0' },
-        { id: 'sky', name: 'ฟ้า', hex: '#81D4FA' },
-        { id: 'purple', name: 'ม่วง', hex: '#CE93D8' },
+        { id: 'red', name: 'แดง', img: '/images/Glitter Rose/ริบบิ้นแดง.jpg' },
+        { id: 'pink', name: 'ชมพู', img: '/images/Glitter Rose/ริบบิ้นชมพู.jpg' },
+        { id: 'blue', name: 'น้ำเงิน', img: '/images/Glitter Rose/ริบบิ้นน้ำเงิน.jpg' },
+        { id: 'white', name: 'ขาว', img: '/images/Glitter Rose/ริบบิ้นขาว.jpg' },
+        { id: 'sky', name: 'ฟ้า', img: '/images/Glitter Rose/ริบบิ้นฟ้า.jpg' },
+        { id: 'purple', name: 'ม่วง', img: '/images/Glitter Rose/ริบบิ้นม่วง.jpg' },
       ];
 
       const ROSE_LAYERS = [
-        { id: 'ramy_white', name: 'รามี่ขาว' },
-        { id: 'pearl_net_white', name: 'ตาข่ายมุกขาว' },
-        { id: 'sa_paper_white', name: 'กระดาษสาขาว' },
-        { id: 'ramy_black', name: 'รามี่ดำ' },
-        { id: 'pearl_net_black', name: 'ตาข่ายมุกดำ' },
-        { id: 'sa_paper_black', name: 'กระดาษสาดำ' },
+        { id: 'ramy_white', name: 'รามี่ขาว', img: '/images/Glitter Rose/รามี่ขาว.jpg' },
+        { id: 'pearl_net_white', name: 'ตาข่ายมุกขาว', img: '/images/Glitter Rose/ตาข่ายขอบมุกขาว.jpg' },
+        { id: 'sa_paper_white', name: 'กระดาษสาขาว', img: '/images/Glitter Rose/กระดาษสาขาว.jpg' },
+        { id: 'ramy_black', name: 'รามี่ดำ', img: '/images/Glitter Rose/รามี่ดำ.jpg' },
+        { id: 'pearl_net_black', name: 'ตาข่ายมุกดำ', img: '/images/Glitter Rose/ตาข่ายขอบมุกดำ.jpg' },
+        { id: 'sa_paper_black', name: 'กระดาษสาดำ', img: '/images/Glitter Rose/กระดาษสาดำ.jpg' },
       ];
 
       const ROSE_PAPERS = [
-        { id: 'white_solid', name: 'ขาวทึบ' },
-        { id: 'white_clear', name: 'ขาวใส' },
-        { id: 'white_gold', name: 'ขาวขอบทอง' },
-        { id: 'black_solid', name: 'ดำทึบ' },
-        { id: 'black_gold', name: 'ดำขอบทอง' },
-        { id: 'pink', name: 'ชมพู' },
+        { id: 'white_solid', name: 'ขาวทึบ', img: '/images/Glitter Rose/ขาวทึบ.jpg' },
+        { id: 'white_clear', name: 'ขาวใส', img: '/images/Glitter Rose/ขาวใส.jpg' },
+        { id: 'white_gold', name: 'ขาวขอบทอง', img: '/images/Glitter Rose/ขาวขอบทอง.jpg' },
+        { id: 'black_solid', name: 'ดำทึบ', img: '/images/Glitter Rose/ดำทึบ.jpg' },
+        { id: 'black_gold', name: 'ดำขอบทอง', img: '/images/Glitter Rose/ดำขอบทอง.jpg' },
       ];
 
       const ROSE_SHAPES = [
-        { id: 'triangle', name: 'สามเหลี่ยม' },
-        { id: 'rectangle', name: 'สี่เหลี่ยม' },
-        { id: 'open_front', name: 'เปิดหน้า' },
+        { id: 'triangle', name: 'สามเหลี่ยม', price: 0 },
+        { id: 'rectangle', name: 'สี่เหลี่ยม', price: 0 },
+        { id: 'open_front', name: 'เปิดหน้า', price: 0 },
+        { id: 'bouquet_triangle', name: 'ช่อฟูสามเหลี่ยม', price: 25 },
+        { id: 'bouquet_rectangle', name: 'ช่อฟูสี่เหลี่ยม', price: 25 },
       ];
 
       const ROSE_DECORATIONS = [
-        { id: 'ribbon', name: 'โบว์คาดช่อ', price: 15 },
-        { id: 'butterfly', name: 'ผีเสื้อ', price: 0 },
-        { id: 'blank_card', name: 'การ์ดเปล่า', price: 0 },
-        { id: 'stick', name: 'ก้านเสียบ', price: 5 },
-        { id: 'fairy_light', name: 'ไฟ', price: 15 },
-        { id: 'crown', name: 'มงกุฎ', price: 15 },
+        { id: 'ribbon_jfy_clear', name: 'โบว์คาดช่อ JUST FOR YOU สีขาวโปร่ง', price: 15, img: '/images/Glitter Rose/โบว์คาดช่อ JUST FOR YOU สีขาวโปร่ง.jpg' },
+        { id: 'ribbon_jfy_solid', name: 'โบว์คาดช่อ Just For You สีขาวทึบ', price: 15, img: '/images/Glitter Rose/โบว์คาดช่อ Just For You สีขาวทึบ.jpg' },
+        { id: 'ribbon_hbd_clear', name: 'โบว์คาดช่อ HAPPY BIRTHDAY สีดำโปร่ง', price: 15, img: '/images/Glitter Rose/โบว์คาดช่อ HAPPY BIRTHDAY สีดำโปร่ง.png' },
+        { id: 'butterfly', name: 'ผีเสื้อ', price: 0, img: '/images/Glitter Rose/ผีเสื้อ.jpg' },
+        { id: 'blank_card', name: 'การ์ดเปล่า', price: 0, img: '/images/Glitter Rose/การ์ดเปล่า.png' },
+        { id: 'stick', name: 'ก้านเสียบ', price: 5, img: '/images/Glitter Rose/ก้านเสียบ.png' },
+        { id: 'fairy_light', name: 'ไฟ', price: 15, img: '/images/Glitter Rose/ไฟ.jpg' },
+        { id: 'crown', name: 'มงกุฎ', price: 15, img: '/images/Glitter Rose/มงกุฏ.jpg' },
       ];
 
       const steps = [
@@ -227,6 +251,12 @@ export default function GlitterRose() {
           const item = ROSE_DECORATIONS.find(x => x.id === id);
           return acc + (item ? item.price : 0);
         }, 0);
+        if (selectedShape) {
+          const shapeItem = ROSE_SHAPES.find(x => x.id === selectedShape);
+          if (shapeItem && shapeItem.price) {
+            total += shapeItem.price;
+          }
+        }
         return total;
       }
 
@@ -263,6 +293,12 @@ export default function GlitterRose() {
       }
 
       function loadState() {
+        const isEditMode = window.location.search.includes('edit=true');
+        if (!isEditMode) {
+          localStorage.removeItem('editing_cart_id');
+          localStorage.removeItem(STORAGE_KEY);
+        }
+
         const saved = localStorage.getItem(STORAGE_KEY);
         if (saved) {
           try {
@@ -283,6 +319,23 @@ export default function GlitterRose() {
             deliveryTime = s.deliveryTime || '';
             additionalNote = s.additionalNote || '';
           } catch (err) { console.error('Failed to parse saved state', err); }
+        } else {
+          // Reset all variables to start completely fresh!
+          current = 0;
+          maxStepReached = 0;
+          selectedQty = null;
+          selectedColors = [];
+          selectedLayers = [];
+          selectedPaper = null;
+          selectedShape = null;
+          selectedDecorations = [];
+          basePrice = 0;
+          customerName = '';
+          customerPhone = '';
+          customerAddress = '';
+          deliveryDate = '';
+          deliveryTime = '';
+          additionalNote = '';
         }
         // รีเฟรชข้อมูลและ Summary
         updateTotalPrice();
@@ -323,9 +376,17 @@ export default function GlitterRose() {
           const item = ROSE_DECORATIONS.find(c => c.id === id);
           return acc + (item ? item.price : 0);
         }, 0);
+        if (selectedShape) {
+          const shapeItem = ROSE_SHAPES.find(x => x.id === selectedShape);
+          if (shapeItem && shapeItem.price) {
+            total += shapeItem.price;
+          }
+        }
 
         const sv = document.getElementById('sticky-price-val');
         if (sv) sv.textContent = total.toLocaleString();
+        const dv = document.getElementById('desktop-price-val');
+        if (dv) dv.textContent = total.toLocaleString();
       }
 
       function updateSummary() {
@@ -385,7 +446,9 @@ export default function GlitterRose() {
               <div class="color-card\${selectedColors.includes(c.id) ? ' selected' : ''}" 
                   data-id="\${c.id}" 
                   onclick="selectColor('\${c.id}')">
-                <div class="color-swatch" style="background:\${c.hex};\${c.border ? 'border:1.5px solid ' + c.border + ';' : ''}"></div>
+                <div class="color-swatch" style="overflow:hidden; display:flex; align-items:center; justify-content:center;">
+                  <img src="\${c.img}" alt="\${c.name}" style="width:100%; height:100%; object-fit:cover; border-radius:inherit;" />
+                </div>
                 <span class="color-name">\${c.name}</span>
               </div>
             \`).join('')}
@@ -409,7 +472,9 @@ export default function GlitterRose() {
               <div class="color-card\${selectedLayers.includes(c.id) ? ' selected' : ''}" 
                   data-id="\${c.id}" 
                   onclick="selectLayer('\${c.id}')">
-                <div class="color-swatch" style="background:var(--warm-white); border:1px solid var(--glass-border);"></div>
+                <div class="color-swatch" style="overflow:hidden; display:flex; align-items:center; justify-content:center; background:var(--warm-white); border:1px solid var(--glass-border);">
+                  \${c.img ? \`<img src="\${c.img}" alt="\${c.name}" style="width:100%; height:100%; object-fit:cover; border-radius:inherit;" />\` : ''}
+                </div>
                 <span class="color-name" style="text-transform:none; font-size:.8rem;">\${c.name}</span>
               </div>
             \`).join('')}
@@ -419,6 +484,18 @@ export default function GlitterRose() {
 
       function renderStep3() {
         mainBox.style.justifyContent = 'flex-start';
+        
+        let availableShapes = ROSE_SHAPES;
+        if (selectedQty < 10) {
+          availableShapes = availableShapes.filter(c => c.id !== 'bouquet_triangle' && c.id !== 'bouquet_rectangle');
+          if (selectedShape === 'bouquet_triangle' || selectedShape === 'bouquet_rectangle') {
+            selectedShape = null;
+            updateStep3Summary();
+            updateTotalPrice();
+            saveState();
+          }
+        }
+
         mainBox.innerHTML = \`
           <div class="qty-header">
             <h3>📜 เลือกกระดาษห่อ</h3>
@@ -429,7 +506,9 @@ export default function GlitterRose() {
               <div class="color-card\${selectedPaper === c.id ? ' selected' : ''}" 
                   data-id="\${c.id}" 
                   onclick="selectPaper('\${c.id}')">
-                <div class="color-swatch" style="background:var(--warm-white); border:1px solid var(--glass-border);"></div>
+                <div class="color-swatch" style="overflow:hidden; display:flex; align-items:center; justify-content:center; background:var(--warm-white); border:1px solid var(--glass-border);">
+                  \${c.img ? \`<img src="\${c.img}" alt="\${c.name}" style="width:100%; height:100%; object-fit:cover; border-radius:inherit;" />\` : ''}
+                </div>
                 <span class="color-name" style="text-transform:none; font-size:.8rem;">\${c.name}</span>
               </div>
             \`).join('')}
@@ -442,12 +521,15 @@ export default function GlitterRose() {
             <p>เลือกรูปทรงในการห่อช่อดอกไม้</p>
           </div>
           <div class="color-grid" id="shape-grid" style="margin-top:20px;">
-            \${ROSE_SHAPES.map(c => \`
+            \${availableShapes.map(c => \`
               <div class="color-card\${selectedShape === c.id ? ' selected' : ''}" 
                   data-id="\${c.id}" 
                   onclick="selectShape('\${c.id}')">
-                <div class="color-swatch" style="background:var(--warm-white); border:1px solid var(--glass-border);"></div>
-                <span class="color-name" style="text-transform:none; font-size:.8rem;">\${c.name}</span>
+                <div class="color-swatch" style="overflow:hidden; display:flex; align-items:center; justify-content:center; background:var(--warm-white); border:1px solid var(--glass-border);">
+                  \${c.img ? \`<img src="\${c.img}" alt="\${c.name}" style="width:100%; height:100%; object-fit:cover; border-radius:inherit;" />\` : ''}
+                </div>
+                <span class="color-name" style="text-transform:none; font-size:.8rem; margin-bottom:4px;">\${c.name}</span>
+                \${c.price > 0 ? \`<span style="font-size:.7rem; font-weight:700; color:var(--rose-gold); background:rgba(201,149,107,0.1); padding:2px 10px; border-radius:12px; letter-spacing:.02em;">+\${c.price} ฿</span>\` : ''}
               </div>
             \`).join('')}
           </div>
@@ -467,14 +549,16 @@ export default function GlitterRose() {
           
           <div style="margin-top:20px; text-align:left; width:100%;">
             <div style="font-size:.9rem; font-weight:600; color:var(--deep-brown); margin-bottom:12px; display:flex; align-items:center; gap:6px;">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>อุปกรณ์ตกแต่งฟรี
+              อุปกรณ์ตกแต่งฟรี
             </div>
             <div class="color-grid" id="decor-free-grid">
               \${freeDecors.map(c => \`
                 <div class="color-card\${selectedDecorations.includes(c.id) ? ' selected' : ''}" 
                     data-id="\${c.id}" 
                     onclick="selectDecoration('\${c.id}')">
-                  <div class="color-swatch" style="background:var(--warm-white); border:1px solid var(--glass-border);"></div>
+                  <div class="color-swatch" style="overflow:hidden; display:flex; align-items:center; justify-content:center; background:var(--warm-white); border:1px solid var(--glass-border);">
+                  \${c.img ? \`<img src="\${c.img}" alt="\${c.name}" style="width:100%; height:100%; object-fit:cover; border-radius:inherit;" />\` : ''}
+                </div>
                   <span class="color-name" style="text-transform:none; font-size:.8rem; margin-bottom:4px;">\${c.name}</span>
                   <span style="font-size:.7rem; font-weight:700; color:#4caf50; background:#e8f5e9; padding:2px 10px; border-radius:12px; letter-spacing:.02em;">ฟรี</span>
                 </div>
@@ -493,7 +577,9 @@ export default function GlitterRose() {
                 <div class="color-card\${selectedDecorations.includes(c.id) ? ' selected' : ''}" 
                     data-id="\${c.id}" 
                     onclick="selectDecoration('\${c.id}')">
-                  <div class="color-swatch" style="background:var(--warm-white); border:1px solid var(--glass-border);"></div>
+                  <div class="color-swatch" style="overflow:hidden; display:flex; align-items:center; justify-content:center; background:var(--warm-white); border:1px solid var(--glass-border);">
+                  \${c.img ? \`<img src="\${c.img}" alt="\${c.name}" style="width:100%; height:100%; object-fit:cover; border-radius:inherit;" />\` : ''}
+                </div>
                   <span class="color-name" style="text-transform:none; font-size:.8rem; margin-bottom:4px;">\${c.name}</span>
                   <span style="font-size:.7rem; font-weight:700; color:var(--rose-gold); background:rgba(201,149,107,0.1); padding:2px 10px; border-radius:12px; letter-spacing:.02em;">+\${c.price} ฿</span>
                 </div>
@@ -982,6 +1068,15 @@ export default function GlitterRose() {
         }, 0);
         total += decorAdd;
 
+        let shapePrice = 0;
+        if (selectedShape) {
+          const shapeItem = ROSE_SHAPES.find(x => x.id === selectedShape);
+          if (shapeItem && shapeItem.price) {
+            shapePrice = shapeItem.price;
+            total += shapePrice;
+          }
+        }
+
         const colorNames = selectedColors.map(id => ROSE_COLORS.find(x => x.id === id).name).join(', ');
         let layerNames = selectedLayers.map(id => ROSE_LAYERS.find(x => x.id === id).name).join(', ');
         if (!layerNames) layerNames = '-';
@@ -1010,7 +1105,7 @@ export default function GlitterRose() {
             <div class="r-row" style="color:var(--text-muted);"><span>\${layerNames}</span><span></span></div>
 
             <div class="r-row bold">
-              <span>กระดาษและทรงห่อ</span><span>ฟรี</span>
+              <span>กระดาษและทรงห่อ</span><span>\${shapePrice > 0 ? '+' + shapePrice.toLocaleString() + ' ฿' : 'ฟรี'}</span>
             </div>
             <div class="r-row" style="color:var(--text-muted);"><span>\${paperName} · ทรง\${shapeName}</span><span></span></div>
 
@@ -1078,6 +1173,18 @@ export default function GlitterRose() {
         }
 
         localStorage.removeItem(STORAGE_KEY);
+        
+        // ปิด Modal
+        const modal = document.getElementById('receipt-modal');
+        if (modal) {
+          modal.classList.remove('show');
+          document.body.style.overflow = '';
+        }
+
+        // แจ้งเตือนผู้ใช้ข้ามหน้าผ่าน sessionStorage
+        sessionStorage.setItem('order_success_toast', '1');
+
+        // เด้งไปหน้าตะกร้าสินค้าทันทีหลังจากบันทึก
         window.location.href = '/cart';
       }
 
@@ -1085,7 +1192,74 @@ export default function GlitterRose() {
         saveToCartOnly();
       }
 
+      async function loadPresetIfNeeded() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const presetId = urlParams.get('preset');
+        if (presetId && window.fetchPresetProductHelper) {
+          try {
+            showToast('กำลังโหลดแบบสินค้าสำเร็จรูป...');
+            const p = await window.fetchPresetProductHelper(presetId);
+            if (p && p.config) {
+              const config = p.config;
+              selectedQty = config.selectedQty || null;
+              selectedColors = config.selectedColors || [];
+              selectedLayers = config.selectedLayers || [];
+              selectedPaper = config.selectedPaper || null;
+              selectedShape = config.selectedShape || null;
+              selectedDecorations = config.selectedDecorations || [];
+              
+              // Calculate extra costs to deduce mathematically precise basePrice
+              let extra = 0;
+              const qty = selectedQty || 0;
+              let layerUnitPrice = 0;
+              if (qty > 3) {
+                if (qty <= 10) layerUnitPrice = 10;
+                else if (qty <= 20) layerUnitPrice = 15;
+                else layerUnitPrice = 20;
+              }
+              const layersCount = selectedLayers ? selectedLayers.length : 0;
+              if (layersCount > 1 && layerUnitPrice > 0) {
+                extra += (layersCount - 1) * layerUnitPrice;
+              }
+              if (selectedDecorations) {
+                extra += selectedDecorations.reduce((acc, id) => {
+                  const item = ROSE_DECORATIONS.find(x => x.id === id);
+                  return acc + (item ? item.price : 0);
+                }, 0);
+              }
+              
+              basePrice = Math.max(0, p.price - extra);
+              maxStepReached = 4;
+              
+              saveState();
+              updateTotalPrice();
+              updateStep1Summary();
+              updateStep2Summary();
+              updateStep3Summary();
+              updateStep4Summary();
+              updateUI();
+              
+              showToast('โหลดแบบสินค้าสำเร็จรูปเสร็จสิ้น!');
+            } else {
+              showToast('ไม่พบแบบสินค้าดังกล่าว');
+            }
+          } catch(e) {
+            console.error('Failed to load preset:', e);
+            showToast('เกิดข้อผิดพลาดในการโหลดแบบสินค้า');
+          }
+        }
+      }
+
       loadState();
+      loadPresetIfNeeded();
+
+      // ตรวจสอบและแสดงแจ้งเตือนถ้าเพิ่งสั่งสินค้าสำเร็จ
+      if (sessionStorage.getItem('order_success_toast')) {
+        sessionStorage.removeItem('order_success_toast');
+        setTimeout(() => {
+          showToast('เพิ่มลงตะกร้าเรียบร้อยแล้ว!');
+        }, 300);
+      }
 
       // ===== Routing: handle anchor links smoothly =====
       document.addEventListener('click', function (e) {
@@ -1114,13 +1288,15 @@ export default function GlitterRose() {
     __html: `
 
     <!-- Navbar -->
-    <nav class="navbar" style="padding-left: 20px; padding-right: 20px;">
-      <button class="back-btn-circle" onclick="window.history.length > 1 ? window.history.back() : window.location.href='/'">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-          <path d="M15 18l-6-6 6-6" />
-        </svg>
-      </button>
-      <a href="/" class="nav-logo" style="position: absolute; left: 50%; transform: translateX(-50%);">"Bear has flower"</a>
+    <nav class="navbar">
+      <div class="navbar-inner">
+        <button class="back-btn-circle" onclick="window.history.length > 1 ? window.history.back() : window.location.href='/'">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M15 18l-6-6 6-6" />
+          </svg>
+        </button>
+        <a href="/" class="nav-logo" style="position: absolute; left: 50%; transform: translateX(-50%);">"Bear has flower"</a>
+      </div>
     </nav>
 
     <div class="page-wrap">
@@ -1169,10 +1345,10 @@ export default function GlitterRose() {
       <!-- Selection Bar (Desktop/iPad) -->
       <div class="selection-bar">
         <div class="bar-step-info">
-          ขั้นตอนที่ <strong id="step-num">1</strong> / 5 &nbsp;—&nbsp; <strong id="step-name">Rose</strong>
+          ราคา: <strong id="desktop-price-val" style="color: var(--rose-gold); font-size: 1.4rem;">0</strong> บาท
         </div>
         <div class="btn-group">
-          <button class="btn-back" id="btn-prev-step" onclick="prevStep()">← ก่อนหน้า</button>
+          <button class="btn-back" id="btn-prev-step" onclick="prevStep()">ก่อนหน้า</button>
           <button class="btn-next" id="btn-next-step" onclick="nextStep()">
             ถัดไป
           </button>
