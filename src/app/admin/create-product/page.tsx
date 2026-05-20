@@ -116,7 +116,7 @@ export default function CreateProductPage() {
     const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser) {
         setUser(currentUser);
-        const hasAdmin = await checkIsAdmin(currentUser.uid, currentUser.displayName);
+        const hasAdmin = await checkIsAdmin(currentUser.uid, currentUser.displayName, currentUser.email);
         setIsAdminUser(hasAdmin);
       } else {
         setUser(null);
@@ -142,7 +142,7 @@ export default function CreateProductPage() {
     }
 
     if (editRaw || editId || isEditQuery) {
-      if (selectedType !== 'glitter_rose') {
+      if (selectedType !== 'glitter_rose' && selectedType !== 'velvet_flower') {
         setSelectedType('glitter_rose');
       }
       setViewMode('form');
@@ -177,10 +177,12 @@ export default function CreateProductPage() {
 
   // Main interactive logic is loaded when option is selected
   useEffect(() => {
-    if (isAdminUser !== true || selectedType !== 'glitter_rose' || viewMode !== 'form') return;
+    if (isAdminUser !== true || (selectedType !== 'glitter_rose' && selectedType !== 'velvet_flower') || viewMode !== 'form') return;
 
     const script = document.createElement('script');
+    const PRODUCT_TYPE = '${selectedType}';
     script.innerHTML = `
+      const PRODUCT_TYPE = '${selectedType}';
       const ROSE_PRICES = [
         { qty: 1, price: 79 },
         { qty: 3, price: 159 },
@@ -269,7 +271,7 @@ export default function CreateProductPage() {
       const EDIT_KEY = 'bear_flower_edit_product';
       const EDIT_ID_KEY = 'bear_flower_edit_product_id';
 
-      const STORAGE_KEY = 'bear_flower_create_prod_v1';
+      const STORAGE_KEY = 'bear_flower_create_prod_' + PRODUCT_TYPE;
 
       function calculateTotalPrice() {
         let total = basePrice;
@@ -322,8 +324,8 @@ export default function CreateProductPage() {
             selectedShape = cfg.selectedShape || null;
             selectedDecorations = cfg.selectedDecorations || [];
             basePrice = cfg.basePrice || 0;
-            current = 0;
-            maxStepReached = 4;
+            current = PRODUCT_TYPE === 'velvet_flower' ? 4 : 0;
+            maxStepReached = PRODUCT_TYPE === 'velvet_flower' ? 4 : 4;
             saveState();
           } catch (err) {
             console.error('Failed to parse edit product', err);
@@ -365,8 +367,8 @@ export default function CreateProductPage() {
       }
 
       function resetForm() {
-        current = 0;
-        maxStepReached = 0;
+        current = PRODUCT_TYPE === 'velvet_flower' ? 4 : 0;
+        maxStepReached = PRODUCT_TYPE === 'velvet_flower' ? 4 : 0;
         selectedQty = null;
         selectedColors = [];
         selectedLayers = [];
@@ -931,6 +933,10 @@ export default function CreateProductPage() {
       function updateUI() {
         stepEls.forEach((el, i) => {
           el.classList.remove('active', 'done');
+          if (PRODUCT_TYPE === 'velvet_flower') {
+            if (i < 4) el.style.display = 'none';
+            else el.style.display = '';
+          }
           if (i < current || (i < maxStepReached && i !== current)) el.classList.add('done');
           if (i === current) el.classList.add('active');
         });
@@ -945,7 +951,7 @@ export default function CreateProductPage() {
         else if (current === 4) renderStep5();
 
         const isLast = current === steps.length - 1;
-        const isFirst = current === 0;
+        const isFirst = PRODUCT_TYPE === 'velvet_flower' ? false : current === 0;
 
         if (btnPrev) btnPrev.style.visibility = isFirst ? 'hidden' : 'visible';
         const nextBtnEl = document.getElementById('btn-next-step');
@@ -959,6 +965,24 @@ export default function CreateProductPage() {
       }
 
       window.nextStep = function() {
+        if (PRODUCT_TYPE === 'velvet_flower') {
+          if (current === 4) {
+            if (!productName.trim() || !productPrice.trim() || !productCoverImage) {
+              showToast('กรุณากรอกข้อมูลที่จำเป็นให้ครบถ้วน (ชื่อสินค้า, ราคาสินค้า และรูปหน้าปก)');
+              const ids = ['ipt-prod-name', 'ipt-prod-price'];
+              ids.forEach(id => {
+                const el = document.getElementById(id);
+                if (el && !el.value.trim()) {
+                  el.style.borderColor = '#e53935';
+                  setTimeout(() => { el.style.borderColor = 'var(--glass-border)'; }, 2000);
+                }
+              });
+              return;
+            }
+            submitProductToFirestore();
+          }
+          return;
+        }
         if (current === 0) {
           if (selectedQty === null || selectedColors.length === 0) {
             const gridId = selectedQty === null ? 'qty-dropdown' : 'color-grid';
@@ -1030,6 +1054,9 @@ export default function CreateProductPage() {
       }
 
       window.prevStep = function() {
+        if (PRODUCT_TYPE === 'velvet_flower') {
+          return;
+        }
         if (current > 0) {
           current--;
           saveState();
@@ -1048,11 +1075,11 @@ export default function CreateProductPage() {
 
           const productData = {
             name: productName.trim(),
-            description: productDesc.trim() || 'ช่อกุหลาบกลิตเตอร์สั่งทำพิเศษตามแบบ',
+            description: productDesc.trim() || (PRODUCT_TYPE === 'velvet_flower' ? 'ดอกไม้ลวดกำมะหยี่สั่งทำพิเศษตามแบบ' : 'ช่อกุหลาบกลิตเตอร์สั่งทำพิเศษตามแบบ'),
             price: parseFloat(productPrice),
             badge: productBadge.trim() || (selectedQty ? selectedQty + ' ดอก' : 'สั่งทำพิเศษ'),
             coverImage: productCoverImage,
-            type: 'glitter_rose',
+            type: PRODUCT_TYPE,
             config: {
               selectedQty,
               selectedColors,
@@ -1607,11 +1634,14 @@ export default function CreateProductPage() {
                   <span className="option-badge active">เริ่มสร้างตัวเลือกสินค้า</span>
                 </div>
 
-                <div className="option-card disabled">
+                <div className="option-card" onClick={() => {
+                  setSelectedType('velvet_flower');
+                  setViewMode('form');
+                }}>
                   <div className="option-icon">🧸</div>
                   <h3>ดอกไม้ลวดกำมะหยี่</h3>
-                  <p>สร้างสินค้ากลุ่มดอกไม้ประดิษฐ์จากลวดกำมะหยี่ เช่น ดอกทานตะวัน ทิวลิป ดอกเดซี่ และการจัดช่อตกแต่งพิเศษ (ระบบโครงสร้างแบบฟอร์มนี้จะเปิดให้ใช้งานในอนาคต)</p>
-                  <span className="option-badge locked">⚡ เร็วๆ นี้</span>
+                  <p>สร้างสินค้ากลุ่มดอกไม้ประดิษฐ์จากลวดกำมะหยี่ เช่น ดอกทานตะวัน ทิวลิป ดอกเดซี่ และการจัดช่อตกแต่งพิเศษ</p>
+                  <span className="option-badge active">เริ่มสร้างตัวเลือกสินค้า</span>
                 </div>
               </div>
             </div>

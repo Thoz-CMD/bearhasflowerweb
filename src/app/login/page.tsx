@@ -2,18 +2,15 @@
 
 import React, { useState, useEffect } from 'react';
 import { auth, db } from '@/lib/firebase';
+import { checkIsAdmin } from '@/lib/admin';
 import { 
-  signInWithEmailAndPassword, 
-  createUserWithEmailAndPassword,
   onAuthStateChanged,
-  updateProfile
+  GoogleAuthProvider,
+  signInWithPopup
 } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
 
 export default function LoginPage() {
-  const [phoneNumber, setPhoneNumber] = useState('');
-  const [password, setPassword] = useState('');
-  const [mode, setMode] = useState('login'); // login, signup
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -25,99 +22,39 @@ export default function LoginPage() {
       }
     });
 
-    if (typeof window !== 'undefined') {
-      (window as any).showBeautifulAlert = function(message: string, type: string = 'info', title: string = 'แจ้งเตือน') {
-        return new Promise((resolve) => {
-          const existing = document.getElementById('beautiful-alert-overlay');
-          if (existing) existing.remove();
 
-          const overlay = document.createElement('div');
-          overlay.id = 'beautiful-alert-overlay';
-          overlay.className = 'beautiful-alert-overlay';
-
-          let icon = '🌸';
-          if (type === 'success') icon = '✅';
-          if (type === 'error') icon = '❌';
-          if (type === 'warning') icon = '⚠️';
-
-          overlay.innerHTML = `
-            <div class="beautiful-alert-modal">
-              <div class="beautiful-alert-icon ${type}">${icon}</div>
-              <h3 class="beautiful-alert-title">${title}</h3>
-              <p class="beautiful-alert-message">${message}</p>
-              <div class="beautiful-alert-buttons">
-                <button class="beautiful-alert-btn confirm-btn">ตกลง</button>
-              </div>
-            </div>
-          `;
-
-          document.body.appendChild(overlay);
-          document.body.style.overflow = 'hidden';
-
-          setTimeout(() => overlay.classList.add('active'), 10);
-
-          const closeAlert = () => {
-            overlay.classList.remove('active');
-            overlay.classList.add('closing');
-            document.body.style.overflow = '';
-            setTimeout(() => {
-              overlay.remove();
-              resolve(true);
-            }, 300);
-          };
-
-          overlay.querySelector('.confirm-btn')?.addEventListener('click', closeAlert);
-          overlay.addEventListener('click', (e) => {
-            if (e.target === overlay) closeAlert();
-          });
-        });
-      };
-    }
 
     return () => unsubscribe();
   }, []);
 
-  const handleAuth = async (e: React.FormEvent) => {
-    e.preventDefault();
+
+
+  const handleGoogleSignIn = async () => {
     setError('');
     setLoading(true);
-
-    // Technique: Convert phone to fake email
-    const fakeEmail = `${phoneNumber.trim()}@bearhasflower.local`;
-
     try {
-      if (mode === 'login') {
-        await signInWithEmailAndPassword(auth, fakeEmail, password);
-      } else {
-        const userCredential = await createUserWithEmailAndPassword(auth, fakeEmail, password);
-        // Save phone number as display name
-        await updateProfile(userCredential.user, { displayName: phoneNumber });
-        
-        // Save user profile to Firestore users collection
-        const user = userCredential.user;
-        const trimmedPhone = phoneNumber.trim();
-        const isAdminPhone = trimmedPhone === '0656144703';
-        
-        await setDoc(doc(db, 'users', user.uid), {
-          uid: user.uid,
-          phoneNumber: trimmedPhone,
-          role: isAdminPhone ? 'admin' : 'user',
-          createdAt: new Date().toISOString()
-        });
+      const provider = new GoogleAuthProvider();
+      const result = await signInWithPopup(auth, provider);
+      const user = result.user;
 
-        await (window as any).showBeautifulAlert('สมัครสมาชิกสำเร็จ!', 'success', 'สร้างบัญชีผู้ใช้');
-      }
+      // Check if user's email is in admin whitelist
+      const isAdmin = await checkIsAdmin(user.uid, null, user.email);
+
+      // Ensure a user document exists in Firestore
+      await setDoc(doc(db, 'users', user.uid), {
+        uid: user.uid,
+        email: user.email || null,
+        displayName: user.displayName || null,
+        role: isAdmin ? 'admin' : 'user',
+        provider: 'google',
+        createdAt: new Date().toISOString()
+      }, { merge: true });
+
+      // Redirect to home after successful sign-in
+      window.location.href = '/';
     } catch (err: any) {
-      console.error(err);
-      if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
-        setError('เบอร์โทรศัพท์หรือรหัสผ่านไม่ถูกต้อง');
-      } else if (err.code === 'auth/email-already-in-use') {
-        setError('เบอร์โทรศัพท์นี้ถูกใช้งานไปแล้ว');
-      } else if (err.code === 'auth/weak-password') {
-        setError('รหัสผ่านต้องมีความยาวอย่างน้อย 6 ตัวอักษร');
-      } else {
-        setError('เกิดข้อผิดพลาด โปรดลองอีกครั้ง');
-      }
+      console.error('Google sign-in error', err);
+      setError('การล็อกอินด้วย Google ล้มเหลว โปรดลองอีกครั้ง');
     } finally {
       setLoading(false);
     }
@@ -156,6 +93,16 @@ export default function LoginPage() {
 
         .logo-area {
           margin-bottom: 30px;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+        }
+
+        .logo-image {
+          width: 300px;
+          height: 300px;
+          margin-bottom: 15px;
+          object-fit: contain;
         }
 
         .logo-text {
@@ -172,89 +119,41 @@ export default function LoginPage() {
           color: #5c4738;
         }
 
-        .mode-toggle {
-          display: flex;
-          background: #fdf5f6;
-          border-radius: 50px;
-          padding: 4px;
-          margin-bottom: 30px;
-        }
 
-        .mode-btn {
-          flex: 1;
-          border: none;
-          background: none;
-          padding: 10px;
-          border-radius: 50px;
-          font-size: 0.85rem;
-          font-weight: 600;
-          color: #a08a8e;
-          cursor: pointer;
-          transition: all 0.3s;
-        }
 
-        .mode-btn.active {
-          background: #db8a9e;
-          color: #fff;
-          box-shadow: 0 4px 10px rgba(219, 138, 158, 0.2);
-        }
-
-        .form-group {
-          margin-bottom: 20px;
-          text-align: left;
-        }
-
-        .label {
-          display: block;
-          font-size: 0.85rem;
-          font-weight: 600;
-          color: #a08a8e;
-          margin-bottom: 8px;
-          margin-left: 5px;
-        }
-
-        .input-field {
-          width: 100%;
-          padding: 14px 20px;
-          border: 1.5px solid #fdf5f6;
-          background: #fdfafb;
-          border-radius: 16px;
-          font-size: 1rem;
-          color: #5c4738;
-          transition: all 0.3s;
-          outline: none;
-        }
-
-        .input-field:focus {
-          border-color: #db8a9e;
-          background: #fff;
-        }
-
-        .btn-primary {
+        .btn-google {
           width: 100%;
           padding: 16px;
-          background: #db8a9e;
-          color: #fff;
-          border: none;
+          background: #fff;
+          color: #333;
+          border: 1.5px solid #db8a9e;
           border-radius: 16px;
           font-size: 1rem;
           font-weight: 700;
-          margin-top: 15px;
+          margin-top: 30px;
           cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 10px;
           transition: all 0.3s;
-          box-shadow: 0 8px 20px rgba(219, 138, 158, 0.25);
+          box-shadow: 0 4px 10px rgba(219, 138, 158, 0.1);
         }
 
-        .btn-primary:hover {
+        .btn-google:hover {
+          background: #fdf5f6;
           transform: translateY(-2px);
-          box-shadow: 0 12px 25px rgba(219, 138, 158, 0.35);
+          box-shadow: 0 8px 20px rgba(219, 138, 158, 0.2);
         }
 
-        .btn-primary:disabled {
+        .btn-google:disabled {
           background: #e0bec6;
           cursor: not-allowed;
           transform: none;
+          color: #999;
         }
+
+        .btn-google svg { width: 20px; height: 20px; }
 
         .error-msg {
           color: #e53935;
@@ -276,64 +175,21 @@ export default function LoginPage() {
       <div className="login-card">
         <div className="logo-area">
           <div className="logo-text">"Bear has flower"</div>
-          <div className="welcome-text">
-            {mode === 'login' ? 'เข้าสู่ระบบ' : 'สร้างบัญชีใหม่'}
-          </div>
+          <div className="welcome-text">เข้าสู่ระบบ</div>
+          <img src="/images/โลโก้หน้าล็อกอิน.png" alt="Bear has flower" className="logo-image" />
         </div>
 
-        <div className="mode-toggle">
-          <button 
-            className={`mode-btn ${mode === 'login' ? 'active' : ''}`}
-            onClick={() => setMode('login')}
-          >
-            เข้าสู่ระบบ
-          </button>
-          <button 
-            className={`mode-btn ${mode === 'signup' ? 'active' : ''}`}
-            onClick={() => setMode('signup')}
-          >
-            สมัครสมาชิก
-          </button>
-        </div>
+        {error && <div className="error-msg">{error}</div>}
 
-        <form onSubmit={handleAuth}>
-          <div className="form-group">
-            <label className="label">เบอร์โทรศัพท์</label>
-            <input 
-              type="tel" 
-              className="input-field" 
-              placeholder="08X-XXX-XXXX"
-              value={phoneNumber}
-              onChange={(e) => setPhoneNumber(e.target.value)}
-              required
-            />
-          </div>
-
-          <div className="form-group">
-            <label className="label">รหัสผ่าน</label>
-            <input 
-              type="password" 
-              className="input-field" 
-              placeholder="รหัสผ่านอย่างน้อย 6 ตัว"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              minLength={6}
-            />
-          </div>
-          
-          {error && <div className="error-msg">{error}</div>}
-          
-          <button type="submit" className="btn-primary" disabled={loading}>
-            {loading ? 'กำลังประมวลผล...' : (mode === 'login' ? 'เข้าสู่ระบบ' : 'สมัครสมาชิก')}
-          </button>
-        </form>
-
-        <p className="info-text">
-          {mode === 'signup' 
-            ? 'การสมัครสมาชิกช่วยให้คุณติดตามสถานะออเดอร์และดูประวัติการสั่งซื้อได้จากทุกที่' 
-            : 'หากยังไม่มีบัญชี สามารถสลับไปที่เมนูสมัครสมาชิกได้ด้านบน'}
-        </p>
+        <button type="button" className="btn-google" onClick={handleGoogleSignIn} disabled={loading}>
+          <svg width="20" height="20" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+            <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+            <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+            <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+          </svg>
+          {loading ? 'กำลังประมวลผล...' : 'เข้าสู่ระบบด้วย Google'}
+        </button>
       </div>
     </div>
   );

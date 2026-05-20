@@ -436,7 +436,7 @@ export default function AdminPage() {
       if (currentUser) {
         setUser(currentUser);
         // Verify admin privilege
-        const hasAdmin = await checkIsAdmin(currentUser.uid, currentUser.displayName);
+        const hasAdmin = await checkIsAdmin(currentUser.uid, currentUser.displayName, currentUser.email);
         setIsAdminUser(hasAdmin);
       } else {
         setUser(null);
@@ -2883,7 +2883,13 @@ export default function AdminPage() {
                             <div className="order-main-info">
                               <div className="order-avatar">🛒</div>
                               <div className="order-meta">
-                                <span className="order-id">ออเดอร์ #{order.id.substring(0, 8).toUpperCase()}</span>
+                                {
+                                  (() => {
+                                    const customItem = order.items?.find((i: any) => i.config);
+                                    const customerName = customItem?.config?.customerName || 'ไม่ระบุ';
+                                    return <span className="order-id">ออเดอร์ {customerName}</span>;
+                                  })()
+                                }
                                 <span className="order-date">{formatOrderDate(order.createdAt)}</span>
                               </div>
                             </div>

@@ -17,13 +17,13 @@ export default function Home() {
     if (alreadyChecked && auth.currentUser) {
       setUser(auth.currentUser);
       setLoading(false);
-      checkIsAdmin(auth.currentUser.uid, auth.currentUser.displayName).then(res => setIsAdmin(res));
+      checkIsAdmin(auth.currentUser.uid, auth.currentUser.displayName, auth.currentUser.email).then(res => setIsAdmin(res));
     }
 
     const unsubscribe = onAuthStateChanged(auth, async (u) => {
       setUser(u);
       if (u) {
-        const res = await checkIsAdmin(u.uid, u.displayName);
+        const res = await checkIsAdmin(u.uid, u.displayName, u.email);
         setIsAdmin(res);
       } else {
         setIsAdmin(false);
