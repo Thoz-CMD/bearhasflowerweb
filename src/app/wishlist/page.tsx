@@ -18,6 +18,27 @@ export default function Wishlist() {
     }
   }, []);
 
+  // Expose React Firebase helper for fetching products on Wishlist page
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      (window as any).fetchWishlistProductsHelper = async () => {
+        try {
+          const { db } = await import('@/lib/firebase');
+          const { collection, getDocs } = await import('firebase/firestore');
+          const snap = await getDocs(collection(db, 'products'));
+          const products: any[] = [];
+          snap.forEach(doc => {
+            products.push({ id: doc.id, ...doc.data() });
+          });
+          return products;
+        } catch (e) {
+          console.error("fetchWishlistProductsHelper Error:", e);
+          return [];
+        }
+      };
+    }
+  }, []);
+
   useEffect(() => {
     if (loading) return;
     const script = document.createElement('script');
@@ -122,7 +143,7 @@ export default function Wishlist() {
         }
       }
 
-      function renderWishlist() {
+      async function renderWishlist() {
         const list = getWishlist();
         const container = document.getElementById('wishlist-container');
         const emptyState = document.getElementById('wishlist-empty');
@@ -140,31 +161,65 @@ export default function Wishlist() {
 
         if (emptyState) emptyState.style.display = 'none';
 
+        let dbProducts = [];
+        if (window.fetchWishlistProductsHelper) {
+          try {
+            dbProducts = await window.fetchWishlistProductsHelper();
+          } catch (e) {
+            console.error("Failed to load wishlist products from DB:", e);
+          }
+        }
+
         container.innerHTML = list.map((item, idx) => {
           const key = item.id;
-          const meta = PRODUCTS_REGISTRY[key] || {
-            emoji: '🌹',
-            badge: 'Custom',
-            name: item.name || 'สินค้าแนะนำ',
-            desc: 'สินค้าหมีมีดอกไม้คัดสรรพิเศษเพื่อคุณ',
-            price: '—',
-            link: '/glitter_rose'
-          };
+          const dbProd = dbProducts.find(p => {
+            const cleanDbName = p.name.trim().replace(/\\s+/g, '_');
+            return cleanDbName === key || p.id === key;
+          });
+
+          let meta = PRODUCTS_REGISTRY[key];
+          if (dbProd) {
+            const isVelvet = dbProd.type === 'velvet_flower' || (dbProd.name && dbProd.name.includes('กำมะหยี่')) || (dbProd.description && dbProd.description.includes('กำมะหยี่'));
+            meta = {
+              emoji: '🌹',
+              badge: dbProd.badge || 'แนะนำ',
+              name: dbProd.name,
+              desc: dbProd.description || 'สินค้าหมีมีดอกไม้คัดสรรพิเศษเพื่อคุณ',
+              price: dbProd.price !== undefined ? dbProd.price.toLocaleString() : '—',
+              link: isVelvet ? '/velvet_wire?preset=' + dbProd.id : '/glitter_rose?preset=' + dbProd.id,
+              coverImage: dbProd.coverImage || null
+            };
+          }
+
+          if (!meta) {
+            meta = {
+              emoji: '🌹',
+              badge: 'Custom',
+              name: item.name || 'สินค้าแนะนำ',
+              desc: 'สินค้าหมีมีดอกไม้คัดสรรพิเศษเพื่อคุณ',
+              price: '—',
+              link: '/glitter_rose',
+              coverImage: null
+            };
+          }
 
           return \`
             <article class="product-card fade-in" style="animation-delay: \${0.05 * (idx + 1)}s">
-              <div class="product-image-wrap">
-                <div class="product-placeholder">\${meta.emoji}</div>
+              <div class="product-image-wrap" onclick="window.location.href='\${meta.link}'" style="cursor:pointer; position:relative; overflow:hidden;">
+                \${meta.coverImage
+                  ? '<img src="' + meta.coverImage + '" alt="' + meta.name + '" class="product-image" style="width:100%; height:100%; object-fit:cover; position:absolute; top:0; left:0; border-radius:inherit;" />'
+                  : '<div class="product-placeholder">' + meta.emoji + '</div>'
+                }
                 \${meta.badge ? '<span class="product-badge">' + meta.badge + '</span>' : ''}
-                <button class="product-wishlist" onclick="removeFromWishlist('\${item.id}')" aria-label="ลบออก" style="color: #e05c7a; border-color: #e05c7a;">
+                <button class="product-wishlist" onclick="event.stopPropagation(); removeFromWishlist('\${item.id}')" aria-label="ลบออก" style="color: #e05c7a; border-color: #e05c7a; z-index:10;">
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="#e05c7a" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12Z" />
                   </svg>
                 </button>
               </div>
               <div class="product-info">
-                <div class="product-name">\${meta.name}</div>
-                <div class="product-desc">\${meta.desc}</div>
+                <div class="product-name" onclick="window.location.href='\${meta.link}'" style="cursor:pointer;">\${meta.name}</div>
+                <div class="product-desc" onclick="window.location.href='\${meta.link}'" style="cursor:pointer;">\${meta.desc}</div>
                 <div class="product-footer">
                   <div class="product-price">\${meta.price} <span>บาท</span></div>
                   <button class="add-cart-btn" onclick="window.location.href='\${meta.link}'" aria-label="เพิ่มในตะกร้า">

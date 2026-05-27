@@ -1334,7 +1334,7 @@ export default function CreateProductPage() {
           background: #fdf8f9;
           font-family: 'Noto Sans Thai', sans-serif;
           color: #5c4738;
-          padding: 20px 20px 40px;
+          padding: 20px 15px 40px;
         }
 
         .dashboard-container {
@@ -1435,9 +1435,10 @@ export default function CreateProductPage() {
 
         /* manage products screen */
         .manage-screen {
-          max-width: 1100px;
+          max-width: 1200px;
           margin: 0 auto;
-          padding: 30px 20px 60px;
+          /* Keep spacing consistent with other pages */
+          padding: 20px 0 60px;
           width: 100%;
         }
         .manage-header {
@@ -1481,6 +1482,47 @@ export default function CreateProductPage() {
           display: grid;
           grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
           gap: 22px;
+        }
+        @media (max-width: 600px) {
+          .manage-grid {
+            /* Mobile: show product cards as 2 columns */
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 16px;
+          }
+          .manage-desc {
+            display: none;
+          }
+          .manage-footer {
+            /* Mobile: align price to left, buttons to right */
+            flex-direction: row;
+            align-items: center;
+            gap: 6px;
+            flex-wrap: nowrap;
+            justify-content: space-between;
+          }
+          .manage-price {
+            font-size: 0.90rem !important;
+            white-space: nowrap;
+            flex-shrink: 0;
+          }
+          .manage-price span {
+            font-size: 0.56rem !important;
+            margin-left: 2px;
+          }
+          .manage-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 4px;
+            flex-shrink: 0;
+            margin-left: auto;
+          }
+          .manage-actions .admin-btn {
+            font-size: 0.65rem !important;
+            padding: 5px 7px;
+            border-radius: 10px;
+            white-space: nowrap;
+            line-height: 1.0;
+          }
         }
         .manage-card {
           background: #fff;
@@ -1559,6 +1601,7 @@ export default function CreateProductPage() {
         .manage-actions {
           display: flex;
           gap: 6px;
+          margin-left: auto;
         }
       `}</style>
 

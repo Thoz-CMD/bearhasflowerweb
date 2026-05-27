@@ -1,0 +1,29 @@
+<USER_REQUEST>
+ช่วยปรับปรุงดีไซน์ (Redesign) หน้าจอ Dashboard หน้า admin ของเว็บไซต์ฉันใหม่ โดยให้ยึดโครงสร้าง การจัดวาง Layout และสไตล์ความสวยงามตามแนวทาง B2B SaaS แบบโมเดิร์นตามรายละเอียดด้านล่างนี้ (เน้นเฉพาะโครงสร้าง UI/UX, การจัดวางตำแหน่งคอมโพเนนต์ และการกำหนดสไตล์ด้วย Tailwind CSS โดยไม่ต้องสนใจข้อมูลตัวหนังสือดิบในภาพ):
+
+1. โครงสร้าง Layout และธีมโดยรวม:
+- แถบเมนูด้านซ้าย (Sidebar Navigation): ใช้พื้นหลังสีขาวคลีน มีเส้นขอบขวาบางๆ ส่วนบนสุดใส่โลโก้/ชื่อแบรนด์ ส่วนตรงกลางเป็นลิงก์เมนูต่างๆ พร้อมไอคอนแบบเส้นมินิมอล (Line-art icons) และมีระยะห่าง (Padding) ที่นุ่มนวล ส่วนล่างสุดมีช่องแสดงโปรไฟล์ผู้ใช้งานและปุ่มย่อแถบเมนูเล็กๆ
+- พื้นที่เนื้อหาหลัก (Main Content Area): ใช้พื้นหลังสีเทาอ่อน ไล่เฉดสีนุ่มนวล เพื่อให้ความรู้สึกโปร่ง โล่ง และหรูหรา (High-end feel)
+- แถบหัวขอด้านบน (Top Header): จัดวางแบบมินิมอล มีช่องค้นหา (Search bar) 
+<truncated 3624 bytes>
+สีม่วงสว่างหรือสีน้ำเงินครามเข้ม (เช่น Indigo/Purple #6366F1) สำหรับปุ่มที่ถูกกด, กราฟ, และแถบสถานะต่างๆ ส่วนองค์ประกอบทั่วไปให้ใช้สีเทาหม่นเพื่อความสบายตา
+- ขอบและมุมมน (Borders & Radii): ใช้สไตล์มุมโค้งมนขนาดปานกลางถึงใหญ่ (rounded-lg ถึง rounded-xl) กับทุกๆ การ์ดและวิดเจ็ตบนดีไซน์ เพื่อให้งานออกแบบดูนุ่มนวลและเป็นไปในทิศทางเดียวกันทั้งหมด
+</USER_REQUEST>
+<ADDITIONAL_METADATA>
+The current local time is: 2026-05-27T22:29:42+07:00.
+
+The user's current state is as follows:
+Active Document: c:\Users\Thoz\Desktop\Bear has flower\nextjs-app\src\app\login\page.tsx (LANGUAGE_TSX)
+Cursor is on line: 236
+Other open documents:
+- c:\Users\Thoz\Desktop\Bear has flower\nextjs-app\src\app\login\page.tsx (LANGUAGE_TSX)
+- c:\Users\Thoz\Desktop\Bear has flower\nextjs-app\src\app\page.tsx (LANGUAGE_TSX)
+- c:\Users\Thoz\Desktop\Bear has flower\nextjs-app\src\app\about\page.tsx (LANGUAGE_TSX)
+- c:\Users\Thoz\Desktop\Bear has flower\nextjs-app\src\app\glitter_rose\page.tsx (LANGUAGE_TSX)
+- c:\Users\Thoz\Desktop\Bear has flower\nextjs-app\src\app\admin\page.tsx (LANGUAGE_TSX)
+Running terminal commands:
+- npm run dev (in c:\Users\Thoz\Desktop\Bear has flower\nextjs-app, running for 102h18m49s)
+</ADDITIONAL_METADATA>
+<USER_SETTINGS_CHANGE>
+The user changed setting `Model Selection` from Gemini 3.5 Flash (Medium) to Gemini 3.5 Flash (High). No need to comment on this change if the user doesn't ask about it. If reporting what model you are, please use a human readable name instead of the exact string.
+</USER_SETTINGS_CHANGE>

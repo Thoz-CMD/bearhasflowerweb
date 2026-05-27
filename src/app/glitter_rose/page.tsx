@@ -61,6 +61,19 @@ export default function GlitterRose() {
           box-shadow: 0 10px 25px rgba(0,0,0,0.08) !important;
           font-family: inherit !important;
           padding: 10px !important;
+          box-sizing: content-box !important;
+          width: 315px !important;
+        }
+        .flatpickr-days {
+          width: 315px !important;
+        }
+        .dayContainer {
+          width: 315px !important;
+          min-width: 315px !important;
+          max-width: 315px !important;
+        }
+        .flatpickr-day {
+          max-width: 45px !important;
         }
         .flatpickr-day.selected, .flatpickr-day.selected:hover, .flatpickr-day.selected:focus {
           background: var(--rose-gold) !important;
@@ -765,7 +778,19 @@ export default function GlitterRose() {
         const yyyy = d.getFullYear();
         const mm = String(d.getMonth() + 1).padStart(2, '0');
         const dd = String(d.getDate()).padStart(2, '0');
-        return \`\${yyyy}-\${mm}-\${dd}\`;
+        return yyyy + '-' + mm + '-' + dd;
+      }
+
+      // Returns the earliest delivery date string based on selected quantity.
+      function getMinDeliveryStr() {
+        const d = new Date();
+        // If ordering 30 or more roses, require at least 2 days in advance (today + 3 days).
+        const offset = (selectedQty && selectedQty >= 30) ? 3 : 1;
+        d.setDate(d.getDate() + offset);
+        const yyyy = d.getFullYear();
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        return yyyy + '-' + mm + '-' + dd;
       }
 
       function updateFormState() {
@@ -788,10 +813,10 @@ export default function GlitterRose() {
 
       function renderStep5() {
         mainBox.style.justifyContent = 'flex-start';
-        const tmr = getTomorrowStr();   
+        const minDelivery = getMinDeliveryStr();   
         
-        // Ensure saved delivery date is not in the past
-        if (deliveryDate && deliveryDate < tmr) {
+        // Ensure saved delivery date respects the minimum required date
+        if (deliveryDate && deliveryDate < minDelivery) {
           deliveryDate = '';
           saveState();
         }
@@ -827,7 +852,7 @@ export default function GlitterRose() {
                 <input type="text" id="ipt-date" placeholder="เลือกวันที่และเวลาจัดส่ง" value="\${deliveryDate ? deliveryDate + (deliveryTime ? ' ' + deliveryTime : '') : ''}" style="width:100%; background: var(--glass-bg); border: 1px solid var(--glass-border); padding: 12px; border-radius: 12px; color: var(--text-color); font-size: 16px;" readonly>
               </div>
               <span style="font-size:.75rem; color:var(--text-muted); margin-top:6px; display:block; line-height:1.4;">
-                * ไม่สามารถเลือกวันย้อนหลังหรือวันปัจจุบันได้ ต้องสั่งล่วงหน้าอย่างน้อย 1 วัน
+                \${selectedQty >= 30 ? '* ต้องสั่งล่วงหน้าอย่างน้อย 2 วัน (เนื่องจากจำนวน 30 ดอกขึ้นไป)' : '* ต้องสั่งล่วงหน้าอย่างน้อย 1 วัน'}
               </span>
             </div>
             
@@ -842,13 +867,23 @@ export default function GlitterRose() {
         setTimeout(() => {
           const dateInput = document.getElementById('ipt-date');
           if (dateInput && typeof window.flatpickr !== 'undefined') {
-            const tmrDate = new Date();
-            tmrDate.setDate(tmrDate.getDate() + 1);
+            const minDate = new Date();
+            const offset = (selectedQty && selectedQty >= 30) ? 3 : 1;
+            minDate.setDate(minDate.getDate() + offset);
+            minDate.setHours(0, 0, 0, 0); // รีเซ็ตเวลาเป็น 00:00 เพื่อไม่ให้ Flatpickr ล็อกเวลาตามเวลาปัจจุบันของระบบ
             
+            const tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            const tomorrowStr = tomorrow.getFullYear() + '-' + String(tomorrow.getMonth() + 1).padStart(2, '0') + '-' + String(tomorrow.getDate()).padStart(2, '0');
+            const initialMinTime = (deliveryDate === tomorrowStr) ? "09:00" : "00:00";
+
             window.flatpickr('#ipt-date', {
               enableTime: true,
               dateFormat: "Y-m-d H:i",
-              minDate: tmrDate,
+              minDate: minDate,
+              minTime: initialMinTime,
+              defaultHour: 9,
+              defaultMinute: 0,
               locale: window.flatpickr.l10ns ? window.flatpickr.l10ns.th : "default",
               time_24hr: true,
               disableMobile: true, // บังคับใช้หน้าตาของ Flatpickr เสมอบนมือถือ
@@ -862,12 +897,25 @@ export default function GlitterRose() {
                 if (selectedDates.length > 0) {
                   const d = selectedDates[0];
                   const dStr = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
-                  const tStr = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
                   
-                  deliveryDate = dStr;
+                  if (dStr === tomorrowStr) {
+                    instance.set('minTime', '09:00');
+                    if (d.getHours() < 9) {
+                      d.setHours(9, 0, 0, 0);
+                      instance.setDate(d, false);
+                    }
+                  } else {
+                    instance.set('minTime', '00:00');
+                  }
+                  
+                  const currentD = instance.selectedDates[0] || d;
+                  const currentDStr = currentD.getFullYear() + '-' + String(currentD.getMonth() + 1).padStart(2, '0') + '-' + String(currentD.getDate()).padStart(2, '0');
+                  const tStr = String(currentD.getHours()).padStart(2, '0') + ':' + String(currentD.getMinutes()).padStart(2, '0');
+                  
+                  deliveryDate = currentDStr;
                   deliveryTime = tStr;
                   const el = document.getElementById('ipt-date');
-                  if (el) el.value = dStr + ' ' + tStr;
+                  if (el) el.value = currentDStr + ' ' + tStr;
                 }
               }
             });
@@ -969,28 +1017,38 @@ export default function GlitterRose() {
             return;
           }
         } else if (current === 4) {
-          const tmr = getTomorrowStr();
-          if (!customerName.trim() || !customerPhone.trim() || !customerAddress.trim() || !deliveryDate || !deliveryTime) {
-            showToast('กรุณากรอกข้อมูลที่จำเป็นให้ครบถ้วน');
-            const inputs = ['ipt-name', 'ipt-phone', 'ipt-address', 'ipt-date', 'ipt-time'];
-            inputs.forEach(id => {
-              const el = document.getElementById(id);
-              if (el && !el.value.trim()) {
+            const minDelivery = getMinDeliveryStr();
+            if (!customerName.trim() || !customerPhone.trim() || !customerAddress.trim() || !deliveryDate || !deliveryTime) {
+              showToast('กรุณากรอกข้อมูลที่จำเป็นให้ครบถ้วน');
+              const inputs = ['ipt-name', 'ipt-phone', 'ipt-address', 'ipt-date', 'ipt-time'];
+              inputs.forEach(id => {
+                const el = document.getElementById(id);
+                if (el && !el.value.trim()) {
+                  el.style.borderColor = '#e53935';
+                  setTimeout(() => { el.style.borderColor = 'var(--glass-border)'; }, 2000);
+                }
+              });
+              return;
+            }
+            if (deliveryDate < minDelivery) {
+              showToast('ต้องเลือกวันจัดส่งล่วงหน้าอย่างน้อย 2 วัน');
+              const el = document.getElementById('ipt-date');
+              if (el) {
                 el.style.borderColor = '#e53935';
                 setTimeout(() => { el.style.borderColor = 'var(--glass-border)'; }, 2000);
               }
-            });
-            return;
-          }
-          if (deliveryDate < tmr) {
-            showToast('ต้องเลือกวันจัดส่งล่วงหน้าอย่างน้อย 1 วัน');
-            const el = document.getElementById('ipt-date');
-            if (el) {
-              el.style.borderColor = '#e53935';
-              setTimeout(() => { el.style.borderColor = 'var(--glass-border)'; }, 2000);
+              return;
             }
-            return;
-          }
+            const tomorrowStr = getTomorrowStr();
+            if (deliveryDate === tomorrowStr && deliveryTime < '09:00') {
+              showToast('หากจัดส่งวันพรุ่งนี้ กรุณาเลือกเวลารับตั้งแต่ 09:00 น. เป็นต้นไป');
+              const el = document.getElementById('ipt-date');
+              if (el) {
+                el.style.borderColor = '#e53935';
+                setTimeout(() => { el.style.borderColor = 'var(--glass-border)'; }, 2000);
+              }
+              return;
+            }
         }
 
         if (current < steps.length - 1) {
@@ -1295,7 +1353,7 @@ export default function GlitterRose() {
             <path d="M15 18l-6-6 6-6" />
           </svg>
         </button>
-        <a href="/" class="nav-logo" style="position: absolute; left: 50%; transform: translateX(-50%);">"Bear has flower"</a>
+        <a href="/" class="nav-logo" style="position: absolute; left: 50%; transform: translateX(-50%); white-space: nowrap;">"Bear has flower"</a>
       </div>
     </nav>
 

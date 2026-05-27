@@ -127,6 +127,7 @@ body::before {
   color: var(--mid-brown);
   letter-spacing: .05em;
   text-decoration: none;
+  white-space: nowrap;
 }
 
 .nav-links {
@@ -1408,6 +1409,7 @@ body::before {
   color: var(--mid-brown);
   letter-spacing: .05em;
   text-decoration: none;
+  white-space: nowrap;
 }
 
 .nav-back {

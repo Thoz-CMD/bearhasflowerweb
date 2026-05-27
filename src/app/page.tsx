@@ -190,6 +190,23 @@ export default function Home() {
     }
 
     const initApp = () => {
+      (window as any).filterProducts = function (type: string) {
+        const section = document.getElementById('products');
+        if (section) {
+          const yOffset = -80; // account for navbar
+          const y = section.getBoundingClientRect().top + window.scrollY + yOffset;
+          window.scrollTo({ top: y, behavior: 'smooth' });
+        }
+        
+        document.querySelectorAll('.product-card').forEach((card: any) => {
+          if (type === 'all' || card.getAttribute('data-product-type') === type) {
+            card.style.display = '';
+          } else {
+            card.style.display = 'none';
+          }
+        });
+      };
+
       // ===== Slideshow =====
       let currentSlide = 0;
       const slidesEl = document.getElementById('slides');
@@ -240,8 +257,6 @@ export default function Home() {
       const updateWishlistBadge = () => {
         try {
           const list = JSON.parse(localStorage.getItem(WISHLIST_KEY) || '[]');
-
-          // Mobile bottom tab badge
           const badge = document.getElementById('tab-wishlist-badge');
           if (badge) {
             badge.textContent = list.length;
@@ -255,7 +270,7 @@ export default function Home() {
           const wishlist = JSON.parse(localStorage.getItem(WISHLIST_KEY) || '[]');
           document.querySelectorAll('.product-wishlist').forEach((btn: any) => {
             const card = btn.closest('.product-card');
-            const id = card ? card.querySelector('.product-name')?.textContent?.trim().replace(/\s+/g, '_') : '';
+            const id = card ? card.getAttribute('data-product-id') : '';
             const exists = wishlist.some((i: any) => i.id === id);
 
             if (exists) {
@@ -288,9 +303,9 @@ export default function Home() {
         (window as any).__adminProductCache = adminCache;
 
         products.forEach((p: any, idx: number) => {
-          const cleanIdForHearts = p.name.trim().replace(/\s+/g, '_');
+          const cleanIdForHearts = p.id;
           const existsInWishlist = wishlist.some((item: any) => item.id === cleanIdForHearts);
-          const currentLikes = p.likes || 0;
+          const currentLikes = Math.max(0, p.likes || 0);
 
           const card = document.createElement('article');
           card.className = 'product-card fade-in';
@@ -298,8 +313,12 @@ export default function Home() {
           card.setAttribute('data-product-id', p.id);
           adminCache[p.id] = p;
 
+          const isVelvet = p.type === 'velvet_flower' || (p.name && p.name.includes('กำมะหยี่')) || (p.description && p.description.includes('กำมะหยี่'));
+          const targetUrl = isVelvet ? '/velvet_wire?preset=' + p.id : '/glitter_rose?preset=' + p.id;
+          card.setAttribute('data-product-type', isVelvet ? 'velvet' : 'glitter');
+
           card.innerHTML = `
-            <div class="product-image-wrap" onclick="window.location.href='/glitter_rose?preset=${p.id}'" style="cursor:pointer; position:relative; overflow:hidden;">
+            <div class="product-image-wrap" onclick="window.location.href='${targetUrl}'" style="cursor:pointer; position:relative; overflow:hidden;">
               ${p.coverImage
               ? `<img src="${p.coverImage}" alt="${p.name}" class="product-image" style="width:100%; height:100%; object-fit:cover; position:absolute; top:0; left:0; border-radius:inherit;" />`
               : `<div class="product-placeholder">🌹</div>`
@@ -313,11 +332,11 @@ export default function Home() {
               </button>
             </div>
             <div class="product-info">
-              <div class="product-name" onclick="window.location.href='/glitter_rose?preset=${p.id}'" style="cursor:pointer;">${p.name}</div>
-              <div class="product-desc" onclick="window.location.href='/glitter_rose?preset=${p.id}'" style="cursor:pointer;">${p.description}</div>
+              <div class="product-name" onclick="window.location.href='${targetUrl}'" style="cursor:pointer;">${p.name}</div>
+              <div class="product-desc" onclick="window.location.href='${targetUrl}'" style="cursor:pointer;">${p.description}</div>
               <div class="product-footer">
                 <div class="product-price">${p.price?.toLocaleString()} <span>บาท</span></div>
-                <button class="add-cart-btn" onclick="window.location.href='/glitter_rose?preset=${p.id}'" aria-label="เพิ่มในตะกร้า">
+                <button class="add-cart-btn" onclick="window.location.href='${targetUrl}'" aria-label="เพิ่มในตะกร้า">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
                     <g stroke="white" stroke-width="2">
                       <path stroke-linejoin="round"
@@ -345,7 +364,7 @@ export default function Home() {
 
               const exists = currentWishlist.find((i: any) => i.id === id);
               const countSpan = this.querySelector('.likes-count');
-              let val = parseInt(countSpan?.textContent || '0', 10);
+              let val = Math.max(0, parseInt(countSpan?.textContent || '0', 10));
               let diff = 0;
 
               if (exists) {
@@ -397,30 +416,6 @@ export default function Home() {
       // Listeners for cart/wishlist
       const cartBtn = document.getElementById('nav-cart-btn');
       if (cartBtn) cartBtn.onclick = () => { window.location.href = '/cart'; };
-
-      document.querySelectorAll('.product-wishlist').forEach((btn: any) => {
-        btn.onclick = function (this: HTMLElement) {
-          const card = this.closest('.product-card');
-          const id = card ? card.querySelector('.product-name')?.textContent?.trim().replace(/\s+/g, '_') : '';
-          const name = card ? card.querySelector('.product-name')?.textContent?.trim() : '';
-
-          let wishlist = JSON.parse(localStorage.getItem(WISHLIST_KEY) || '[]');
-          const exists = wishlist.find((i: any) => i.id === id);
-          if (exists) {
-            wishlist = wishlist.filter((i: any) => i.id !== id);
-            this.querySelector('path')?.setAttribute('fill', 'none');
-            this.style.color = '';
-            this.style.borderColor = '';
-          } else {
-            wishlist.push({ id, name });
-            this.querySelector('path')?.setAttribute('fill', '#e05c7a');
-            this.style.color = '#e05c7a';
-            this.style.borderColor = '#e05c7a';
-          }
-          localStorage.setItem(WISHLIST_KEY, JSON.stringify(wishlist));
-          updateWishlistBadge();
-        };
-      });
 
       // ===== Hamburger / Drawer =====
       const hamburger = document.getElementById('hamburger-btn');
@@ -785,15 +780,15 @@ export default function Home() {
   <section class="section-two">
     <div class="section-two-content">
 
-      <a href="/glitter_rose" class="category-card fade-in" id="cat-glitter">
+      <div class="category-card fade-in" id="cat-glitter" onclick="window.location.href='/glitter_rose'" style="cursor: pointer;">
         <div class="cat-bg cat-bg-1"></div>
         <div class="cat-deco"></div>
         <div class="cat-overlay">
           <h3 class="cat-title">ดอกกุหลาบ<br>กลิตเตอร์</h3>
         </div>
-      </a>
+      </div>
 
-      <div class="category-card fade-in" id="cat-velvet" style="animation-delay:.1s">
+      <div class="category-card fade-in" id="cat-velvet" onclick="filterProducts('velvet')" style="animation-delay:.1s; cursor: pointer;">
         <div class="cat-bg cat-bg-2"></div>
         <div class="cat-deco"></div>
         <div class="cat-overlay">
@@ -805,7 +800,7 @@ export default function Home() {
   </section>
 
   <!-- Products Section -->
-  <div class="section-heading" id="products">
+  <div class="section-heading" id="products" onclick="filterProducts('all')" style="cursor:pointer;" title="แสดงสินค้าทั้งหมด">
     <h2>Our Products</h2>
     <p class="subtitle">สินค้าของเรา</p>
   </div>
