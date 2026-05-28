@@ -2237,7 +2237,7 @@ body::before {
   }
 
   .page-wrap {
-    padding: 24px 14px 0;
+    padding: 24px 14px calc(120px + env(safe-area-inset-bottom));
     gap: 18px;
   }
 

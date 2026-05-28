@@ -24,16 +24,7 @@ const ROSE_DECORATIONS_MAP: Record<string, string> = {
   ribbon: 'โบว์คาดช่อ', butterfly: 'ผีเสื้อ', blank_card: 'การ์ดเปล่า',
   stick: 'ก้านเสียบ', fairy_light: 'ไฟประดับ', crown: 'มงกุฎ'
 };
-const FINANCE_CATEGORIES: Record<string, { label: string, emoji: string }> = {
-  materials: { label: 'กุหลาบ & วัตถุดิบหลัก', emoji: '🌹' },
-  decorations: { label: 'ของตกแต่ง & ตุ๊กตาหมี', emoji: '🧸' },
-  packaging: { label: 'แพ็คเกจจิ้ง & โบว์ริบบิ้น', emoji: '📦' },
-  marketing: { label: 'การตลาด & โฆษณา', emoji: '📣' },
-  utilities: { label: 'ค่าน้ำ / ค่าไฟ / ค่าเช่า', emoji: '⚡' },
-  labor: { label: 'ค่าจ้าง / ค่าแรงช่าง', emoji: '💼' },
-  other: { label: 'รายจ่ายเบ็ดเตล็ดอื่นๆ', emoji: '🏷️' },
-  sales: { label: 'ยอดขายดอกไม้ผ่านระบบ', emoji: '🛍️' }
-};
+// Categories are stored for reporting, but not shown in the UI.
 
 
 const getRoseColorHex = (colorId: string) => {
@@ -125,9 +116,26 @@ export default function AdminPage() {
   const [expenses, setExpenses] = useState<any[]>([]);
   const [expenseTitle, setExpenseTitle] = useState('');
   const [expenseAmount, setExpenseAmount] = useState('');
-  const [expenseCategory, setExpenseCategory] = useState('materials');
   const [expenseDate, setExpenseDate] = useState(new Date().toISOString().substring(0, 10));
   const [isSubmittingExpense, setIsSubmittingExpense] = useState(false);
+  const [expenseItems, setExpenseItems] = useState<Array<{
+    id: string;
+    title: string;
+    amount: string;
+    date: string;
+  }>>(() => [
+    {
+      id: crypto?.randomUUID ? crypto.randomUUID() : String(Date.now()),
+      title: '',
+      amount: '',
+      date: new Date().toISOString().substring(0, 10)
+    }
+  ]);
+  const [receiptPreviews, setReceiptPreviews] = useState<string[]>([]);
+  const [receiptDataUrls, setReceiptDataUrls] = useState<string[]>([]);
+  const [isParsingReceipt, setIsParsingReceipt] = useState(false);
+  const [receiptParseError, setReceiptParseError] = useState<string | null>(null);
+  const [receiptFileNames, setReceiptFileNames] = useState<string[]>([]);
   const [selectedMonth, setSelectedMonth] = useState(() => {
     const today = new Date();
     return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
@@ -546,30 +554,136 @@ export default function AdminPage() {
 
   const handleAddExpense = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!expenseTitle.trim() || !expenseAmount) {
+    const validItems = expenseItems.filter((item) => item.title.trim() && item.amount);
+    if (validItems.length === 0) {
       await (window as any).showBeautifulAlert('กรุณากรอกข้อมูลรายจ่ายให้ครบถ้วนค่ะ', 'warning', 'ข้อมูลไม่ครบถ้วน');
       return;
     }
 
     setIsSubmittingExpense(true);
     try {
-      await addDoc(collection(db, 'expenses'), {
-        title: expenseTitle.trim(),
-        amount: parseFloat(expenseAmount),
-        category: expenseCategory,
-        date: expenseDate,
+      await Promise.all(validItems.map((item) => addDoc(collection(db, 'expenses'), {
+        title: item.title.trim(),
+        amount: parseFloat(item.amount),
+        category: 'other',
+        date: item.date,
         createdAt: serverTimestamp ? serverTimestamp() : new Date().toISOString(),
         recordedBy: user?.phoneNumber || user?.email || 'Admin'
-      });
-      setSelectedMonth(expenseDate.substring(0, 7));
+      })));
+      const firstDate = validItems[0]?.date;
+      if (firstDate) setSelectedMonth(firstDate.substring(0, 7));
       setExpenseTitle('');
       setExpenseAmount('');
+      setExpenseItems([
+        {
+          id: crypto?.randomUUID ? crypto.randomUUID() : String(Date.now()),
+          title: '',
+          amount: '',
+          date: new Date().toISOString().substring(0, 10)
+        }
+      ]);
       await (window as any).showBeautifulAlert('บันทึกรายจ่ายสำเร็จเรียบร้อยแล้วค่ะ!', 'success', 'บันทึกสำเร็จ');
     } catch (err) {
       console.error("Failed to add expense:", err);
       await (window as any).showBeautifulAlert('เกิดข้อผิดพลาดในการบันทึกรายจ่าย', 'error', 'เกิดข้อผิดพลาด');
     } finally {
       setIsSubmittingExpense(false);
+    }
+  };
+
+  const readFileAsDataUrl = (file: File) => new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = typeof reader.result === 'string' ? reader.result : '';
+      resolve(result);
+    };
+    reader.onerror = () => reject(new Error(`ไม่สามารถอ่านไฟล์ ${file.name} ได้`));
+    reader.readAsDataURL(file);
+  });
+
+  const handleReceiptFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+
+    if (files.some((file) => !file.type.startsWith('image/'))) {
+      (window as any).showBeautifulAlert('กรุณาอัปโหลดไฟล์รูปภาพเท่านั้นค่ะ', 'warning', 'ไฟล์ไม่ถูกต้อง');
+      e.target.value = '';
+      return;
+    }
+
+    try {
+      const results = await Promise.all(files.map((file) => readFileAsDataUrl(file)));
+      setReceiptPreviews((prev) => [...prev, ...results]);
+      setReceiptDataUrls((prev) => [...prev, ...results]);
+      setReceiptFileNames((prev) => [...prev, ...files.map((file) => file.name)]);
+      setReceiptParseError(null);
+    } catch (err: any) {
+      const message = err?.message || 'ไม่สามารถอ่านไฟล์รูปภาพได้';
+      setReceiptParseError(message);
+      await (window as any).showBeautifulAlert(message, 'error', 'เกิดข้อผิดพลาด');
+    } finally {
+      e.target.value = '';
+    }
+  };
+
+  const handleParseReceipt = async () => {
+    if (receiptDataUrls.length === 0) {
+      await (window as any).showBeautifulAlert('กรุณาเลือกรูปใบเสร็จอย่างน้อย 1 รูปก่อนค่ะ', 'warning', 'ยังไม่มีรูป');
+      return;
+    }
+
+    setIsParsingReceipt(true);
+    setReceiptParseError(null);
+    try {
+      const res = await fetch('/api/expense-ai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          imageDataList: receiptDataUrls
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        const detailText = typeof data?.detail === 'string' ? data.detail : '';
+        const trimmedDetail = detailText.length > 500 ? detailText.slice(0, 500) + '...' : detailText;
+        const message = trimmedDetail
+          ? `Gemini API error: ${trimmedDetail}`
+          : (data?.error || 'ไม่สามารถอ่านใบเสร็จได้ในขณะนี้');
+        throw new Error(message);
+      }
+
+      if (Array.isArray(data?.items) && data.items.length > 0) {
+        const normalizedItems = data.items.map((item: any) => ({
+          id: crypto?.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random()),
+          title: String(item?.title || '').trim(),
+          amount: item?.amount !== undefined && item?.amount !== null ? String(item.amount) : '',
+          date: String(item?.date || expenseDate)
+        }));
+        setExpenseItems(normalizedItems);
+      } else {
+        if (data?.title) setExpenseTitle(String(data.title));
+        if (data?.amount !== undefined && data?.amount !== null) {
+          setExpenseAmount(String(data.amount));
+        }
+        if (data?.date) setExpenseDate(String(data.date));
+        setExpenseItems([
+          {
+            id: crypto?.randomUUID ? crypto.randomUUID() : String(Date.now()),
+            title: String(data?.title || ''),
+            amount: data?.amount !== undefined && data?.amount !== null ? String(data.amount) : '',
+            date: String(data?.date || expenseDate)
+          }
+        ]);
+      }
+
+      await (window as any).showBeautifulAlert(`อ่านใบเสร็จสำเร็จ ${receiptDataUrls.length} รูป และกรอกฟอร์มให้อัตโนมัติแล้วค่ะ`, 'success', 'สำเร็จ');
+    } catch (err: any) {
+      const message = err?.message || 'อ่านใบเสร็จไม่สำเร็จ กรุณาลองใหม่อีกครั้ง';
+      setReceiptParseError(message);
+      await (window as any).showBeautifulAlert(message, 'error', 'เกิดข้อผิดพลาด');
+    } finally {
+      setIsParsingReceipt(false);
     }
   };
 
@@ -1926,6 +2040,134 @@ export default function AdminPage() {
           height: fit-content;
         }
 
+        .ai-receipt-card {
+          background: #fffafb;
+          border: 1.5px dashed #f2e2e5;
+          border-radius: 18px;
+          padding: 16px;
+          margin-bottom: 18px;
+        }
+
+        .ai-receipt-title {
+          font-weight: 700;
+          color: #5c4738;
+          font-size: 0.95rem;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          margin-bottom: 6px;
+        }
+
+        .ai-receipt-subtitle {
+          color: #a08a8e;
+          font-size: 0.8rem;
+          margin: 0 0 12px 0;
+        }
+
+        .ai-receipt-input {
+          position: absolute;
+          inset: 0;
+          opacity: 0;
+          cursor: pointer;
+        }
+
+        .ai-file-control {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          background: #fff;
+          border: 1.5px solid #f2e2e5;
+          border-radius: 14px;
+          padding: 10px 12px;
+          position: relative;
+          overflow: hidden;
+          transition: all 0.2s;
+        }
+
+        .ai-file-control:hover {
+          border-color: #db8a9e;
+          box-shadow: 0 6px 16px rgba(219, 138, 158, 0.08);
+          background: #fffafb;
+        }
+
+        .ai-file-button {
+          background: #fdf0f2;
+          color: #db8a9e;
+          border-radius: 10px;
+          padding: 8px 12px;
+          font-weight: 700;
+          font-size: 0.82rem;
+          white-space: nowrap;
+        }
+
+        .ai-file-name {
+          color: #7a6352;
+          font-size: 0.82rem;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+          flex: 1;
+        }
+
+        .ai-file-hint {
+          color: #a08a8e;
+          font-size: 0.72rem;
+        }
+
+        .ai-file-stack {
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+          min-width: 0;
+        }
+
+        .ai-receipt-preview {
+          width: 100%;
+          border-radius: 14px;
+          border: 1px solid #f2e2e5;
+          margin-top: 12px;
+          display: block;
+          max-height: 240px;
+          object-fit: cover;
+        }
+
+        .ai-receipt-actions {
+          display: flex;
+          gap: 10px;
+          margin-top: 12px;
+        }
+
+        .ai-receipt-actions .submit-btn {
+          width: auto;
+          margin-top: 0;
+          flex: 1;
+        }
+
+        .ghost-btn {
+          flex: 1;
+          background: #fff;
+          color: #db8a9e;
+          border: 1.5px solid #f2e2e5;
+          padding: 12px;
+          border-radius: 14px;
+          font-weight: 700;
+          font-size: 0.9rem;
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+
+        .ghost-btn:hover {
+          border-color: #db8a9e;
+          background: #fff5f7;
+        }
+
+        .ai-error-text {
+          margin-top: 10px;
+          color: #e74c3c;
+          font-size: 0.82rem;
+          font-weight: 600;
+        }
+
         .form-title {
           font-size: 1.15rem;
           font-weight: 700;
@@ -1943,6 +2185,70 @@ export default function AdminPage() {
           display: flex;
           flex-direction: column;
           gap: 6px;
+        }
+
+        .expense-item-card {
+          border: 1px solid #f2e2e5;
+          border-radius: 16px;
+          padding: 14px;
+          margin-bottom: 12px;
+          background: #fff;
+        }
+
+        .expense-item-grid {
+          display: grid;
+          grid-template-columns: 1fr;
+          gap: 12px;
+        }
+
+        .expense-item-subgrid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 12px;
+        }
+
+        .expense-item-actions {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-top: 10px;
+        }
+
+        .add-row-btn {
+          background: #fff;
+          color: #db8a9e;
+          border: 1.5px dashed #f2e2e5;
+          padding: 10px 14px;
+          border-radius: 12px;
+          font-weight: 700;
+          font-size: 0.85rem;
+          cursor: pointer;
+          transition: all 0.2s;
+          width: 100%;
+          margin-top: 8px;
+        }
+
+        .add-row-btn:hover {
+          border-color: #db8a9e;
+          background: #fff5f7;
+        }
+
+        .remove-row-btn {
+          background: #fdedec;
+          color: #e74c3c;
+          border: none;
+          padding: 6px 12px;
+          border-radius: 10px;
+          font-weight: 700;
+          font-size: 0.78rem;
+          cursor: pointer;
+        }
+
+        @media (max-width: 767px) {
+          .expense-item-grid,
+          .expense-item-subgrid {
+            grid-template-columns: 1fr;
+          }
         }
 
         .form-label {
@@ -2559,18 +2865,8 @@ export default function AdminPage() {
             margin-right: 8px !important;
           }
 
-          /* Category Name placement */
-          .ledger-table td:nth-child(3) {
-            display: inline-flex !important;
-            width: auto !important;
-            font-size: 0.82rem !important;
-            font-weight: 600 !important;
-            color: #7a6352 !important;
-            vertical-align: middle;
-          }
-
           /* Item Description / Details text block */
-          .ledger-table td:nth-child(4) {
+          .ledger-table td:nth-child(3) {
             display: block !important;
             font-size: 0.85rem !important;
             color: #5c4738 !important;
@@ -2579,7 +2875,7 @@ export default function AdminPage() {
           }
 
           /* Highlighted Bottom Amount */
-          .ledger-table td:nth-child(5) {
+          .ledger-table td:nth-child(4) {
             display: flex !important;
             justify-content: flex-end !important;
             align-items: center !important;
@@ -2591,7 +2887,7 @@ export default function AdminPage() {
           }
 
           /* Action Delete button absolutely floated in top-right of Card */
-          .ledger-table td:nth-child(6) {
+          .ledger-table td:nth-child(5) {
             position: absolute !important;
             top: 12px !important;
             right: 12px !important;
@@ -3403,75 +3699,173 @@ export default function AdminPage() {
                   <h3 className="form-title">
                     <span style={{ fontSize: '1.2rem' }}>➕</span> บันทึกจัดซื้อ & รายจ่ายใหม่
                   </h3>
+                  <div className="ai-receipt-card">
+                    <div className="ai-receipt-title">
+                      <span>🤖</span> อ่านใบเสร็จด้วย AI
+                    </div>
+                    <p className="ai-receipt-subtitle">
+                      อัปโหลดรูปใบเสร็จหรือสลิปได้หลายรูป แล้วให้ AI ช่วยกรอกฟอร์มให้อัตโนมัติ
+                    </p>
+                    <div className="ai-file-control">
+                      <span className="ai-file-button">วางรูป</span>
+                      <div className="ai-file-stack">
+                        <span className="ai-file-name">
+                          {receiptFileNames.length > 0 ? `เลือกแล้ว ${receiptFileNames.length} รูป` : 'ยังไม่ได้เลือกไฟล์'}
+                        </span>
+                      </div>
+                      <input
+                        type="file"
+                        className="ai-receipt-input"
+                        accept="image/*"
+                        multiple
+                        onChange={handleReceiptFileChange}
+                      />
+                    </div>
+                    {receiptFileNames.length > 0 && (
+                      <div style={{ marginTop: '0.6rem', fontSize: '0.85rem', color: '#7d5d4f' }}>
+                        {receiptFileNames.join(', ')}
+                      </div>
+                    )}
+                    {receiptPreviews.length > 0 && (
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '0.7rem' }}>
+                        {receiptPreviews.map((preview, index) => (
+                          <img
+                            key={`${receiptFileNames[index] || 'receipt'}-${index}`}
+                            src={preview}
+                            alt={`Receipt preview ${index + 1}`}
+                            className="ai-receipt-preview"
+                            style={{ marginTop: 0 }}
+                          />
+                        ))}
+                      </div>
+                    )}
+                    <div className="ai-receipt-actions">
+                      <button
+                        type="button"
+                        className="submit-btn"
+                        onClick={handleParseReceipt}
+                        disabled={isParsingReceipt}
+                      >
+                        {isParsingReceipt ? 'กำลังอ่านใบเสร็จ...' : 'อ่านใบเสร็จ'}
+                      </button>
+                      <button
+                        type="button"
+                        className="ghost-btn"
+                        onClick={() => {
+                          setReceiptPreviews([]);
+                          setReceiptDataUrls([]);
+                          setReceiptParseError(null);
+                          setReceiptFileNames([]);
+                        }}
+                        disabled={isParsingReceipt}
+                      >
+                        ล้างรูป
+                      </button>
+                    </div>
+                    {receiptParseError && (
+                      <div className="ai-error-text">{receiptParseError}</div>
+                    )}
+                  </div>
                   <form onSubmit={handleAddExpense}>
-                    <div className="form-group">
-                      <label className="form-label">คำอธิบายรายการจัดซื้อ / รายจ่าย</label>
-                      <input
-                        type="text"
-                        className="form-input"
-                        placeholder="เช่น ซื้อดอกกุหลาบสด 200 ดอก, ซื้อโบว์..."
-                        value={expenseTitle}
-                        onChange={(e) => setExpenseTitle(e.target.value)}
-                        required
-                      />
-                    </div>
+                    {expenseItems.map((item, idx) => (
+                      <div key={item.id} className="expense-item-card">
+                        <div className="expense-item-grid">
+                          <div className="form-group" style={{ marginBottom: 0 }}>
+                            <label className="form-label">คำอธิบายรายการ</label>
+                            <input
+                              type="text"
+                              className="form-input"
+                              placeholder="เช่น ซื้อดอกกุหลาบสด 200 ดอก"
+                              value={item.title}
+                              onChange={(e) => {
+                                const next = [...expenseItems];
+                                next[idx] = { ...next[idx], title: e.target.value };
+                                setExpenseItems(next);
+                              }}
+                              required
+                            />
+                          </div>
+                        </div>
 
-                    <div className="form-group">
-                      <label className="form-label">หมวดหมู่ค่าใช้จ่าย</label>
-                      <div className="custom-select-container">
-                        <select
-                          className="form-select custom-select"
-                          value={expenseCategory}
-                          onChange={(e) => setExpenseCategory(e.target.value)}
-                        >
-                          <option value="materials">🌹 กุหลาบ & วัตถุดิบหลัก</option>
-                          <option value="decorations">🧸 ของตกแต่ง & ตุ๊กตาหมี</option>
-                          <option value="packaging">📦 แพ็คเกจจิ้ง & โบว์ริบบิ้น</option>
-                          <option value="utilities">⚡ ค่าน้ำ / ค่าไฟ / ค่าเช่า</option>
-                          <option value="other">🏷️ รายจ่ายเบ็ดเตล็ดอื่นๆ</option>
-                        </select>
-                        <div className="custom-select-icon">
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#db8a9e" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                            <polyline points="6 9 12 15 18 9" />
-                          </svg>
+                        <div className="expense-item-subgrid">
+                          <div className="form-group" style={{ marginBottom: 0 }}>
+                            <label className="form-label">จำนวนเงิน (฿)</label>
+                            <input
+                              type="number"
+                              className="form-input"
+                              placeholder="0.00"
+                              min="1"
+                              step="any"
+                              value={item.amount}
+                              onChange={(e) => {
+                                const next = [...expenseItems];
+                                next[idx] = { ...next[idx], amount: e.target.value };
+                                setExpenseItems(next);
+                              }}
+                              required
+                            />
+                          </div>
+                          <div className="form-group" style={{ marginBottom: 0 }}>
+                            <label className="form-label">วันที่ทำรายการ</label>
+                            <div className="custom-date-container">
+                              <input
+                                type="date"
+                                className="form-input custom-date-input"
+                                value={item.date}
+                                onChange={(e) => {
+                                  const next = [...expenseItems];
+                                  next[idx] = { ...next[idx], date: e.target.value };
+                                  setExpenseItems(next);
+                                }}
+                                required
+                              />
+                              <div className="custom-date-icon-box">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#db8a9e" strokeWidth="2.5">
+                                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                                  <line x1="16" y1="2" x2="16" y2="6" />
+                                  <line x1="8" y1="2" x2="8" y2="6" />
+                                  <line x1="3" y1="10" x2="21" y2="10" />
+                                </svg>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="expense-item-actions">
+                          <span style={{ color: '#a08a8e', fontSize: '0.78rem' }}>รายการที่ {idx + 1}</span>
+                          {expenseItems.length > 1 && (
+                            <button
+                              type="button"
+                              className="remove-row-btn"
+                              onClick={() => {
+                                const next = expenseItems.filter((row) => row.id !== item.id);
+                                setExpenseItems(next.length ? next : expenseItems);
+                              }}
+                            >
+                              ลบรายการนี้
+                            </button>
+                          )}
                         </div>
                       </div>
-                    </div>
+                    ))}
 
-                    <div className="form-group">
-                      <label className="form-label">จำนวนเงินจ่ายจริง (฿)</label>
-                      <input
-                        type="number"
-                        className="form-input"
-                        placeholder="0.00"
-                        min="1"
-                        step="any"
-                        value={expenseAmount}
-                        onChange={(e) => setExpenseAmount(e.target.value)}
-                        required
-                      />
-                    </div>
-
-                    <div className="form-group">
-                      <label className="form-label">วันที่ทำรายการจ่าย</label>
-                      <div className="custom-date-container">
-                        <input
-                          type="date"
-                          className="form-input custom-date-input"
-                          value={expenseDate}
-                          onChange={(e) => setExpenseDate(e.target.value)}
-                          required
-                        />
-                        <div className="custom-date-icon-box">
-                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#db8a9e" strokeWidth="2.5">
-                            <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-                            <line x1="16" y1="2" x2="16" y2="6" />
-                            <line x1="8" y1="2" x2="8" y2="6" />
-                            <line x1="3" y1="10" x2="21" y2="10" />
-                          </svg>
-                        </div>
-                      </div>
-                    </div>
+                    <button
+                      type="button"
+                      className="add-row-btn"
+                      onClick={() => {
+                        setExpenseItems((prev) => [
+                          ...prev,
+                          {
+                            id: crypto?.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random()),
+                            title: '',
+                            amount: '',
+                            date: new Date().toISOString().substring(0, 10)
+                          }
+                        ]);
+                      }}
+                    >
+                      เพิ่มบรรทัดรายการใหม่
+                    </button>
 
                     <button
                       type="submit"
@@ -3503,7 +3897,6 @@ export default function AdminPage() {
                           <tr>
                             <th>วันที่</th>
                             <th>ประเภท</th>
-                            <th>หมวดหมู่</th>
                             <th>รายละเอียดรายการ</th>
                             <th style={{ textAlign: 'right' }}>จำนวนเงิน</th>
                             <th style={{ textAlign: 'center', width: '50px' }}>ลบ</th>
@@ -3511,7 +3904,6 @@ export default function AdminPage() {
                         </thead>
                         <tbody>
                           {monthlyLedgerItems.map((item) => {
-                            const catInfo = FINANCE_CATEGORIES[item.category] || { label: item.category, emoji: '🏷️' };
                             return (
                               <tr key={item.id} className="ledger-row-item">
                                 <td style={{ fontWeight: 600, color: '#7a6352' }}>
@@ -3525,9 +3917,6 @@ export default function AdminPage() {
                                   <span className={`fin-badge ${item.type}`}>
                                     {item.type === 'revenue' ? '🟢 รายรับ' : '🔴 รายจ่าย'}
                                   </span>
-                                </td>
-                                <td style={{ fontWeight: 500 }}>
-                                  {catInfo.emoji} {catInfo.label}
                                 </td>
                                 <td style={{ color: '#5c4738', fontSize: '0.85rem' }}>
                                   {item.title}
