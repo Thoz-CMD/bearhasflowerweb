@@ -741,7 +741,6 @@ export default function Home() {
     <div class="banner-container">
       <div class="slides" id="slides">
         <div class="slide">
-          <div class="slide-label">Glitter Rose Collection</div>
         </div>
         <div class="slide">
           <div class="slide-label">Wire Velvet Flowers</div>

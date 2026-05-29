@@ -45,7 +45,10 @@ const ROSE_SHAPES_MAP: Record<string, string> = {
 };
 const ROSE_DECORATIONS_MAP: Record<string, string> = {
   ribbon: 'โบว์คาดช่อ', butterfly: 'ผีเสื้อ', blank_card: 'การ์ดเปล่า',
-  stick: 'ก้านเสียบ', fairy_light: 'ไฟประดับ', crown: 'มงกุฎ'
+  stick: 'ก้านเสียบ', fairy_light: 'ไฟประดับ', crown: 'มงกุฎ',
+  ribbon_jfy_clear: 'โบว์คาดช่อ JUST FOR YOU สีขาวโปร่ง',
+  ribbon_jfy_solid: 'โบว์คาดช่อ Just For You สีขาวทึบ',
+  ribbon_hbd_clear: 'โบว์คาดช่อ HAPPY BIRTHDAY สีดำโปร่ง'
 };
 
 const renderDesktopConfig = (item: any) => {
@@ -833,9 +836,15 @@ export default function CartPage() {
             <span className="total-label">รวมทั้งหมด</span>
             <span className="total-value">{calculateTotal().toLocaleString()} ฿</span>
           </div>
-          <button className="checkout-btn" onClick={handleCheckout}>
-            สั่งซื้อสินค้า
-          </button>
+          {isFirebaseEnabled ? (
+            <button className="checkout-btn" onClick={handleCheckout}>
+              สั่งซื้อสินค้า
+            </button>
+          ) : (
+            <button className="checkout-btn" onClick={() => window.location.href = '/login'}>
+              เข้าสู่ระบบเพื่อสั่งซื้อสินค้า
+            </button>
+          )}
         </div>
       )}
     </div>

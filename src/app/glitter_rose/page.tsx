@@ -1295,6 +1295,10 @@ export default function GlitterRose() {
               updateStep2Summary();
               updateStep3Summary();
               updateStep4Summary();
+              
+              current = 4; // index 4 = Step 5 (Address)
+              document.getElementById('step5-customer')?.scrollIntoView({ behavior: 'smooth' });
+              
               updateUI();
               
               showToast('โหลดแบบสินค้าสำเร็จรูปเสร็จสิ้น!');

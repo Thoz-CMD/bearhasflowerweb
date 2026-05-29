@@ -268,7 +268,7 @@ body::before {
 }
 
 .slide:nth-child(1) {
-  background: linear-gradient(135deg, #DB8A9E 0%, #F0C9D1 50%, #C37A8E 100%);
+  background: url('/images/brandner/ChatGPT%20Image%2030%20%E0%B8%9E.%E0%B8%84.%202569%2003_10_36.png') center/cover no-repeat;
 }
 
 .slide:nth-child(2) {
@@ -1978,8 +1978,8 @@ body::before {
 }
 
 .color-card.selected .color-swatch {
-  border-color: var(--rose-gold);
-  box-shadow: 0 4px 16px rgba(201, 149, 107, 0.35);
+  border: 3px solid rgba(219, 138, 158, 0.6) !important;
+  box-shadow: 0 4px 16px rgba(219, 138, 158, 0.35);
   transform: scale(0.95);
 }
 

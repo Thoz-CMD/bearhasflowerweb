@@ -13,8 +13,18 @@ import { doc, setDoc } from 'firebase/firestore';
 export default function LoginPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [inAppWarning, setInAppWarning] = useState(false);
 
   useEffect(() => {
+    // Check for In-App Browser (Facebook/LINE)
+    const checkInAppBrowser = () => {
+      const ua = navigator.userAgent || navigator.vendor || (window as any).opera;
+      if (ua && ((ua.indexOf("FBAN") > -1) || (ua.indexOf("FBAV") > -1) || (ua.indexOf("Line") > -1))) {
+        setInAppWarning(true);
+      }
+    };
+    checkInAppBrowser();
+
     // Check if already logged in
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
@@ -164,6 +174,18 @@ export default function LoginPage() {
           border-radius: 10px;
         }
 
+        .inapp-warning {
+          background: #fff3cd;
+          color: #856404;
+          border: 1px solid #ffeeba;
+          padding: 15px;
+          border-radius: 12px;
+          font-size: 0.9rem;
+          margin-bottom: 20px;
+          line-height: 1.5;
+          text-align: left;
+        }
+
         .info-text {
           font-size: 0.75rem;
           color: #a08a8e;
@@ -213,6 +235,12 @@ export default function LoginPage() {
           <div className="welcome-text">เข้าสู่ระบบ</div>
           <img src="/images/โลโก้หน้าล็อกอิน.png" alt="Bear has flower" className="logo-image" />
         </div>
+
+        {inAppWarning && (
+          <div className="inapp-warning">
+            หากคุณเปิดผ่านแอป Facebook/LINE แล้วไม่สามารถล็อกอินได้ โปรดกดที่เมนู แถบมุมหน้าจอ เพื่อเลือก <b>'เปิดในเบราว์เซอร์ (Open in Browser)'</b> หรือคัดลอกลิงก์ไปเปิดใน Safari/Chrome
+          </div>
+        )}
 
         {error && <div className="error-msg">{error}</div>}
 
