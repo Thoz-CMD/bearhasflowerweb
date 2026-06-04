@@ -272,11 +272,20 @@ body::before {
 }
 
 .slide:nth-child(2) {
-  background: linear-gradient(135deg, #E6C5CE 0%, #F8E6EB 50%, #D4A3B4 100%);
+  background: url('/images/brandner/ChatGPT%20Image%204%20%E0%B8%A1%E0%B8%B4.%E0%B8%A2.%202569%2017_07_25.png') center/cover no-repeat;
 }
 
 .slide:nth-child(3) {
-  background: linear-gradient(135deg, #CEACBA 0%, #ECE1E5 50%, #B896A4 100%);
+  background: url('/images/brandner/ChatGPT%20Image%204%20%E0%B8%A1%E0%B8%B4.%E0%B8%A2.%202569%2018_04_35.png') center/cover no-repeat;
+}
+
+@media (max-width: 768px) {
+  .slide:nth-child(2) {
+    background-position: right 9% center;
+  }
+  .slide:nth-child(3) {
+    background-position: left 8% center !important;
+  }
 }
 
 .slide-label {

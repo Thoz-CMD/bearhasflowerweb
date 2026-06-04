@@ -64,7 +64,8 @@ export default function CheckoutPage() {
         qty: item.qty || 1,
         details: item.details || '',
         type: item.type || 'regular',
-        image: item.image || item.imageUrl || (item.type === 'glitter_rose' ? '/images/Glitter Rose/ริบบิ้นแดง.jpg' : ''),
+        image: item.coverImage || item.image || item.imageUrl || (item.type === 'glitter_rose' ? '/images/Glitter Rose/ริบบิ้นแดง.jpg' : ''),
+        coverImage: item.coverImage || item.image || item.imageUrl || (item.type === 'glitter_rose' ? '/images/Glitter Rose/ริบบิ้นแดง.jpg' : ''),
         config: item.config || null
       })),
       total: total,

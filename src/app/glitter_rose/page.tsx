@@ -251,6 +251,7 @@ export default function GlitterRose() {
       let deliveryDate = '';
       let deliveryTime = '';
       let additionalNote = '';
+      let productCoverImage = '';
 
       const STORAGE_KEY = 'bear_flower_v1';
 
@@ -277,7 +278,8 @@ export default function GlitterRose() {
         const state = {
           current, maxStepReached, selectedQty, selectedColors, selectedLayers, selectedPaper,
           selectedShape, selectedDecorations, basePrice,
-          customerName, customerPhone, customerAddress, deliveryDate, deliveryTime, additionalNote
+          customerName, customerPhone, customerAddress, deliveryDate, deliveryTime, additionalNote,
+          productCoverImage
         };
         localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 
@@ -331,6 +333,7 @@ export default function GlitterRose() {
             deliveryDate = s.deliveryDate || '';
             deliveryTime = s.deliveryTime || '';
             additionalNote = s.additionalNote || '';
+            productCoverImage = s.productCoverImage || '';
           } catch (err) { console.error('Failed to parse saved state', err); }
         } else {
           // Reset all variables to start completely fresh!
@@ -349,6 +352,7 @@ export default function GlitterRose() {
           deliveryDate = '';
           deliveryTime = '';
           additionalNote = '';
+          productCoverImage = '';
         }
         // รีเฟรชข้อมูลและ Summary
         updateTotalPrice();
@@ -1226,10 +1230,11 @@ export default function GlitterRose() {
           price: total,
           qty: 1,
           details: 'สี: ' + colorNames,
+          coverImage: productCoverImage,
           config: {
-            selectedQty, selectedColors, selectedLayers, 
+            selectedQty, selectedColors, selectedLayers,
             selectedPaper, selectedShape, selectedDecorations,
-            customerName, customerPhone, customerAddress, 
+            customerName, customerPhone, customerAddress,
             deliveryDate, deliveryTime, additionalNote,
             current, maxStepReached, basePrice
           }
@@ -1278,7 +1283,8 @@ export default function GlitterRose() {
               selectedPaper = config.selectedPaper || null;
               selectedShape = config.selectedShape || null;
               selectedDecorations = config.selectedDecorations || [];
-              
+              productCoverImage = p.coverImage || '';
+
               // Calculate extra costs to deduce mathematically precise basePrice
               let extra = 0;
               const qty = selectedQty || 0;
@@ -1298,17 +1304,17 @@ export default function GlitterRose() {
                   return acc + (item ? item.price : 0);
                 }, 0);
               }
-              
+
               basePrice = Math.max(0, p.price - extra);
               maxStepReached = 4;
-              
+
               saveState();
               updateTotalPrice();
               updateStep1Summary();
               updateStep2Summary();
               updateStep3Summary();
               updateStep4Summary();
-              
+
               current = 4; // index 4 = Step 5 (Address)
               document.getElementById('step5-customer')?.scrollIntoView({ behavior: 'smooth' });
               

@@ -654,7 +654,9 @@ export default function CartPage() {
                     return (
                       <div key={item.id} className="cart-item" data-type={item.type} onClick={() => handleEditItem(item)}>
                         <div className="item-img-placeholder">
-                          {isGlitterRose ? (
+                          {item.coverImage ? (
+                            <img src={item.coverImage} alt={item.name} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />
+                          ) : isGlitterRose ? (
                             <BasketIcon colors={itemColors} />
                           ) : '🛍️'}
                         </div>
@@ -740,7 +742,9 @@ export default function CartPage() {
                             </div>
                           )}
                           <div className="item-img-placeholder">
-                            {isGlitterRose ? (
+                            {item.coverImage ? (
+                              <img src={item.coverImage} alt={item.name} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />
+                            ) : isGlitterRose ? (
                               <BasketIcon colors={itemColors} />
                             ) : '🛍️'}
                           </div>

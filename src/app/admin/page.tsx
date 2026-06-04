@@ -4094,7 +4094,9 @@ function AdminPageContent() {
                         <div className="order-summary-row">
                           <div className="order-main-info order-cell-order">
                             <div className="order-avatar">
-                              {customItem?.config ? (
+                              {customItem?.coverImage ? (
+                                <img src={customItem.coverImage} alt={customItem.name} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />
+                              ) : customItem?.config ? (
                                 <BasketIcon colors={itemColors} size={40} />
                               ) : (
                                 <span>🛒</span>
@@ -4444,7 +4446,9 @@ function AdminPageContent() {
                         <div className="florist-header">
                           <div className="florist-header-main">
                             <div className="florist-img-container">
-                              {isGlitterRose ? (
+                              {item.coverImage ? (
+                                <img src={item.coverImage} alt={item.name} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />
+                              ) : isGlitterRose ? (
                                 <BasketIcon colors={itemColors} />
                               ) : (
                                 '🛍️'

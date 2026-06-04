@@ -228,7 +228,7 @@ export default function Home() {
       (window as any).moveSlide = moveSlide;
       (window as any).goSlide = goSlide;
 
-      const slideshowInterval = setInterval(() => moveSlide(1), 5000);
+      const slideshowInterval = setInterval(() => moveSlide(1), 10000);
 
       // Touch swipe on banner
       const bannerEl = document.querySelector('.banner-container');
@@ -494,6 +494,68 @@ export default function Home() {
         }
       };
 
+      (window as any).handleClearAllNotifs = () => {
+        const modal = document.getElementById('clear-notif-modal');
+        if (modal) {
+          modal.classList.add('show');
+          document.body.style.overflow = 'hidden';
+        }
+      };
+
+      (window as any).confirmClearNotifs = async () => {
+        try {
+          const { db, auth } = await import('@/lib/firebase');
+          const { collection, query, where, getDocs, deleteDoc, doc } = await import('firebase/firestore');
+          const user = auth.currentUser;
+          if (!user) {
+            alert('กรุณาเข้าสู่ระบบก่อน');
+            return;
+          }
+
+          const q = query(
+            collection(db, 'notifications'),
+            where('userId', '==', user.uid)
+          );
+          const snapshot = await getDocs(q);
+          const deletePromises = snapshot.docs.map(docSnap => deleteDoc(doc(db, 'notifications', docSnap.id)));
+          await Promise.all(deletePromises);
+
+          // Refresh the notification list
+          const container = document.getElementById('notif-list-container');
+          if(container) {
+            container.innerHTML = '<div style="padding:20px; text-align:center; color:#a08a8e; font-size:0.9rem;">ไม่มีการแจ้งเตือน</div>';
+          }
+          const countEl = document.getElementById('notif-count');
+          if(countEl) {
+            countEl.style.display = 'none';
+          }
+
+          // Close modal
+          const modal = document.getElementById('clear-notif-modal');
+          if (modal) {
+            modal.classList.remove('show');
+            document.body.style.overflow = '';
+          }
+
+          // Close dropdown
+          const dropdown = document.getElementById('notif-dropdown');
+          if (dropdown) {
+            dropdown.style.display = 'none';
+          }
+        } catch(e) {
+          console.error('Error clearing notifications:', e);
+          alert('เกิดข้อผิดพลาดในการล้างประวัติการแจ้งเตือน');
+        }
+      };
+
+      (window as any).cancelClearNotifs = () => {
+        const modal = document.getElementById('clear-notif-modal');
+        if (modal) {
+          modal.classList.remove('show');
+          document.body.style.overflow = '';
+        }
+      };
+
       // ===== Hamburger / Drawer =====
       const hamburger = document.getElementById('hamburger-btn');
       const drawer = document.getElementById('mobile-drawer');
@@ -626,7 +688,7 @@ export default function Home() {
       <div style="display:flex;align-items:center;gap:4px;">
         
         <!-- Notification Bell -->
-        <div class="nav-cart" id="nav-notif-btn" title="การแจ้งเตือน" style="position:relative;">
+        <div class="nav-cart" id="nav-notif-btn" title="การแจ้งเตือน" style="position:relative; margin-top:5px;">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
             <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
             <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
@@ -634,7 +696,17 @@ export default function Home() {
           <span class="nav-cart-badge" id="notif-count" style="display:none;background:#e74c3c;">0</span>
           
           <div class="profile-dropdown" id="notif-dropdown" style="display:none; position:absolute; top:40px; right:-50px; background:#fff; border-radius:12px; box-shadow:0 10px 25px rgba(0,0,0,0.1); width:300px; max-height:400px; overflow-y:auto; z-index:100; border: 1px solid #fdf5f6; cursor:default;">
-            <div style="padding:15px; font-weight:700; border-bottom:1px solid #fdf5f6; color:#5c4738;">การแจ้งเตือน</div>
+            <div style="padding:15px; font-weight:700; border-bottom:1px solid #fdf5f6; color:#5c4738; display:flex; justify-content:space-between; align-items:center;">
+              <span>การแจ้งเตือน</span>
+              <button onclick="handleClearAllNotifs()" style="border:none; background:none; color:#db8a9e; cursor:pointer; padding:8px; border-radius:8px; transition:all 0.2s; display:flex; align-items:center; justify-content:center; margin-left:8px;" onmouseover="this.style.background='#fdf5f6'" onmouseout="this.style.background='none'" title="ล้างทั้งหมด">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="3 6 5 6 21 6"></polyline>
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                  <line x1="10" y1="11" x2="10" y2="17"></line>
+                  <line x1="14" y1="11" x2="14" y2="17"></line>
+                </svg>
+              </button>
+            </div>
             <div id="notif-list-container">
               <div style="padding:20px; text-align:center; color:#a08a8e; font-size:0.9rem;">ไม่มีการแจ้งเตือน</div>
             </div>
@@ -648,7 +720,7 @@ export default function Home() {
             <line x1="3" y1="6" x2="21" y2="6" />
             <path d="M16 10a4 4 0 0 1-8 0" />
           </svg>
-          <span class="nav-cart-badge" id="cart-count" style="display:none">0</span>
+          <span class="nav-cart-badge" id="cart-count" style="display:none;background:#e74c3c;">0</span>
         </div>
 
         <!-- Profile Menu -->
@@ -841,16 +913,9 @@ export default function Home() {
       <div class="slides" id="slides">
         <div class="slide">
         </div>
-        <div class="slide">
-          <div class="slide-label">Wire Velvet Flowers</div>
-
-
-
-
-          
+        <div class="slide" onclick="window.location.href='/login'" style="cursor:pointer;">
         </div>
         <div class="slide">
-          <div class="slide-label">Bespoke Bouquets</div>
         </div>
       </div>
       <button class="banner-btn prev" id="btn-prev" onclick="moveSlide(-1)" aria-label="ก่อนหน้า">&#10094;</button>
@@ -926,6 +991,39 @@ export default function Home() {
     </ul>
     <p class="footer-copy">&copy; 2025 Bear has flower. All rights reserved.</p>
   </footer>
+
+  <!-- Clear Notifications Modal -->
+  <div id="clear-notif-modal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.5); backdrop-filter:blur(5px); z-index:2000; align-items:center; justify-content:center; opacity:0; transition:opacity 0.3s ease;">
+    <div style="background:#fff; width:85%; max-width:380px; border-radius:24px; padding:32px 28px; box-shadow:0 10px 40px rgba(0,0,0,0.15); text-align:center; transform:scale(0.9); transition:transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);">
+      <div style="width:72px; height:72px; background:#fff0f2; color:#db8a9e; border-radius:50%; display:flex; align-items:center; justify-content:center; margin:0 auto 20px; font-size:2.2rem;">
+        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="3 6 5 6 21 6"></polyline>
+          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+          <line x1="10" y1="11" x2="10" y2="17"></line>
+          <line x1="14" y1="11" x2="14" y2="17"></line>
+        </svg>
+      </div>
+      <h2 style="font-size:1.3rem; color:#5c4738; margin-bottom:8px; font-weight:700;">ล้างประวัติการแจ้งเตือน</h2>
+      <p style="font-size:0.95rem; color:#a08a8e; line-height:1.5; margin-bottom:24px;">
+        คุณต้องการล้างประวัติการแจ้งเตือนทั้งหมดใช่หรือไม่?<br />
+        การกระทำนี้ไม่สามารถย้อนกลับได้
+      </p>
+      <div style="display:flex; gap:12px;">
+        <button onclick="cancelClearNotifs()" style="flex:1; padding:14px; background:#fdf5f6; color:#5c4738; border:none; border-radius:50px; font-weight:700; font-size:1rem; cursor:pointer; transition:all 0.2s;" onmouseover="this.style.background='#f0e0e2'" onmouseout="this.style.background='#fdf5f6'">ยกเลิก</button>
+        <button onclick="confirmClearNotifs()" style="flex:1; padding:14px; background:#db8a9e; color:#fff; border:none; border-radius:50px; font-weight:700; font-size:1rem; cursor:pointer; box-shadow:0 6px 15px rgba(219, 138, 158, 0.25); transition:all 0.2s;" onmouseover="this.style.background='#d47a8e'" onmouseout="this.style.background='#db8a9e'">ล้างทั้งหมด</button>
+      </div>
+    </div>
+  </div>
+
+  <style>
+    #clear-notif-modal.show {
+      display: flex !important;
+      opacity: 1 !important;
+    }
+    #clear-notif-modal.show > div {
+      transform: scale(1) !important;
+    }
+  </style>
 
   ` }} />;
 }

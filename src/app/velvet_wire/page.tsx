@@ -159,12 +159,14 @@ export default function VelvetWire() {
       let deliveryDate = '';
       let deliveryTime = '';
       let additionalNote = '';
+      let productCoverImage = '';
 
       const STORAGE_KEY = 'bear_flower_velvet_v1';
 
       function saveState() {
         const state = {
-          customerName, customerPhone, customerAddress, deliveryDate, deliveryTime, additionalNote
+          customerName, customerPhone, customerAddress, deliveryDate, deliveryTime, additionalNote,
+          productCoverImage
         };
         localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
       }
@@ -180,6 +182,7 @@ export default function VelvetWire() {
             deliveryDate = s.deliveryDate || '';
             deliveryTime = s.deliveryTime || '';
             additionalNote = s.additionalNote || '';
+            productCoverImage = s.productCoverImage || '';
           } catch (err) { console.error('Failed to parse saved state', err); }
         }
         renderForm();
@@ -389,10 +392,11 @@ export default function VelvetWire() {
               presetProduct = p;
               presetProduct.id = presetId;
               basePrice = p.price || 0;
-              
+              productCoverImage = p.coverImage || '';
+
               updateSummary();
               renderForm();
-              
+
               showToast('โหลดแบบสินค้าสำเร็จรูปเสร็จสิ้น!');
             } else {
               showToast('ไม่พบแบบสินค้าดังกล่าว');
