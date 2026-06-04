@@ -968,6 +968,18 @@ export default function GlitterRose() {
         }
       }
 
+      function jumpToTop() {
+        try {
+          const root = document.documentElement;
+          const prev = root.style.scrollBehavior;
+          root.style.scrollBehavior = 'auto';
+          window.scrollTo({ top: 0, left: 0 });
+          root.style.scrollBehavior = prev;
+        } catch (e) {
+          window.scrollTo(0, 0);
+        }
+      }
+
       function nextStep() {
         // ขั้น 1 ต้องเลือกจำนวนและสี
         if (current === 0) {
@@ -1056,6 +1068,7 @@ export default function GlitterRose() {
           if (current > maxStepReached) maxStepReached = current;
           saveState();
           updateUI();
+          setTimeout(jumpToTop, 0);
         } else {
           generateReceipt();
         }

@@ -238,7 +238,7 @@ export default function LoginPage() {
 
         {inAppWarning && (
           <div className="inapp-warning">
-            หากคุณเปิดผ่านแอป Facebook/LINE แล้วไม่สามารถล็อกอินได้ โปรดกดที่เมนู แถบมุมหน้าจอ เพื่อเลือก <b>'เปิดในเบราว์เซอร์ (Open in Browser)'</b> หรือคัดลอกลิงก์ไปเปิดใน Safari/Chrome
+            หากคุฟหกๆกกดฟกดเ้ใากะรกดเสหาหกดรำไสหกณเปิดผ่านแอป Facebook/LINE แล้วไม่สามารถล็อกอินได้ โปรดกดที่เมนู แถบมุมหน้าจอ เพื่อเลือก <b>'เปิดในเบราว์เซอร์ (Open in Browser)'</b> หรือคัดลอกลิงก์ไปเปิดใน Safari/Chrome
           </div>
         )}
 

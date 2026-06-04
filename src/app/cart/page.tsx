@@ -279,8 +279,11 @@ export default function CartPage() {
 
   const getStatusLabel = (status: string) => {
     switch (status) {
+      case 'pending_verification': return { text: 'รอดำเนินการ (รอตรวจสอบมัดจำ)', color: '#757575', bg: '#f5f5f5' };
       case 'preparing': return { text: 'กำลังจัดช่อดอกไม้', color: '#ff9800', bg: '#fff3e0' };
-      case 'shipping': return { text: 'รอจัดส่ง', color: '#2196f3', bg: '#e3f2fd' };
+      case 'shipping': return { text: 'จัดดอกไม้เสร็จแล้ว กรุณาชำระเงินอีกครึ่งนึงเพื่อดำเนินการจัดส่ง', color: '#2196f3', bg: '#e3f2fd' };
+      case 'pending_final_verification': return { text: 'กำลังตรวจสอบยอดเงินส่วนที่เหลือ', color: '#e67e22', bg: '#fdf6ee' };
+      case 'delivering': return { text: 'กำลังจัดส่ง', color: '#9c27b0', bg: '#f3e5f5' };
       case 'completed': return { text: 'เสร็จสิ้น', color: '#4caf50', bg: '#e8f5e9' };
       default: return { text: 'รอดำเนินการ', color: '#757575', bg: '#f5f5f5' };
     }
@@ -538,7 +541,7 @@ export default function CartPage() {
           margin-top: 4px;
         }
 
-        .status-badge { display: inline-flex; align-items: center; justify-content: center; padding: 6px 12px; border-radius: 50px; font-size: .75rem; font-weight: 700; line-height: 1; }
+        .status-badge { display: inline-flex; align-items: center; justify-content: center; padding: 8px 14px; border-radius: 12px; font-size: .75rem; font-weight: 700; line-height: 1.3; text-align: center; word-break: break-word; max-width: 100%; }
         .empty-state { padding: 80px 20px; text-align: center; color: #a08a8e; }
         .empty-icon { font-size: 4rem; margin-bottom: 20px; opacity: 1; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
@@ -816,6 +819,24 @@ export default function CartPage() {
                                 <span className="status-badge" style={{ color: statusInfo.color, background: statusInfo.bg }}>
                                   {statusInfo.text}
                                 </span>
+                                {order.status === 'shipping' && (
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); window.location.href = `/payment?orderId=${order.id}`; }}
+                                    style={{
+                                      padding: '8px 16px',
+                                      background: '#db8a9e',
+                                      color: 'white',
+                                      border: 'none',
+                                      borderRadius: '12px',
+                                      fontSize: '0.85rem',
+                                      fontWeight: 'bold',
+                                      cursor: 'pointer',
+                                      boxShadow: '0 2px 8px rgba(219, 138, 158, 0.3)'
+                                    }}
+                                  >
+                                    ชำระเงิน
+                                  </button>
+                                )}
                               </div>
                             </div>
                           </div>

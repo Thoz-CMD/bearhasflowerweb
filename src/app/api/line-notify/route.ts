@@ -2,13 +2,20 @@ import { NextResponse } from 'next/server';
 
 export async function POST(req: Request) {
   try {
-    const { orderData } = await req.json();
+    const { orderData, paymentType = 'deposit' } = await req.json();
 
     const LINE_ACCESS_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN;
 
     if (!LINE_ACCESS_TOKEN) {
       return NextResponse.json({ error: 'LINE_CHANNEL_ACCESS_TOKEN is not configured' }, { status: 500 });
     }
+
+    const isFinal = paymentType === 'final';
+    const amountToPay = isFinal ? orderData.total - orderData.depositPaid : orderData.depositPaid;
+    const alertTitle = isFinal ? "แจ้งชำระเงินส่วนที่เหลือ!" : "มีออเดอร์ใหม่!";
+    const labelToPay = isFinal ? "ยอดชำระส่วนที่เหลือ" : "มัดจำที่ต้องชำระ";
+    const headerBgColor = isFinal ? "#00B900" : "#E91E8C"; // Green for LINE / final, Pink for new order
+    const headerTextColor = isFinal ? "#E6F8E6" : "#FFD6E7";
 
     // Format items for Flex Message body
     const itemBoxes = orderData.items.map((item: any) => {
@@ -82,19 +89,19 @@ export async function POST(req: Request) {
 
     const flexMessage = {
       type: "flex",
-      altText: `มีออเดอร์ใหม่! ยอด ฿${orderData.total.toLocaleString()}`,
+      altText: `${alertTitle} ยอด ฿${orderData.total.toLocaleString()}`,
       contents: {
         type: "bubble",
         size: "kilo",
         header: {
           type: "box",
           layout: "vertical",
-          backgroundColor: "#E91E8C",
+          backgroundColor: headerBgColor,
           paddingAll: "20px",
           contents: [
             {
               type: "text",
-              text: "มีออเดอร์ใหม่!",
+              text: alertTitle,
               color: "#FFFFFF",
               size: "xl",
               weight: "bold"
@@ -102,7 +109,7 @@ export async function POST(req: Request) {
             {
               type: "text",
               text: "Bear has flower",
-              color: "#FFD6E7",
+              color: headerTextColor,
               size: "sm",
               margin: "sm"
             }
@@ -172,14 +179,14 @@ export async function POST(req: Request) {
               contents: [
                 {
                   type: "text",
-                  text: "มัดจำที่ต้องชำระ",
+                  text: labelToPay,
                   size: "sm",
                   color: "#880E4F",
                   flex: 1
                 },
                 {
                   type: "text",
-                  text: `฿${orderData.depositPaid.toLocaleString()}`,
+                  text: `฿${amountToPay.toLocaleString()}`,
                   size: "sm",
                   weight: "bold",
                   color: "#C2185B",

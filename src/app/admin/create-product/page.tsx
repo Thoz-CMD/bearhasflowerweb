@@ -5,12 +5,31 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { checkIsAdmin } from '@/lib/admin';
 import { collection, addDoc, serverTimestamp, doc, updateDoc, deleteDoc, getDocs, orderBy, query } from 'firebase/firestore';
 
-export default function CreateProductPage() {
+type ProductStudioPageProps = {
+  forceManageMode?: boolean;
+};
+
+export function ProductStudioPage({ forceManageMode = false }: ProductStudioPageProps) {
   const [user, setUser] = useState<any>(null);
   const [isAdminUser, setIsAdminUser] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedType, setSelectedType] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<'select' | 'form' | 'manage'>('select');
+  const [viewMode, setViewMode] = useState<'select' | 'form' | 'manage'>(() => {
+    if (forceManageMode) return 'manage';
+    if (typeof window === 'undefined') return 'select';
+
+    const params = new URLSearchParams(window.location.search);
+    const isManageQuery = params.get('manage') === 'true';
+    const isEditQuery = params.get('edit') === 'true';
+    const hasEditState = Boolean(
+      sessionStorage.getItem('bear_flower_edit_product') ||
+      sessionStorage.getItem('bear_flower_edit_product_id')
+    );
+
+    if (isManageQuery) return 'manage';
+    if (isEditQuery || hasEditState) return 'form';
+    return 'select';
+  });
   const [manageProducts, setManageProducts] = useState<any[]>([]);
   const [manageLoading, setManageLoading] = useState(false);
 
@@ -131,15 +150,9 @@ export default function CreateProductPage() {
   useEffect(() => {
     if (typeof window === 'undefined' || isAdminUser !== true) return;
     const params = new URLSearchParams(window.location.search);
-    const isManageQuery = params.get('manage') === 'true';
     const isEditQuery = params.get('edit') === 'true';
     const editRaw = sessionStorage.getItem(EDIT_KEY);
     const editId = sessionStorage.getItem(EDIT_ID_KEY);
-
-    if (isManageQuery) {
-      setViewMode('manage');
-      return;
-    }
 
     if (editRaw || editId || isEditQuery) {
       if (selectedType !== 'glitter_rose' && selectedType !== 'velvet_flower') {
@@ -1103,7 +1116,7 @@ export default function CreateProductPage() {
               : 'สร้างตัวสินค้าและนำขึ้นแสดงใน Our Products สำเร็จเรียบร้อยแล้วค่ะ!';
             const title = isEditing ? 'อัปเดตสำเร็จ' : 'สร้างสินค้าสำเร็จ';
             window.showBeautifulAlert(message, 'success', title).then(() => {
-              window.location.href = '/admin/create-product?manage=true';
+              window.location.href = '/admin/manage-products';
             });
           } else {
             throw new Error('Firebase save returned false');
@@ -1233,9 +1246,7 @@ export default function CreateProductPage() {
     if (typeof window === 'undefined') return;
     sessionStorage.setItem(EDIT_KEY, JSON.stringify(product));
     sessionStorage.setItem(EDIT_ID_KEY, product.id);
-    setSelectedType('glitter_rose');
-    setViewMode('form');
-    window.history.replaceState(null, '', '/admin/create-product?edit=true');
+    window.location.assign('/admin/create-product?edit=true');
   };
 
   const handleManageDelete = async (productId: string) => {
@@ -1263,83 +1274,66 @@ export default function CreateProductPage() {
   };
 
   return (
-    <div style={{ minHeight: '100vh', background: '#fdf8f9', paddingBottom: '80px', position: 'relative' }}>
-
-      {/* Admin Navbar */}
-      <nav className="admin-nav">
-        <div className="navbar-inner">
-          <button className="back-btn-circle" onClick={() => window.location.href = '/admin'}>
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-              <path d="M15 18l-6-6 6-6" />
-            </svg>
-          </button>
-          <div className="admin-title">Create Product</div>
-          <div style={{ width: 40 }}></div>
-        </div>
-      </nav>
-
-      <div className="admin-dashboard">
+    <div className="admin-dashboard">
         <div className="dashboard-container">
 
           <style>{`
-        .admin-nav {
-          background: #fff;
-          height: 64px;
-          padding: 0 20px;
-          box-shadow: 0 2px 10px rgba(0,0,0,0.05);
-          display: flex;
-          align-items: center;
-          position: sticky;
-          top: 0;
-          z-index: 100;
-        }
-
-        .navbar-inner {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          width: 100%;
-          max-width: 1200px;
-          margin: 0 auto;
-          position: relative;
-          height: 100%;
-        }
-
-        @media (min-width: 1024px) {
-          .admin-nav {
-            padding: 0 40px;
-          }
-        }
-
-        .back-btn-circle {
-          width: 40px; height: 40px; border-radius: 50%; border: none;
-          background: #fdf5f6; color: #db8a9e; display: flex;
-          align-items: center; justify-content: center; cursor: pointer;
-          transition: all 0.2s;
-        }
-        .back-btn-circle:hover {
-          background: #f7d6de;
-          transform: scale(1.05);
-        }
-
-        .admin-title {
-          font-family: 'Cormorant Garamond', 'Noto Sans Thai', serif;
-          font-style: italic;
-          font-weight: 600;
-          font-size: 1.4rem;
-          color: #db8a9e;
-        }
-
         .admin-dashboard {
-          background: #fdf8f9;
+          background: rgba(255, 252, 253, 0.9);
           font-family: 'Noto Sans Thai', sans-serif;
           color: #5c4738;
-          padding: 20px 15px 40px;
+          padding: 24px;
+          border-radius: 28px;
+          box-shadow: 0 24px 60px rgba(80, 50, 57, 0.08);
+          border: 1px solid rgba(219, 138, 158, 0.1);
         }
 
         .dashboard-container {
-          max-width: 1200px;
+          max-width: 1240px;
           margin: 0 auto;
+        }
+
+        .admin-page-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          gap: 16px;
+          margin-bottom: 24px;
+        }
+
+        .admin-page-badge {
+          display: inline-flex;
+          padding: 8px 14px;
+          border-radius: 999px;
+          background: #fff1f5;
+          color: #ea678f;
+          font-size: 0.8rem;
+          font-weight: 700;
+          margin-bottom: 12px;
+        }
+
+        .admin-page-title {
+          font-size: clamp(1.7rem, 3vw, 2.2rem);
+          line-height: 1.1;
+          color: #2d2227;
+          margin: 0;
+        }
+
+        .admin-page-subtitle {
+          color: #8f7d83;
+          font-size: 0.95rem;
+          margin: 10px 0 0;
+        }
+
+        @media (max-width: 768px) {
+          .admin-dashboard {
+            padding: 16px !important;
+            border-radius: 22px !important;
+          }
+
+          .admin-page-header {
+            margin-bottom: 18px !important;
+          }
         }
 
         .option-select-screen {
@@ -1438,20 +1432,15 @@ export default function CreateProductPage() {
           max-width: 1200px;
           margin: 0 auto;
           /* Keep spacing consistent with other pages */
-          padding: 20px 0 60px;
+          padding: 0 0 60px;
           width: 100%;
         }
         .manage-header {
           display: flex;
-          align-items: center;
+          align-items: flex-start;
           justify-content: space-between;
           gap: 16px;
           margin-bottom: 10px;
-        }
-        .manage-header h2 {
-          font-size: 1.4rem;
-          color: var(--deep-brown);
-          margin-bottom: 4px;
         }
         .manage-create-btn {
           border: none;
@@ -1605,20 +1594,31 @@ export default function CreateProductPage() {
         }
       `}</style>
 
+          {viewMode !== 'manage' ? (
+            <div className="admin-page-header">
+              <div>
+                <span className="admin-page-badge">Product Studio</span>
+                <h1 className="admin-page-title">จัดการสินค้า</h1>
+                <p className="admin-page-subtitle">
+                  สร้างสินค้าใหม่หรือเลือก workflow ที่ต้องการจัดการจากหลังบ้าน
+                </p>
+              </div>
+            </div>
+          ) : null}
+
           {viewMode === 'manage' ? (
             <div className="manage-screen">
               <div className="manage-header">
                 <div>
-                  <h2>จัดเก็บสินค้า</h2>
-                  <p className="subtitle">รายการสินค้าที่สร้างไว้ทั้งหมด</p>
+                  <span className="admin-page-badge">Product Studio</span>
+                  <h1 className="admin-page-title">จัดเก็บสินค้า</h1>
+                  <p className="admin-page-subtitle">รายการสินค้าที่สร้างไว้ทั้งหมด</p>
                 </div>
                 <button
                   className="manage-create-btn"
                   onClick={() => {
-                    setSelectedType('glitter_rose');
-                    setViewMode('form');
                     if (typeof window !== 'undefined') {
-                      window.history.replaceState(null, '', '/admin/create-product');
+                      window.location.href = '/admin/create-product';
                     }
                   }}
                 >
@@ -1759,7 +1759,10 @@ export default function CreateProductPage() {
             }} />
           )}
         </div>
-      </div>
     </div>
   );
+}
+
+export default function CreateProductPage() {
+  return <ProductStudioPage />;
 }

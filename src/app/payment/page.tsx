@@ -1,98 +1,81 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { db, auth } from '@/lib/firebase';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
-import { onAuthStateChanged } from 'firebase/auth';
+import { db } from '@/lib/firebase';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import generatePayload from 'promptpay-qr';
 import { QRCodeSVG } from 'qrcode.react';
 
-const STORAGE_CART = 'bear_flower_cart';
-// บัญชี PromptPay ของร้านค้า (สามารถเปลี่ยนเป็นเบอร์โทร หรือ เลขบัตรประชาชนได้)
-const PROMPTPAY_ID = '0656144703'; // TODO: เปลี่ยนเป็นเบอร์พร้อมเพย์ของคุณ
+// บัญชี PromptPay ของร้านค้า
+const PROMPTPAY_ID = '0656144703';
 
-export default function CheckoutPage() {
-  const [cartItems, setCartItems] = useState<any[]>([]);
+export default function PaymentPage() {
+  const [order, setOrder] = useState<any>(null);
   const [total, setTotal] = useState(0);
   const [deposit, setDeposit] = useState(0);
+  const [remainingAmount, setRemainingAmount] = useState(0);
   const [isClient, setIsClient] = useState(false);
   const [payload, setPayload] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [showSuccessPopup, setShowSuccessPopup] = useState(false);
-  const [userId, setUserId] = useState<string | null>(null);
-
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user) setUserId(user.uid);
-    });
-    return () => unsubscribe();
-  }, []);
 
   useEffect(() => {
     setIsClient(true);
-    const savedCart = localStorage.getItem(STORAGE_CART);
-    if (savedCart) {
-      const items = JSON.parse(savedCart);
-      if (items.length === 0) {
-        window.location.href = '/cart';
-        return;
-      }
-      setCartItems(items);
-      const calculatedTotal = items.reduce((acc: number, item: any) => acc + (item.price * (item.qty || 1)), 0);
-      setTotal(calculatedTotal);
+    const searchParams = new URLSearchParams(window.location.search);
+    const orderId = searchParams.get('orderId');
 
-      // คำนวณมัดจำ 50%
-      const depositAmount = Math.ceil(calculatedTotal * 0.5);
-      setDeposit(depositAmount);
-
-      // สร้าง PromptPay QR Code Payload
-      const qrPayload = generatePayload(PROMPTPAY_ID, { amount: depositAmount });
-      setPayload(qrPayload);
-    } else {
-      window.location.href = '/cart';
+    if (orderId) {
+      const fetchOrder = async () => {
+        try {
+          const docRef = doc(db, 'orders', orderId);
+          const docSnap = await getDoc(docRef);
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            setOrder({ id: docSnap.id, ...data });
+            
+            const calcTotal = data.total || 0;
+            const calcDeposit = data.depositPaid || 0;
+            const remaining = calcTotal - calcDeposit;
+            
+            setTotal(calcTotal);
+            setDeposit(calcDeposit);
+            setRemainingAmount(remaining);
+            
+            if (remaining > 0) {
+              const qrPayload = generatePayload(PROMPTPAY_ID, { amount: remaining });
+              setPayload(qrPayload);
+            }
+          }
+        } catch (e) {
+          console.error("Error fetching order:", e);
+        }
+      };
+      fetchOrder();
     }
   }, []);
 
   const handleConfirmPayment = async () => {
-    if (cartItems.length === 0 || isProcessing) return;
+    if (!order || isProcessing || remainingAmount <= 0) return;
     setIsProcessing(true);
 
-    const orderData = {
-      items: cartItems.map((item: any) => ({
-        name: item.name,
-        price: item.price,
-        qty: item.qty || 1,
-        details: item.details || '',
-        type: item.type || 'regular',
-        image: item.image || item.imageUrl || (item.type === 'glitter_rose' ? '/images/Glitter Rose/ริบบิ้นแดง.jpg' : ''),
-        config: item.config || null
-      })),
-      total: total,
-      depositPaid: deposit,
-      status: 'pending_verification', // รอตรวจสอบยอดเงิน
-      createdAt: serverTimestamp(),
-      userId: userId || 'guest',
-    };
-
     try {
-      await addDoc(collection(db, "orders"), orderData);
+      const orderRef = doc(db, 'orders', order.id);
+      await updateDoc(orderRef, { status: 'pending_final_verification' });
 
       // Trigger LINE Notify
       try {
         await fetch('/api/line-notify', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ orderData })
+          body: JSON.stringify({ orderData: order, paymentType: 'final' })
         });
       } catch (err) {
         console.error("Failed to notify LINE:", err);
       }
 
-      localStorage.removeItem(STORAGE_CART);
       setShowSuccessPopup(true);
     } catch (e) {
-      // Fallback for demo mode
-      localStorage.removeItem(STORAGE_CART);
+      console.error("Error updating order:", e);
       setShowSuccessPopup(true);
     }
     setIsProcessing(false);
@@ -101,9 +84,9 @@ export default function CheckoutPage() {
   if (!isClient) return null;
 
   return (
-    <div className="checkout-page">
+    <div className="payment-page">
       <style>{`
-        .checkout-page {
+        .payment-page {
           min-height: 100vh;
           background: #fffafb;
           color: #5c4738;
@@ -111,7 +94,7 @@ export default function CheckoutPage() {
           padding-bottom: 40px;
         }
 
-        .checkout-nav {
+        .payment-nav {
           background: #fff;
           height: 64px;
           padding: 0 20px;
@@ -119,10 +102,21 @@ export default function CheckoutPage() {
           position: sticky;
           top: 0;
           z-index: 100;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        
+        .navbar-inner {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          width: 100%;
+          max-width: 1280px;
         }
 
         @media (min-width: 1024px) {
-          .checkout-nav {
+          .payment-nav {
             padding: 0 40px;
           }
         }
@@ -192,12 +186,6 @@ export default function CheckoutPage() {
           display: inline-block;
           margin: 20px 0;
           border: 2px solid #fdf5f6;
-        }
-
-        .promptpay-logo {
-          height: 24px;
-          margin-bottom: 12px;
-          object-fit: contain;
         }
 
         .amount-display {
@@ -332,9 +320,9 @@ export default function CheckoutPage() {
         }
       `}</style>
 
-      <nav className="checkout-nav">
+      <nav className="payment-nav">
         <div className="navbar-inner">
-          <button className="back-btn-circle" onClick={() => window.location.href = '/cart'}>
+          <button className="back-btn-circle" onClick={() => window.history.back()}>
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
               <path d="M15 18l-6-6 6-6" />
             </svg>
@@ -345,64 +333,88 @@ export default function CheckoutPage() {
       </nav>
 
       <div className="content-wrap">
-        <div className="page-title">
-          <h1>ชำระเงินมัดจำ (50%)</h1>
-          <p>สแกน QR Code เพื่อชำระเงินผ่านแอปธนาคาร<br />ระบบจะระบุจำนวนเงินให้โดยอัตโนมัติ</p>
-        </div>
-
-        <div className="payment-card">
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '12px', gap: '4px' }}>
-            <span style={{ color: '#113566', fontWeight: 900, fontStyle: 'italic', fontSize: '1.4rem', fontFamily: 'Arial, sans-serif' }}>Prompt</span>
-            <span style={{ color: '#f47b20', fontWeight: 900, fontStyle: 'italic', fontSize: '1.4rem', fontFamily: 'Arial, sans-serif' }}>Pay</span>
+        {!order ? (
+          <div style={{ textAlign: 'center', marginTop: '50px', color: '#a08a8e' }}>กำลังโหลดข้อมูล...</div>
+        ) : remainingAmount <= 0 ? (
+          <div className="payment-card">
+            <div style={{ fontSize: '3rem', marginBottom: '16px' }}>✅</div>
+            <div style={{ fontSize: '1.2rem', fontWeight: 700, color: '#5c4738', marginBottom: '8px' }}>ชำระเงินครบถ้วนแล้ว</div>
+            <div style={{ color: '#a08a8e', marginBottom: '24px' }}>ยอดชำระของออเดอร์นี้ถูกชำระเรียบร้อยแล้ว</div>
+            <button className="confirm-btn" onClick={() => window.location.href = '/cart?tab=history'}>กลับไปหน้าประวัติ</button>
           </div>
+        ) : (
+          <>
+            <div className="page-title">
+              <h1>ชำระเงินส่วนที่เหลือ</h1>
+              <p>สแกน QR Code เพื่อชำระเงินผ่านแอปธนาคาร<br />ระบบจะระบุจำนวนเงินให้โดยอัตโนมัติ</p>
+            </div>
 
-          <div className="qr-container">
-            {payload ? (
-              <QRCodeSVG value={payload} size={200} level="M" includeMargin={false} />
-            ) : (
-              <div style={{ width: 200, height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f5f5f5' }}>กำลังโหลด...</div>
+            {order.finishedImageUrl && (
+              <div style={{ marginBottom: '24px', textAlign: 'center', animation: 'fadeUp 0.6s ease-out' }}>
+                <p style={{ fontSize: '0.9rem', color: '#db8a9e', marginBottom: '8px', fontWeight: 'bold' }}>✨ ดอกไม้ของคุณจัดเสร็จเรียบร้อยแล้วค่ะ ✨</p>
+                <img 
+                  src={order.finishedImageUrl} 
+                  alt="Finished Flower Arrangement" 
+                  style={{ width: '100%', maxWidth: '400px', borderRadius: '16px', boxShadow: '0 8px 20px rgba(0,0,0,0.1)', border: '4px solid #fff' }} 
+                />
+              </div>
             )}
-          </div>
 
-          <div className="amount-display">
-            <div className="amount-label">ยอดชำระมัดจำ</div>
-            <div className="amount-value">{deposit.toLocaleString()} ฿</div>
-          </div>
+            <div className="payment-card">
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '12px', gap: '4px' }}>
+                <span style={{ color: '#113566', fontWeight: 900, fontStyle: 'italic', fontSize: '1.4rem', fontFamily: 'Arial, sans-serif' }}>Prompt</span>
+                <span style={{ color: '#f47b20', fontWeight: 900, fontStyle: 'italic', fontSize: '1.4rem', fontFamily: 'Arial, sans-serif' }}>Pay</span>
+              </div>
 
-          <div className="info-box">
-            <h3><span style={{ fontSize: '1.2rem' }}>✨</span> เงื่อนไขการชำระเงิน</h3>
-            <p>
-              กรุณาชำระเงินมัดจำล่วงหน้า <strong>50%</strong> เพื่อเป็นการยืนยันออเดอร์ให้ทางร้านเริ่มจัดเตรียมดอกไม้ของคุณ
-              และหลังจากดอกไม้จัดเสร็จเรียบร้อยแล้ว คุณสามารถชำระส่วนที่เหลืออีก <strong>{(total - deposit).toLocaleString()} บาท</strong> ได้ในภายหลังค่ะ
+              <div className="qr-container">
+                {payload ? (
+                  <QRCodeSVG value={payload} size={200} level="M" includeMargin={false} />
+                ) : (
+                  <div style={{ width: 200, height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f5f5f5' }}>กำลังโหลด...</div>
+                )}
+              </div>
+
+              <div className="amount-display">
+                <div className="amount-label">ยอดที่ต้องชำระ</div>
+                <div className="amount-value">{remainingAmount.toLocaleString()} ฿</div>
+              </div>
+
+              <div className="info-box">
+                <h3><span style={{ fontSize: '1.2rem' }}>✨</span> เงื่อนไขการชำระเงิน</h3>
+                <p>
+                  กรุณาชำระเงินส่วนที่เหลือเพื่อให้ทางร้านดำเนินการจัดส่งให้ถึงมือคุณ
+                  หลังจากโอนเงินเสร็จสิ้น แอดมินจะทำการตรวจสอบยอดเงินและจัดส่งสินค้าทันทีค่ะ
+                </p>
+              </div>
+            </div>
+
+            <div className="summary-card">
+              <div className="summary-row">
+                <span>ยอดรวมสินค้า</span>
+                <span>{total.toLocaleString()} บาท</span>
+              </div>
+              <div className="summary-row" style={{ color: '#a08a8e' }}>
+                <span>มัดจำที่ชำระแล้ว</span>
+                <span>- {deposit.toLocaleString()} บาท</span>
+              </div>
+              <div className="summary-row row-highlight">
+                <span>ยอดต้องชำระ</span>
+                <span>{remainingAmount.toLocaleString()} บาท</span>
+              </div>
+            </div>
+
+            <button
+              className="confirm-btn"
+              onClick={handleConfirmPayment}
+              disabled={isProcessing}
+            >
+              {isProcessing ? 'กำลังดำเนินการ...' : 'ฉันได้สแกนชำระเงินเรียบร้อยแล้ว'}
+            </button>
+            <p style={{ textAlign: 'center', fontSize: '0.75rem', color: '#a08a8e', marginTop: '16px' }}>
+              หลังจากกดปุ่ม ทางร้านจะตรวจสอบยอดเงินและอัปเดตสถานะให้เร็วที่สุดค่ะ
             </p>
-          </div>
-        </div>
-
-        <div className="summary-card">
-          <div className="summary-row">
-            <span>ยอดรวมสินค้า</span>
-            <span>{total.toLocaleString()} บาท</span>
-          </div>
-          <div className="summary-row row-highlight">
-            <span>ยอดมัดจำ (50%)</span>
-            <span>{deposit.toLocaleString()} บาท</span>
-          </div>
-          <div className="summary-row" style={{ color: '#a08a8e', fontSize: '0.85rem' }}>
-            <span>ค้างชำระ (จ่ายเมื่อเสร็จ)</span>
-            <span>{(total - deposit).toLocaleString()} บาท</span>
-          </div>
-        </div>
-
-        <button
-          className="confirm-btn"
-          onClick={handleConfirmPayment}
-          disabled={isProcessing}
-        >
-          {isProcessing ? 'กำลังดำเนินการ...' : 'ฉันได้สแกนชำระเงินแล้ว'}
-        </button>
-        <p style={{ textAlign: 'center', fontSize: '0.75rem', color: '#a08a8e', marginTop: '16px' }}>
-          หลังจากกดปุ่ม ทางร้านจะตรวจสอบยอดเงินและอัปเดตสถานะให้เร็วที่สุดค่ะ
-        </p>
+          </>
+        )}
       </div>
 
       {showSuccessPopup && (
@@ -413,14 +425,14 @@ export default function CheckoutPage() {
                 <polyline points="20 6 9 17 4 12"></polyline>
               </svg>
             </div>
-            <h2 className="modal-title">ขอบคุณสำหรับคำสั่งซื้อ</h2>
+            <h2 className="modal-title">แจ้งชำระเงินสำเร็จ</h2>
             <p className="modal-desc">
-              ได้รับออร์เดอร์ของคุณแล้ว!<br />
-              รอแอดมินตรวจสอบยอดมัดจำ<br />
-              เมื่อยืนยันแล้วจะเริ่มจัดช่อดอกไม้ให้ทันที
+              ระบบได้รับแจ้งการชำระเงินของคุณแล้ว<br />
+              เราจะรีบตรวจสอบยอดเงิน<br />
+              และดำเนินการจัดส่งให้เร็วที่สุดค่ะ
             </p>
             <button className="modal-btn" onClick={() => window.location.href = '/cart?tab=history'}>
-              ดูประวัติการสั่งซื้อ
+              กลับไปหน้าประวัติการสั่งซื้อ
             </button>
           </div>
         </div>

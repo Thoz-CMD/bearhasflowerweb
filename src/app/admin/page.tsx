@@ -1,9 +1,11 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { auth, db } from '@/lib/firebase';
+import React, { useEffect, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { auth, db, storage } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
-import { collection, query, orderBy, onSnapshot, doc, updateDoc, addDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, doc, updateDoc, addDoc, deleteDoc, serverTimestamp, getDoc } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { checkIsAdmin } from '@/lib/admin';
 
 const ROSE_COLORS_MAP: Record<string, string> = {
@@ -71,7 +73,7 @@ const BasketIcon = ({ colors = [], size = 46 }: { colors: string[], size?: numbe
         <path fill={c1} d="M268.194,188.467l19.428-37.602l-47.168-27.794c-11.991-7.066-27.456-2.607-33.844,9.758l0,0 c-6.388,12.365-1.078,27.558,11.624,33.25L268.194,188.467z" />
         <path fill={c1} d="M260.632,176.05h42.325l3.043,54.663c0.774,13.896-10.286,25.589-24.204,25.589l0,0 c-13.918,0-24.978-11.693-24.204-25.589L260.632,176.05z" />
       </g>
-      <circle style={{ fill: '#FACE17' }} cx="282.521" cy="170.716" r="24.903" />
+      <circle style={{ fill: '#FACE17' }} cx="282.521" cy="170.716" r="35" />
 
       {/* Flower 2 - Middle */}
       <g opacity="0.8">
@@ -84,7 +86,7 @@ const BasketIcon = ({ colors = [], size = 46 }: { colors: string[], size?: numbe
         <path fill={c2} d="M145.411,221.893l19.428-37.602l-47.168-27.794c-11.991-7.066-27.456-2.607-33.844,9.758l0,0 c-6.388,12.365,1.078,27.558,11.624,33.25L145.411,221.893z" />
         <path fill={c2} d="M137.85,209.477h42.325l3.043,54.663c0.774,13.896-10.286,25.589-24.204,25.589l0,0 c-13.918,0-24.978-11.693-24.204-25.589L137.85,209.477z" />
       </g>
-      <circle style={{ fill: '#FACE17' }} cx="159.74" cy="204.147" r="24.903" />
+      <circle style={{ fill: '#FACE17' }} cx="159.74" cy="204.147" r="35" />
 
       {/* Flower 3 - Right */}
       <g opacity="0.95">
@@ -97,21 +99,34 @@ const BasketIcon = ({ colors = [], size = 46 }: { colors: string[], size?: numbe
         <path fill={c3} d="M339.388,266.395l19.428-37.602l-47.168-27.794c-11.991-7.066-27.456-2.607-33.844,9.758l0,0 c-6.388,12.365,1.078,27.558,11.624,33.25L339.388,266.395z" />
         <path fill={c3} d="M331.826,253.978h42.325l3.043,54.663c0.774,13.896-10.286,25.589-24.204,25.589l0,0 c-13.918,0-24.978-11.693-24.204-25.589L331.826,253.978z" />
       </g>
-      <circle style={{ fill: '#FACE17' }} cx="353.715" cy="248.643" r="24.903" />
+      <circle style={{ fill: '#FACE17' }} cx="353.715" cy="248.643" r="35" />
     </svg>
   );
 };
 
 export default function AdminPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [user, setUser] = useState<any>(null);
   const [isAdminUser, setIsAdminUser] = useState<boolean | null>(null);
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeFilter, setActiveFilter] = useState('all'); // all, pending_verification, preparing, shipping, completed, cancelled
   const [expandedOrder, setExpandedOrder] = useState<string | null>(null);
+  const [finishedImageFiles, setFinishedImageFiles] = useState<Record<string, File>>({});
+  const [finishedImagePreviews, setFinishedImagePreviews] = useState<Record<string, string>>({});
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [adminViewMode, setAdminViewMode] = useState<'manager' | 'florist' | 'finance' | 'create-order'>('manager');
-  const [isModeDropdownOpen, setIsModeDropdownOpen] = useState(false);
+  const [recipientSearch, setRecipientSearch] = useState('');
   const [registeredUsersCount, setRegisteredUsersCount] = useState(0);
+  const [previousMonthRegisteredUsersCount, setPreviousMonthRegisteredUsersCount] = useState(0);
+
+  let registeredUsersGrowthPct = 0;
+  if (previousMonthRegisteredUsersCount > 0) {
+    registeredUsersGrowthPct = ((registeredUsersCount - previousMonthRegisteredUsersCount) / previousMonthRegisteredUsersCount) * 100;
+  } else if (registeredUsersCount > 0) {
+    registeredUsersGrowthPct = 0;
+  }
   const [activeUsersCount, setActiveUsersCount] = useState(0);
   const [expenses, setExpenses] = useState<any[]>([]);
   const [expenseTitle, setExpenseTitle] = useState('');
@@ -157,6 +172,20 @@ export default function AdminPage() {
   const [coDeliveryTime, setCoDeliveryTime] = useState<string>('');
   const [coAdditionalNote, setCoAdditionalNote] = useState<string>('');
   const [coIsSubmitting, setCoIsSubmitting] = useState<boolean>(false);
+
+  const syncAdminViewMode = (nextMode: 'manager' | 'florist' | 'finance') => {
+    setAdminViewMode(nextMode);
+
+    const params = new URLSearchParams(searchParams.toString());
+    if (nextMode === 'manager') {
+      params.delete('view');
+    } else {
+      params.set('view', nextMode);
+    }
+
+    const queryString = params.toString();
+    router.replace(queryString ? `/admin?${queryString}` : '/admin');
+  };
 
   const getCalculatedPrice = () => {
     const qtyPriceObj = [
@@ -250,7 +279,7 @@ export default function AdminPage() {
       setCoAdditionalNote('');
 
       // Switch view mode to florist
-      setAdminViewMode('florist');
+      syncAdminViewMode('florist');
     } catch (err) {
       console.error('Failed to create manual order:', err);
       await (window as any).showBeautifulAlert('เกิดข้อผิดพลาดในการสร้างออเดอร์', 'error', 'เกิดข้อผิดพลาด');
@@ -345,6 +374,25 @@ export default function AdminPage() {
     const beYear = parseInt(year, 10) + 543;
     return `${thaiMonths[monthIdx]} ${beYear}`;
   };
+
+  const getPreviousYearMonth = (yearMonthStr: string) => {
+    if (!yearMonthStr) return '';
+    const [yearStr, monthStr] = yearMonthStr.split('-');
+    const year = parseInt(yearStr, 10);
+    const month = parseInt(monthStr, 10);
+    if (Number.isNaN(year) || Number.isNaN(month)) return '';
+    const previousDate = new Date(year, month - 2, 1);
+    return `${previousDate.getFullYear()}-${String(previousDate.getMonth() + 1).padStart(2, '0')}`;
+  };
+
+  useEffect(() => {
+    const view = searchParams.get('view');
+    if (view === 'florist' || view === 'finance') {
+      setAdminViewMode(view);
+      return;
+    }
+    setAdminViewMode('manager');
+  }, [searchParams]);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -477,18 +525,40 @@ export default function AdminPage() {
     return () => unsubscribeOrders();
   }, [isAdminUser]);
 
+  useEffect(() => {
+    if (registeredUsersCount > 0 && previousMonthRegisteredUsersCount === 0) {
+      setPreviousMonthRegisteredUsersCount(registeredUsersCount);
+    }
+  }, [registeredUsersCount, previousMonthRegisteredUsersCount]);
+
   // Fetch registered users and active presence in real-time
   useEffect(() => {
     if (isAdminUser !== true) return;
-
-    // 1. Listen to registered users count
-    const unsubscribeUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
-      setRegisteredUsersCount(snapshot.size);
-    }, (err) => {
-      console.error("Error fetching registered users count:", err);
-    });
-
     let calcInterval: any = null;
+
+    let disposed = false;
+    let countInterval: any = null;
+
+    const loadAuthUserCount = async () => {
+      if (!user) return;
+      try {
+        const token = await user.getIdToken();
+        const res = await fetch('/api/admin/auth-user-count', {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        if (!res.ok) throw new Error(`auth-user-count ${res.status}`);
+        const data = (await res.json()) as { count?: number };
+        if (!disposed) setRegisteredUsersCount(Number(data.count || 0));
+
+      } catch (err) {
+        console.error('Error fetching auth user count:', err);
+      }
+    };
+
+    loadAuthUserCount();
+    countInterval = setInterval(loadAuthUserCount, 60000);
 
     // 2. Listen to active sessions presence and auto-cleanup old ones
     const unsubscribePresence = onSnapshot(collection(db, 'presence'), (snapshot) => {
@@ -498,7 +568,7 @@ export default function AdminPage() {
       snapshot.forEach((docSnap) => {
         const data = docSnap.data();
         const lastSeenTime = data.lastSeen ? new Date(data.lastSeen).getTime() : 0;
-        
+
         // Auto-cleanup: If a session is older than 5 minutes (tab closed/crashed), delete it from database to save space
         if (now - lastSeenTime > 5 * 60 * 1000) {
           deleteDoc(doc(db, 'presence', docSnap.id)).catch(e => console.warn("Presence cleanup error:", e));
@@ -525,11 +595,12 @@ export default function AdminPage() {
     });
 
     return () => {
-      unsubscribeUsers();
       unsubscribePresence();
+      disposed = true;
+      if (countInterval) clearInterval(countInterval);
       if (calcInterval) clearInterval(calcInterval);
     };
-  }, [isAdminUser]);
+  }, [isAdminUser, user]);
 
   // Fetch expenses in real-time if user is verified as admin
   useEffect(() => {
@@ -701,23 +772,120 @@ export default function AdminPage() {
 
   const updateOrderStatus = async (orderId: string, newStatus: string) => {
     try {
+      setIsUploadingImage(true);
+      let finishedImageUrl = null;
+
+      if (newStatus === 'shipping' && finishedImageFiles[orderId]) {
+        try {
+          const file = finishedImageFiles[orderId];
+
+          // Convert file to base64
+          const base64File = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = () => resolve(reader.result as string);
+            reader.onerror = error => reject(error);
+          });
+
+          // Upload via API route to bypass CORS
+          const res = await fetch('/api/upload-image', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              base64File,
+              path: `finished_arrangements/${orderId}_${Date.now()}`
+            })
+          });
+
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Upload failed');
+
+          finishedImageUrl = data.url;
+        } catch (uploadErr) {
+          console.error('Failed to upload image:', uploadErr);
+          await (window as any).showBeautifulAlert('เกิดข้อผิดพลาดในการอัปโหลดรูปภาพ โปรดลองใหม่อีกครั้ง', 'error', 'อัปโหลดล้มเหลว');
+          setIsUploadingImage(false);
+          return;
+        }
+      }
+
       const orderRef = doc(db, 'orders', orderId);
-      await updateDoc(orderRef, { status: newStatus });
+      const updateData: any = { status: newStatus };
+      if (finishedImageUrl) {
+        updateData.finishedImageUrl = finishedImageUrl;
+      }
+      await updateDoc(orderRef, updateData);
+
+      // Always send notification for status changes if user is not guest
+      const orderSnap = await getDoc(orderRef);
+      if (orderSnap.exists()) {
+        const orderData = orderSnap.data();
+        const userId = orderData.userId || 'guest';
+        const primaryItem = orderData.items?.[0];
+        const itemName = primaryItem?.name || 'ช่อดอกไม้';
+        // Get product image: use saved image field, or fallback based on type
+        const itemImage = primaryItem?.image || 
+          (primaryItem?.type === 'glitter_rose' ? '/images/Glitter Rose/ริบบิ้นแดง.jpg' : '') ||
+          '';
+
+        if (userId !== 'guest') {
+          let title = 'อัปเดตสถานะออเดอร์';
+          let message = `ออเดอร์ "${itemName}" อัปเดตสถานะใหม่`;
+          
+          if (newStatus === 'preparing') {
+            title = '🌸 เริ่มจัดดอกไม้แล้ว';
+            message = `ออเดอร์ "${itemName}" กำลังถูกจัดเตรียมค่ะ`;
+          } else if (newStatus === 'shipping') {
+            title = '✨ จัดดอกไม้เสร็จเรียบร้อย';
+            message = `กรุณาชำระเงินส่วนที่เหลือเพื่อจัดส่ง "${itemName}" ค่ะ`;
+          } else if (newStatus === 'delivering') {
+            title = '🚚 กำลังจัดส่ง';
+            message = `ออเดอร์ "${itemName}" กำลังเดินทางไปหาคุณค่ะ`;
+          } else if (newStatus === 'completed') {
+            title = '💖 จัดส่งสำเร็จ';
+            message = `ส่งมอบ "${itemName}" เรียบร้อย ขอบคุณที่ใช้บริการค่ะ`;
+          } else if (newStatus === 'cancelled') {
+            title = '❌ ออเดอร์ถูกยกเลิก';
+            message = `ออเดอร์ "${itemName}" ถูกยกเลิก ติดต่อแอดมินเพื่อสอบถามเพิ่มค่ะ`;
+          }
+
+          // Only send for meaningful updates
+          if (['preparing', 'shipping', 'delivering', 'completed', 'cancelled'].includes(newStatus)) {
+            await addDoc(collection(db, 'notifications'), {
+              userId,
+              orderId,
+              title,
+              message,
+              imageUrl: itemImage,
+              type: 'status_update',
+              status: 'unread',
+              createdAt: serverTimestamp(),
+            });
+          }
+        }
+      }
+
       await (window as any).showBeautifulAlert('อัปเดตสถานะออเดอร์เรียบร้อยแล้ว!', 'success', 'อัปเดตสถานะสำเร็จ');
     } catch (err) {
       console.error('Failed to update status:', err);
       await (window as any).showBeautifulAlert('เกิดข้อผิดพลาดในการอัปเดตสถานะ', 'error', 'เกิดข้อผิดพลาด');
+    } finally {
+      setIsUploadingImage(false);
     }
   };
 
   const getStatusLabel = (status: string) => {
     switch (status) {
       case 'pending_verification':
-        return { label: 'รอตรวจสอบยอดเงิน', color: '#e67e22', bg: '#fdf6ee' };
+        return { label: 'รอตรวจสอบยอดเงินมัดจำ', color: '#e67e22', bg: '#fdf6ee' };
+      case 'pending_final_verification':
+        return { label: 'รอตรวจสอบยอดเงิน (ส่วนที่เหลือ)', color: '#e67e22', bg: '#fdf6ee' };
       case 'preparing':
         return { label: 'กำลังจัดเตรียมช่อดอกไม้', color: '#db8a9e', bg: '#fdf5f6' };
       case 'shipping':
-        return { label: 'กำลังจัดส่ง', color: '#3498db', bg: '#ebf5fb' };
+        return { label: 'จัดดอกไม้เสร็จแล้ว', color: '#3498db', bg: '#ebf5fb' };
+      case 'delivering':
+        return { label: 'กำลังจัดส่ง', color: '#9b59b6', bg: '#f5eef8' };
       case 'completed':
         return { label: 'จัดส่งสำเร็จ', color: '#2ecc71', bg: '#eafaf1' };
       case 'cancelled':
@@ -727,16 +895,20 @@ export default function AdminPage() {
     }
   };
 
-  const formatOrderDate = (createdAt: any) => {
-    if (!createdAt) return '-';
-    let d: Date;
+  const resolveOrderDate = (createdAt: any) => {
+    if (!createdAt) return null;
     if (createdAt.toDate) {
-      d = createdAt.toDate();
-    } else if (createdAt.seconds) {
-      d = new Date(createdAt.seconds * 1000);
-    } else {
-      d = new Date(createdAt);
+      return createdAt.toDate();
     }
+    if (createdAt.seconds) {
+      return new Date(createdAt.seconds * 1000);
+    }
+    return new Date(createdAt);
+  };
+
+  const formatOrderDate = (createdAt: any) => {
+    const d = resolveOrderDate(createdAt);
+    if (!d) return '-';
     return d.toLocaleString('th-TH', {
       year: 'numeric',
       month: 'short',
@@ -744,6 +916,19 @@ export default function AdminPage() {
       hour: '2-digit',
       minute: '2-digit'
     });
+  };
+
+  const getOrderCustomerDisplayName = (order: any) => {
+    const customItem = order?.items?.find((item: any) => item?.config);
+    return (
+      customItem?.config?.customerName ||
+      order?.customerName ||
+      order?.displayName ||
+      order?.name ||
+      order?.userName ||
+      order?.shippingName ||
+      `#${order?.id?.substring?.(0, 8)?.toUpperCase?.() || 'ไม่ระบุ'}`
+    );
   };
 
   if (loading) {
@@ -829,7 +1014,25 @@ export default function AdminPage() {
   }
 
   // Filter logic
-  const filteredOrders = orders.filter(o => activeFilter === 'all' || o.status === activeFilter);
+  const normalizedRecipientSearch = recipientSearch.trim().toLowerCase();
+  const filteredOrders = orders.filter(o => {
+    const matchesStatus = activeFilter === 'all' || o.status === activeFilter;
+    if (!matchesStatus) return false;
+    if (!normalizedRecipientSearch) return true;
+    const customerDisplayName = getOrderCustomerDisplayName(o).toLowerCase();
+    const orderId = String(o?.id || '').toLowerCase();
+    const itemIdMatch = (o?.items || []).some((item: any) => {
+      const idValue = String(item?.id || '').toLowerCase();
+      const productIdValue = String(item?.productId || item?.product_id || '').toLowerCase();
+      const skuValue = String(item?.sku || '').toLowerCase();
+      return idValue.includes(normalizedRecipientSearch)
+        || productIdValue.includes(normalizedRecipientSearch)
+        || skuValue.includes(normalizedRecipientSearch);
+    });
+    return customerDisplayName.includes(normalizedRecipientSearch)
+      || orderId.includes(normalizedRecipientSearch)
+      || itemIdMatch;
+  });
 
   // Statistics calculations
   const totalSales = orders
@@ -838,9 +1041,164 @@ export default function AdminPage() {
   const pendingCount = orders.filter(o => o.status === 'pending_verification').length;
   const preparingCount = orders.filter(o => o.status === 'preparing').length;
   const completedCount = orders.filter(o => o.status === 'completed').length;
+  const toPercent = (count: number) => Math.min(100, Math.max(0, Math.round((count / safeOrderCount) * 100)));
+
+  const getSalesForMonth = (orders: any[], year: number, month: number) => {
+    return orders
+      .filter(o => o.status !== 'cancelled')
+      .filter(o => {
+        const orderDate = resolveOrderDate(o.createdAt);
+        return orderDate && orderDate.getFullYear() === year && orderDate.getMonth() === month;
+      })
+      .reduce((acc, o) => acc + (o.total || 0), 0);
+  };
+
+  const getSalesForYearMonth = (orders: any[], yearMonth: string) => {
+    return orders
+      .filter(o => o.status !== 'cancelled')
+      .filter(o => {
+        const orderDate = resolveOrderDate(o.createdAt);
+        return orderDate && `${orderDate.getFullYear()}-${String(orderDate.getMonth() + 1).padStart(2, '0')}` === yearMonth;
+      })
+      .reduce((acc, o) => acc + (o.total || 0), 0);
+  };
+
+  const getExpensesForYearMonth = (items: any[], yearMonth: string) => {
+    return items
+      .filter((item) => item.date && item.date.substring(0, 7) === yearMonth)
+      .reduce((acc, item) => acc + (item.amount || 0), 0);
+  };
+
+  const getGrowthMetrics = (currentValue: number, previousValue: number) => {
+    const rawPct = previousValue === 0
+      ? (currentValue > 0 ? 100 : 0)
+      : ((currentValue - previousValue) / previousValue) * 100;
+    const absolutePct = Math.abs(rawPct);
+    const displayPct = Number(absolutePct.toFixed(2));
+    return {
+      rawPct,
+      displayPct,
+      formattedPct: displayPct.toLocaleString('th-TH', {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 2,
+      }),
+      progressPct: Math.min(100, Math.max(0, Math.round(absolutePct))),
+      ringLabelPct: Math.round(displayPct),
+      ringPrefix: rawPct > 0 ? '+' : rawPct < 0 ? '-' : '',
+      detailPrefix: rawPct > 0 ? '↗' : rawPct < 0 ? '↘' : '•',
+      detailLabel: rawPct > 0 ? 'เพิ่มขึ้น' : rawPct < 0 ? 'ลดลง' : 'คงที่',
+    };
+  };
+
+  const today = new Date();
+  const currentMonth = today.getMonth();
+  const currentYear = today.getFullYear();
+  const previousMonth = currentMonth === 0 ? 11 : currentMonth - 1;
+  const previousYear = currentMonth === 0 ? currentYear - 1 : currentYear;
+
+  const currentMonthSales = getSalesForMonth(orders, currentYear, currentMonth);
+  const previousMonthSales = getSalesForMonth(orders, previousYear, previousMonth);
+
+  const salesGrowthPct = previousMonthSales === 0
+    ? (currentMonthSales > 0 ? 100 : 0)
+    : ((currentMonthSales - previousMonthSales) / previousMonthSales) * 100;
 
   const totalExpenses = expenses.reduce((acc, exp) => acc + (exp.amount || 0), 0);
   const netProfit = totalSales - totalExpenses;
+  const safeOrderCount = Math.max(orders.length, 1);
+  const todayLabel = new Intl.DateTimeFormat('th-TH', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  }).format(new Date());
+  const notificationCount = pendingCount;
+  const notificationLabel = notificationCount > 99 ? '99+' : String(notificationCount);
+  const viewTitleMap = {
+    manager: 'Dashboard',
+    florist: 'ช่างจัดดอกไม้',
+    finance: 'รายรับ-รายจ่าย',
+    'create-order': 'สร้างออเดอร์',
+  } as const;
+  const viewSubtitleMap = {
+    manager: 'ภาพรวมการจัดการร้านดอกไม้',
+    florist: 'ติดตามคิวงานและความพร้อมในการจัดช่อ',
+    finance: 'ตรวจสอบรายการรายรับและรายจ่ายของร้าน',
+    'create-order': 'สร้างออเดอร์พิเศษจากหลังบ้าน',
+  } as const;
+  const overviewCards = [
+    {
+      key: 'sales',
+      label: 'ยอดขายทั้งหมด',
+      value: `${totalSales.toLocaleString()} ฿`,
+      detail: `${orders.length} รายการทั้งหมด`,
+      accent: '#ff5f87',
+      cardClass: 'metric-sales',
+      progressPct: Math.round(Math.abs(salesGrowthPct)),
+      ringLabelPct: Math.round(Math.abs(salesGrowthPct)),
+      ringPrefix: '+',
+      detailPrefix: '↗',
+    },
+    {
+      key: 'pending',
+      label: 'รอตรวจสอบเงิน',
+      value: `${pendingCount} รายการ`,
+      detail: `${Math.round((pendingCount / safeOrderCount) * 100)}% จากทั้งหมด`,
+      accent: '#f59f3a',
+      cardClass: 'metric-pending',
+      progressPct: toPercent(pendingCount),
+      ringLabelPct: toPercent(pendingCount),
+      ringPrefix: '+',
+      detailPrefix: '↗',
+    },
+    {
+      key: 'preparing',
+      label: 'กำลังจัดเตรียม',
+      value: `${preparingCount} รายการ`,
+      detail: `${Math.round((preparingCount / safeOrderCount) * 100)}% จากทั้งหมด`,
+      accent: '#ef4e7b',
+      cardClass: 'metric-preparing',
+      progressPct: toPercent(preparingCount),
+      ringLabelPct: toPercent(preparingCount),
+      ringPrefix: '+',
+      detailPrefix: '↗',
+    },
+    {
+      key: 'completed',
+      label: 'ส่งสำเร็จแล้ว',
+      value: `${completedCount} รายการ`,
+      detail: `${Math.round((completedCount / safeOrderCount) * 100)}% จากทั้งหมด`,
+      accent: '#35c770',
+      cardClass: 'metric-completed',
+      progressPct: toPercent(completedCount),
+      ringLabelPct: toPercent(completedCount),
+      ringPrefix: '+',
+      detailPrefix: '↗',
+    },
+    {
+      key: 'active-users',
+      label: 'ผู้ใช้งานขณะนี้ (Live)',
+      value: `${activeUsersCount} คน`,
+      detail: activeUsersCount > 0 ? 'กำลังใช้งานอยู่ตอนนี้' : 'ยังไม่มีผู้ใช้งานที่ออนไลน์',
+      accent: '#5a8dff',
+      cardClass: 'metric-live',
+      progressPct: registeredUsersCount > 0 ? Math.round((activeUsersCount / registeredUsersCount) * 100) : 0,
+      ringLabelPct: registeredUsersCount > 0 ? Math.round((activeUsersCount / registeredUsersCount) * 100) : 0,
+      ringPrefix: '',
+      detailPrefix: '•',
+    },
+    {
+      key: 'registered-users',
+      label: 'ผู้สมัครใช้งานทั้งหมด',
+      value: `${registeredUsersCount} คน`,
+      detail: 'จำนวนบัญชีที่ลงทะเบียนไว้',
+      accent: '#9b62ff',
+      cardClass: 'metric-users',
+      progressPct: Math.round(Math.abs(registeredUsersGrowthPct)),
+      ringLabelPct: Math.round(Math.abs(registeredUsersGrowthPct)),
+      ringPrefix: '+',
+      detailPrefix: '•',
+    },
+  ];
 
   // Filter orders and expenses based on the selected month for the Finance View
   const monthlyOrders = orders.filter(o => {
@@ -866,11 +1224,63 @@ export default function AdminPage() {
 
   const monthlyExpensesTotal = monthlyExpenses.reduce((acc, exp) => acc + (exp.amount || 0), 0);
   const monthlyNetProfit = monthlySales - monthlyExpensesTotal;
+  const previousMonthFinance = getPreviousYearMonth(selectedMonth);
+  const previousMonthSalesFinance = previousMonthFinance
+    ? getSalesForYearMonth(orders, previousMonthFinance)
+    : 0;
+  const previousMonthExpensesFinance = previousMonthFinance
+    ? getExpensesForYearMonth(expenses, previousMonthFinance)
+    : 0;
+  const previousMonthNetProfitFinance = previousMonthSalesFinance - previousMonthExpensesFinance;
+  const salesFinanceGrowth = getGrowthMetrics(monthlySales, previousMonthSalesFinance);
+  const expensesFinanceGrowth = getGrowthMetrics(monthlyExpensesTotal, previousMonthExpensesFinance);
+  const netProfitFinanceGrowth = getGrowthMetrics(monthlyNetProfit, previousMonthNetProfitFinance);
+  const previousMonthLabelFinance = previousMonthFinance ? formatMonthThai(previousMonthFinance) : 'เดือนที่แล้ว';
+  const financeCards = [
+    {
+      key: 'finance-sales',
+      label: 'รายรับประจำเดือน (จากระบบ)',
+      value: `${monthlySales.toLocaleString()} ฿`,
+      detail: `${salesFinanceGrowth.detailLabel} ${salesFinanceGrowth.formattedPct}% จาก${previousMonthLabelFinance}`,
+      accent: '#ff5f87',
+      cardClass: 'metric-sales',
+      progressPct: salesFinanceGrowth.progressPct,
+      ringLabelPct: salesFinanceGrowth.ringLabelPct,
+      ringPrefix: salesFinanceGrowth.ringPrefix,
+      detailPrefix: salesFinanceGrowth.detailPrefix,
+    },
+    {
+      key: 'finance-expenses',
+      label: 'รายจ่ายจัดซื้อประจำเดือน',
+      value: `${monthlyExpensesTotal.toLocaleString()} ฿`,
+      detail: `${expensesFinanceGrowth.detailLabel} ${expensesFinanceGrowth.formattedPct}% จาก${previousMonthLabelFinance}`,
+      accent: '#f59f3a',
+      cardClass: 'metric-pending',
+      progressPct: expensesFinanceGrowth.progressPct,
+      ringLabelPct: expensesFinanceGrowth.ringLabelPct,
+      ringPrefix: expensesFinanceGrowth.ringPrefix,
+      detailPrefix: expensesFinanceGrowth.detailPrefix,
+    },
+    {
+      key: 'finance-net-profit',
+      label: 'กำไรสุทธิประจำเดือน',
+      value: `${monthlyNetProfit.toLocaleString()} ฿`,
+      detail: `${netProfitFinanceGrowth.detailLabel} ${netProfitFinanceGrowth.formattedPct}% จาก${previousMonthLabelFinance}`,
+      accent: monthlyNetProfit >= 0 ? '#35c770' : '#e74c3c',
+      cardClass: monthlyNetProfit >= 0 ? 'metric-completed' : 'metric-preparing',
+      progressPct: netProfitFinanceGrowth.progressPct,
+      ringLabelPct: netProfitFinanceGrowth.ringLabelPct,
+      ringPrefix: netProfitFinanceGrowth.ringPrefix,
+      detailPrefix: netProfitFinanceGrowth.detailPrefix,
+      valueColor: monthlyNetProfit >= 0 ? '#27ae60' : '#e74c3c',
+    },
+  ];
 
   // Ledger Items for the selected month
   const monthlyLedgerItems = [
     ...monthlyOrders.filter(o => o.status !== 'cancelled').map(o => {
       let orderDate = '';
+      const customerDisplayName = getOrderCustomerDisplayName(o);
       try {
         if (o.createdAt?.toDate) {
           orderDate = o.createdAt.toDate().toISOString().substring(0, 10);
@@ -884,7 +1294,7 @@ export default function AdminPage() {
       }
       return {
         id: o.id,
-        title: `รายรับสินค้า (ออเดอร์ #${o.id.substring(0, 8).toUpperCase()})`,
+        title: `รายรับสินค้า (ออเดอร์ ${customerDisplayName})`,
         amount: o.total || 0,
         type: 'revenue',
         category: 'sales',
@@ -903,85 +1313,113 @@ export default function AdminPage() {
 
 
   return (
-    <div style={{ minHeight: '100vh', background: '#fdf8f9' }}>
-      {/* Admin Navbar */}
-      <nav className="admin-nav">
-        <div className="navbar-inner">
-          <button className="back-btn-circle" onClick={() => window.location.href = '/'}>
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-              <path d="M15 18l-6-6 6-6" />
-            </svg>
-          </button>
-          <div className="admin-title">Admin Panel</div>
-          <div style={{ width: 40 }}></div>
-        </div>
-      </nav>
-
-      <div className="admin-dashboard">
-        <style>{`
-          .admin-nav {
-            background: #fff;
-            height: 64px;
-            padding: 0 16px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
-            display: flex;
-            align-items: center;
-            position: sticky;
-            top: 0;
-            z-index: 100;
-            width: 100%;
-            box-sizing: border-box;
-          }
-
-          .navbar-inner {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            width: 100%;
-            max-width: 1200px;
-            margin: 0 auto;
-            position: relative;
-            height: 100%;
-          }
-
-          @media (min-width: 1024px) {
-            .admin-nav {
-              padding: 0 40px;
-            }
-          }
-
-          .back-btn-circle {
-            width: 40px; height: 40px; border-radius: 50%; border: none;
-            background: #fdf5f6; color: #db8a9e; display: flex;
-            align-items: center; justify-content: center; cursor: pointer;
-            transition: all 0.2s;
-          }
-          .back-btn-circle:hover {
-            background: #f7d6de;
-            transform: scale(1.05);
-          }
-
-          .admin-title {
-            font-family: 'Cormorant Garamond', 'Noto Sans Thai', serif;
-            font-style: italic;
-            font-weight: 600;
-            font-size: 1.4rem;
-            color: #db8a9e;
-          }
-
+    <div className="admin-dashboard">
+      <style>{`
           .admin-dashboard {
-            background: #fdf8f9;
+            background: rgba(255, 252, 253, 0.9);
             font-family: 'Noto Sans Thai', sans-serif;
             color: #5c4738;
-            padding: 16px 16px 40px;
+            padding: 24px;
             overflow-x: hidden;
             width: 100%;
             box-sizing: border-box;
+            border-radius: 28px;
+            box-shadow: 0 24px 60px rgba(80, 50, 57, 0.08);
+            border: 1px solid rgba(219, 138, 158, 0.1);
           }
 
         .dashboard-container {
-          max-width: 1200px;
+          max-width: 1320px;
           margin: 0 auto;
+        }
+
+        .dashboard-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          gap: 18px;
+          margin-bottom: 28px;
+        }
+
+        .dashboard-title-block {
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+        }
+
+        .dashboard-chip {
+          display: inline-flex;
+          align-items: center;
+          width: fit-content;
+          padding: 8px 14px;
+          border-radius: 999px;
+          background: #fff1f5;
+          color: #ea678f;
+          font-size: 0.8rem;
+          font-weight: 700;
+        }
+
+        .dashboard-title {
+          font-size: clamp(1.75rem, 3vw, 2.25rem);
+          line-height: 1.1;
+          color: #2d2227;
+          margin: 0;
+        }
+
+        .dashboard-subtitle {
+          color: #8f7d83;
+          font-size: 0.98rem;
+          margin: 0;
+        }
+
+        .dashboard-header-actions {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+        }
+
+        .header-icon-btn,
+        .header-date-chip {
+          height: 48px;
+          border-radius: 16px;
+          border: 1px solid rgba(219, 138, 158, 0.12);
+          background: rgba(255, 255, 255, 0.92);
+          box-shadow: 0 14px 30px rgba(80, 50, 57, 0.05);
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          color: #7c6870;
+        }
+
+        .header-icon-btn {
+          width: 48px;
+          position: relative;
+        }
+
+        .header-icon-badge {
+          position: absolute;
+          top: 6px;
+          right: 6px;
+          min-width: 15px;
+          height: 15px;
+          padding: 0 4px;
+          border-radius: 999px;
+          background: #ff5d89;
+          color: #fff;
+          font-size: 0.62rem;
+          font-weight: 800;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          line-height: 1;
+          box-shadow: 0 0 0 3px rgba(255, 93, 137, 0.12);
+        }
+
+        .header-date-chip {
+          gap: 8px;
+          padding: 0 16px;
+          font-weight: 700;
+          color: #5d4a52;
         }
 
 
@@ -989,90 +1427,85 @@ export default function AdminPage() {
         /* Stats Grid */
         .stats-grid {
           display: grid;
-          grid-template-columns: repeat(3, 1fr);
-          gap: 20px;
-          margin-bottom: 35px;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 18px;
+          margin-bottom: 30px;
         }
 
         .stat-card {
           border-radius: 20px;
-          padding: 24px;
-          box-shadow: 0 10px 25px rgba(219, 138, 158, 0.03);
+          padding: 18px 18px;
+          box-shadow: 0 16px 34px rgba(80, 50, 57, 0.06);
           display: flex;
           align-items: center;
+          justify-content: space-between;
           gap: 16px;
-          border: 1px solid;
-          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+          border: 1px solid rgba(219, 138, 158, 0.12);
+          transition: all 0.25s ease;
         }
+
         .stat-card:hover {
           transform: translateY(-4px);
-          box-shadow: 0 12px 30px rgba(0, 0, 0, 0.06);
+          box-shadow: 0 24px 48px rgba(80, 50, 57, 0.08);
         }
 
-        .stat-card.sales {
-          background: linear-gradient(135deg, #fffcf5 0%, #fef9e7 100%);
-          border-color: #faebcc;
-        }
-        .stat-card.sales .stat-icon {
+        .metric-sales {
           background: #fff;
-          box-shadow: 0 4px 10px rgba(241, 196, 15, 0.15);
-        }
-        .stat-card.sales .stat-value {
-          color: #b7950b;
         }
 
-        .stat-card.pending {
-          background: linear-gradient(135deg, #fffbf7 0%, #fdf5eb 100%);
-          border-color: #f5e1cc;
-        }
-        .stat-card.pending .stat-icon {
+        .metric-pending {
           background: #fff;
-          box-shadow: 0 4px 10px rgba(230, 126, 34, 0.15);
-        }
-        .stat-card.pending .stat-value {
-          color: #d35400;
         }
 
-        .stat-card.preparing {
-          background: linear-gradient(135deg, #fffafb 0%, #fdf0f2 100%);
-          border-color: #f7d6de;
-        }
-        .stat-card.preparing .stat-icon {
+        .metric-preparing {
           background: #fff;
-          box-shadow: 0 4px 10px rgba(219, 138, 158, 0.2);
-        }
-        .stat-card.preparing .stat-value {
-          color: #db8a9e;
         }
 
-        .stat-card.completed {
-          background: linear-gradient(135deg, #f7fcf9 0%, #edfcf4 100%);
-          border-color: #d1f2e1;
-        }
-        .stat-card.completed .stat-icon {
+        .metric-completed {
           background: #fff;
-          box-shadow: 0 4px 10px rgba(46, 204, 113, 0.15);
-        }
-        .stat-card.completed .stat-value {
-          color: #27ae60;
         }
 
-        .stat-card.active-users {
-          background: linear-gradient(135deg, #f5fbfe 0%, #eaf6fd 100%);
-          border-color: #d0e9f8;
-        }
-        .stat-card.active-users .stat-icon {
+        .metric-live {
           background: #fff;
-          box-shadow: 0 4px 10px rgba(52, 152, 219, 0.15);
-          position: relative;
         }
-        .stat-card.active-users .stat-value {
-          color: #2980b9;
+
+        .metric-users {
+          background: #fff;
         }
+
+        .stat-info {
+          display: flex;
+          flex-direction: column;
+          gap: 7px;
+          min-width: 0;
+        }
+
+        .stat-label {
+          color: #8e7b82;
+          font-size: 0.9rem;
+          font-weight: 650;
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+        }
+
+        .stat-value {
+          font-size: 2rem;
+          font-weight: 850;
+          color: #35272d;
+          line-height: 1.05;
+        }
+
+        .stat-detail {
+          font-size: 0.88rem;
+          font-weight: 750;
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+        }
+
         .live-dot {
-          position: absolute;
-          top: 6px;
-          right: 6px;
+          position: relative;
           width: 8px;
           height: 8px;
           border-radius: 50%;
@@ -1080,56 +1513,48 @@ export default function AdminPage() {
           box-shadow: 0 0 8px #2ecc71;
           animation: livePulse 1.8s infinite;
         }
-        @keyframes livePulse {
-          0% { transform: scale(1); opacity: 1; box-shadow: 0 0 0 0 rgba(46, 204, 113, 0.7); }
-          70% { transform: scale(1.4); opacity: 0.5; box-shadow: 0 0 0 6px rgba(46, 204, 113, 0); }
-          100% { transform: scale(1); opacity: 1; box-shadow: 0 0 0 0 rgba(46, 204, 113, 0); }
-        }
 
-        .stat-card.registered-users {
-          background: linear-gradient(135deg, #faf7fe 0%, #f3ebfc 100%);
-          border-color: #e1d1f7;
-        }
-        .stat-card.registered-users .stat-icon {
-          background: #fff;
-          box-shadow: 0 4px 10px rgba(155, 89, 182, 0.15);
-        }
-        .stat-card.registered-users .stat-value {
-          color: #8e44ad;
-        }
-
-        .stat-icon {
-          width: 50px;
-          height: 50px;
-          border-radius: 16px;
-          display: flex;
+        .stat-ring {
+          --size: 80px;
+          --thickness: 7px;
+          --p: 0;
+          --accent: #db8a9e;
+          width: var(--size);
+          height: var(--size);
+          border-radius: 999px;
+          background: conic-gradient(var(--accent) calc(var(--p) * 1%), rgba(80, 50, 57, 0.08) 0);
+          position: relative;
+          display: inline-flex;
           align-items: center;
           justify-content: center;
-          font-size: 1.4rem;
+          flex-shrink: 0;
         }
-
-        .stat-info {
-          display: flex;
-          flex-direction: column;
+        .stat-ring::before {
+          content: '';
+          position: absolute;
+          inset: var(--thickness);
+          border-radius: 999px;
+          background: rgba(255, 255, 255, 0.96);
         }
-
-        .stat-label {
-          color: #a08a8e;
+        .stat-ring-label {
+          position: relative;
           font-size: 0.85rem;
-          margin-bottom: 2px;
+          font-weight: 850;
+          color: var(--accent);
+          letter-spacing: 0.01em;
         }
 
-        .stat-value {
-          font-size: 1.35rem;
-          font-weight: 700;
-          color: #5c4738;
+        @keyframes livePulse {
+          0% { transform: scale(1); opacity: 1; box-shadow: 0 0 0 0 rgba(46, 204, 113, 0.7); }
+          70% { transform: scale(1.35); opacity: 0.5; box-shadow: 0 0 0 6px rgba(46, 204, 113, 0); }
+          100% { transform: scale(1); opacity: 1; box-shadow: 0 0 0 0 rgba(46, 204, 113, 0); }
         }
 
         /* Tabs Filter */
         .tabs-filter {
           display: flex;
           gap: 10px;
-          margin-bottom: 25px;
+          margin-bottom: 22px;
           overflow-x: auto;
           padding-bottom: 5px;
           scrollbar-width: none;
@@ -1140,135 +1565,213 @@ export default function AdminPage() {
         }
 
         .tab-btn {
-          background: #fff;
-          border: 1px solid #fdf5f6;
-          color: #a08a8e;
-          padding: 10px 20px;
-          border-radius: 20px;
+          background: rgba(255, 255, 255, 0.88);
+          border: 1px solid rgba(219, 138, 158, 0.1);
+          color: #856d75;
+          padding: 11px 18px;
+          border-radius: 999px;
           cursor: pointer;
           font-size: 0.88rem;
-          font-weight: 500;
+          font-weight: 600;
           white-space: nowrap;
           transition: all 0.2s;
         }
 
         .tab-btn.active {
-          background: #db8a9e;
+          background: linear-gradient(135deg, #f47aa2 0%, #ea678f 100%);
           color: #fff;
-          border-color: #db8a9e;
-          font-weight: 600;
-          box-shadow: 0 6px 15px rgba(219, 138, 158, 0.25);
+          border-color: transparent;
+          box-shadow: 0 10px 22px rgba(234, 103, 143, 0.26);
         }
 
         /* Live Orders Section */
         .orders-section {
-          background: #fff;
-          border-radius: 24px;
+          background: rgba(255, 255, 255, 0.94);
+          border-radius: 26px;
           padding: 24px;
-          box-shadow: 0 10px 25px rgba(219, 138, 158, 0.05);
-          border: 1px solid #fdf5f6;
+          box-shadow: 0 18px 42px rgba(80, 50, 57, 0.05);
+          border: 1px solid rgba(219, 138, 158, 0.1);
         }
 
         .section-header {
           display: flex;
           justify-content: space-between;
-          align-items: center;
+          align-items: flex-start;
+          gap: 16px;
           margin-bottom: 20px;
-          border-bottom: 1px solid #fdf5f6;
-          padding-bottom: 15px;
+          border-bottom: 1px solid #f6e8ec;
+          padding-bottom: 18px;
         }
 
         .section-header h2 {
-          font-size: 1.25rem;
-          font-weight: 600;
+          font-size: 1.35rem;
+          font-weight: 700;
+          margin: 0;
+          color: #2d2227;
+        }
+
+        .section-subtitle {
+          font-size: 0.88rem;
+          color: #97838a;
+          margin: 6px 0 0;
+        }
+
+        .orders-header-actions {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          flex-wrap: wrap;
+          justify-content: flex-end;
+        }
+
+        .orders-search {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          background: #fff;
+          border: 1px solid rgba(219, 138, 158, 0.16);
+          border-radius: 999px;
+          padding: 8px 12px;
+          min-width: 240px;
+          box-shadow: 0 8px 18px rgba(80, 50, 57, 0.04);
+        }
+
+        .orders-search svg {
+          color: #d46f92;
+          flex-shrink: 0;
+        }
+
+        .orders-search-input {
+          border: none;
+          outline: none;
+          font-size: 0.88rem;
+          color: #5c4738;
+          width: 100%;
+          background: transparent;
+        }
+
+        .orders-search-input::placeholder {
+          color: #b69aa3;
         }
 
         .order-count-badge {
-          background: #fdf5f6;
-          color: #db8a9e;
-          padding: 4px 10px;
-          border-radius: 12px;
-          font-size: 0.8rem;
-          font-weight: 600;
+          background: #fff1f5;
+          color: #ea678f;
+          padding: 9px 14px;
+          border-radius: 999px;
+          font-size: 0.82rem;
+          font-weight: 700;
         }
 
-        /* Order Cards List */
         .orders-list {
           display: flex;
           flex-direction: column;
-          gap: 16px;
+          gap: 14px;
         }
 
         .order-row {
-          border: 1px solid #fdf5f6;
-          border-radius: 16px;
+          border: 1px solid #f5e6ea;
+          border-radius: 20px;
           padding: 18px;
           transition: all 0.2s;
           cursor: pointer;
+          background: #fff;
         }
 
         .order-row:hover {
-          border-color: #f7d6de;
-          box-shadow: 0 4px 12px rgba(219, 138, 158, 0.03);
+          border-color: #f1c4d1;
+          box-shadow: 0 16px 30px rgba(80, 50, 57, 0.05);
         }
 
         .order-summary-row {
-          display: flex;
-          justify-content: space-between;
+          display: grid;
+          grid-template-columns: minmax(210px, 2fr) minmax(140px, 1.1fr) minmax(150px, 1fr) minmax(170px, 1fr) 24px;
           align-items: center;
-          flex-wrap: wrap;
-          gap: 12px;
+          gap: 14px;
         }
 
         .order-main-info {
           display: flex;
           align-items: center;
-          gap: 15px;
+          gap: 14px;
+          min-width: 0;
         }
 
         .order-avatar {
-          width: 44px;
-          height: 44px;
-          border-radius: 12px;
-          background: #fdf5f6;
+          width: 58px;
+          height: 58px;
+          border-radius: 18px;
+          background: linear-gradient(135deg, #fff5f8 0%, #fff0f4 100%);
           display: flex;
           align-items: center;
           justify-content: center;
           font-size: 1.2rem;
+          flex-shrink: 0;
         }
 
-        .order-meta {
+        .order-meta,
+        .order-middle-meta,
+        .order-delivery-meta,
+        .order-right-meta,
+        .order-mobile-meta,
+        .order-extra-bar {
           display: flex;
           flex-direction: column;
+          gap: 4px;
+          min-width: 0;
         }
 
-        .order-id {
+        .order-id,
+        .order-customer,
+        .order-delivery-date {
           font-weight: 700;
-          font-size: 0.95rem;
+          font-size: 0.94rem;
+          color: #36272e;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
         }
 
-        .order-date {
-          font-size: 0.78rem;
+        .order-date,
+        .order-phone,
+        .order-delivery-time {
+          font-size: 0.8rem;
           color: #a08a8e;
         }
 
         .order-right-meta {
-          display: flex;
-          align-items: center;
-          gap: 20px;
+          align-items: flex-end;
         }
 
         .order-price {
-          font-weight: 700;
-          font-size: 1.1rem;
-          color: #db8a9e;
+          font-weight: 800;
+          font-size: 1.18rem;
+          color: #ea678f;
         }
 
         .status-badge {
-          padding: 5px 12px;
-          border-radius: 12px;
+          padding: 7px 12px;
+          border-radius: 999px;
           font-size: 0.78rem;
-          font-weight: 600;
+          font-weight: 700;
+          width: fit-content;
+        }
+
+        .order-expand-indicator {
+          color: #b79aa2;
+          transition: transform 0.2s ease;
+        }
+
+        .order-expand-indicator.open {
+          transform: rotate(180deg);
+        }
+
+        .order-mobile-meta {
+          display: none;
+        }
+
+        .order-extra-bar {
+          display: none;
         }
 
         /* Expand Area */
@@ -1280,62 +1783,175 @@ export default function AdminPage() {
 
         .order-details-drawer.open {
           max-height: 1200px;
-          margin-top: 15px;
-          padding-top: 15px;
+          margin-top: 16px;
+          padding-top: 16px;
           border-top: 1px dashed #f5e6e8;
         }
 
         .detail-grid {
           display: grid;
-          grid-template-columns: repeat(3, 1fr);
-          gap: 20px;
+          grid-template-columns: minmax(0, 1.2fr) minmax(260px, 0.8fr);
+          gap: 14px;
         }
 
         @media (max-width: 1024px) {
           .detail-grid {
-            grid-template-columns: repeat(3, 1fr) !important;
+            grid-template-columns: minmax(0, 1fr) minmax(240px, 0.92fr) !important;
             gap: 12px !important;
           }
         }
 
         .detail-card {
-          background: #fffdfd;
-          border: 1px solid #fdf5f6;
-          border-radius: 12px;
-          padding: 16px;
+          background: linear-gradient(180deg, #fffefe 0%, #fff9fb 100%);
+          border: 1px solid #f8e7ed;
+          border-radius: 14px;
+          padding: 14px;
+          box-shadow: 0 8px 18px rgba(80, 50, 57, 0.03);
         }
 
         .detail-card h4 {
-          font-size: 0.9rem;
+          font-size: 0.82rem;
           font-weight: 700;
-          color: #db8a9e;
-          margin-bottom: 10px;
-          border-bottom: 1px solid #fdf5f6;
-          padding-bottom: 6px;
+          color: #c8738f;
+          margin: 0;
+          border-bottom: none;
+          padding-bottom: 0;
         }
 
-        .detail-item-list {
+        .detail-card-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 10px;
+          margin-bottom: 10px;
+          padding-bottom: 8px;
+          border-bottom: 1px solid #f8e9ee;
+        }
+
+        .detail-card-chip {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          padding: 4px 8px;
+          border-radius: 999px;
+          background: #fff1f5;
+          color: #dc6e93;
+          font-size: 0.7rem;
+          font-weight: 700;
+          white-space: nowrap;
+        }
+
+        .detail-item-list,
+        .detail-kv-list {
           display: flex;
           flex-direction: column;
-          gap: 6px;
-          font-size: 0.85rem;
+          gap: 8px;
+          font-size: 0.82rem;
           color: #7a6352;
+        }
+
+        .detail-kv-row {
+          display: grid;
+          grid-template-columns: 92px minmax(0, 1fr);
+          gap: 10px;
+          align-items: start;
+        }
+
+        .detail-kv-label {
+          color: #aa8b95;
+          font-size: 0.76rem;
+          font-weight: 700;
+          line-height: 1.45;
+        }
+
+        .detail-kv-value {
+          color: #5c4738;
+          font-size: 0.82rem;
+          font-weight: 600;
+          line-height: 1.48;
+          word-break: break-word;
+        }
+
+        .detail-note-box {
+          margin-top: 10px;
+          padding: 10px 12px;
+          border-radius: 12px;
+          background: #fff4f7;
+          border: 1px solid #f9dce6;
+        }
+
+        .detail-note-label {
+          display: block;
+          margin-bottom: 4px;
+          color: #d26f92;
+          font-size: 0.72rem;
+          font-weight: 700;
+        }
+
+        .detail-note-text {
+          color: #7c6169;
+          font-size: 0.78rem;
+          line-height: 1.5;
+          word-break: break-word;
+        }
+
+        .detail-empty-text {
+          color: #9a848b;
+          font-size: 0.8rem;
+          line-height: 1.5;
         }
 
         .control-panel {
           display: flex;
           flex-direction: column;
+          gap: 8px;
+        }
+
+        .detail-status-line {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
           gap: 10px;
+          margin-bottom: 10px;
+        }
+
+        .detail-status-meta {
+          color: #8d747d;
+          font-size: 0.76rem;
+          font-weight: 600;
+          line-height: 1.4;
+        }
+
+        .status-note {
+          padding: 10px 12px;
+          border-radius: 12px;
+          font-size: 0.8rem;
+          font-weight: 700;
+          text-align: center;
+          line-height: 1.45;
+        }
+
+        .status-note.success {
+          color: #2ecc71;
+          background: #eefbf4;
+          border: 1px solid #d2f3df;
+        }
+
+        .status-note.danger {
+          color: #e74c3c;
+          background: #fdf0ee;
+          border: 1px solid #f6d9d3;
         }
 
         .status-select-btn {
           border: none;
           color: #fff;
-          padding: 10px 14px;
-          border-radius: 8px;
+          padding: 9px 12px;
+          border-radius: 10px;
           cursor: pointer;
-          font-weight: 600;
-          font-size: 0.85rem;
+          font-weight: 700;
+          font-size: 0.8rem;
+          line-height: 1.45;
           transition: all 0.2s;
           text-align: center;
         }
@@ -1358,49 +1974,180 @@ export default function AdminPage() {
         }
 
         @media (max-width: 768px) {
+          .admin-dashboard {
+            padding: 16px !important;
+            border-radius: 22px !important;
+          }
+          .orders-section {
+            padding: 16px !important;
+            border-radius: 20px !important;
+          }
+          .orders-list {
+            gap: 12px !important;
+            padding-bottom: 96px;
+          }
+          .order-row {
+            padding: 14px !important;
+            border-radius: 18px !important;
+            scroll-margin-bottom: 160px;
+          }
+          .dashboard-header {
+            flex-direction: column !important;
+            align-items: stretch !important;
+            margin-bottom: 22px !important;
+          }
+          .dashboard-header-actions {
+            justify-content: space-between !important;
+          }
           .stats-grid {
             grid-template-columns: 1fr 1fr !important;
             gap: 10px !important;
             margin-bottom: 20px !important;
           }
           .stat-card {
-            padding: 16px 12px !important;
-            gap: 10px !important;
+            padding: 14px 12px !important;
+            gap: 12px !important;
             border-radius: 16px !important;
           }
-          .stat-icon {
-            width: 36px !important;
-            height: 36px !important;
-            border-radius: 10px !important;
-            font-size: 1.1rem !important;
-            flex-shrink: 0 !important;
-          }
           .stat-label {
-            font-size: 0.72rem !important;
+            font-size: 0.74rem !important;
             color: #a08a8e !important;
             line-height: 1.25 !important;
           }
           .stat-value {
-            font-size: 1rem !important;
-            font-weight: 750 !important;
+            font-size: 1.15rem !important;
+            font-weight: 820 !important;
             line-height: 1.25 !important;
           }
+          .stat-detail {
+            font-size: 0.76rem !important;
+          }
+          .stat-ring {
+            --size: 54px;
+            --thickness: 6px;
+          }
+          .stat-ring-label {
+            font-size: 0.76rem;
+          }
           .detail-grid {
-            grid-template-columns: 1fr;
+            grid-template-columns: 1fr !important;
+            gap: 12px !important;
           }
-          .mode-switcher-container {
-            margin: 10px 0;
-            overflow-x: auto;
-            scrollbar-width: none;
-            -ms-overflow-style: none;
+          .section-header {
+            flex-direction: column !important;
+            align-items: flex-start !important;
           }
-          .mode-switcher-container::-webkit-scrollbar {
-            display: none;
+          .orders-header-actions {
+            width: 100%;
+            justify-content: flex-start !important;
           }
-          .mode-btn {
-            padding: 8px 16px;
-            font-size: 0.8rem;
-            flex: 0 0 auto;
+          .orders-search {
+            width: 100%;
+            min-width: 0;
+          }
+          .order-summary-row {
+            display: flex !important;
+            flex-direction: column !important;
+            align-items: stretch !important;
+            gap: 12px !important;
+          }
+          .order-main-info {
+            align-items: flex-start !important;
+          }
+          .order-avatar {
+            width: 50px !important;
+            height: 50px !important;
+            border-radius: 16px !important;
+          }
+          .order-id,
+          .order-customer,
+          .order-delivery-date {
+            white-space: normal !important;
+            overflow: visible !important;
+            text-overflow: unset !important;
+            line-height: 1.35 !important;
+          }
+          .order-middle-meta,
+          .order-delivery-meta {
+            display: none !important;
+          }
+          .order-right-meta {
+            flex-direction: row !important;
+            align-items: center !important;
+            justify-content: space-between !important;
+            gap: 10px !important;
+            padding-top: 10px;
+            border-top: 1px dashed #f4e3e8;
+          }
+          .order-price {
+            font-size: 1.05rem !important;
+          }
+          .order-expand-indicator {
+            display: none !important;
+          }
+          .order-mobile-meta,
+          .order-extra-bar {
+            display: flex !important;
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px dashed #f4e3e8;
+            color: #927c84;
+            font-size: 0.82rem;
+          }
+          .order-mobile-meta span,
+          .order-extra-bar span {
+            white-space: normal !important;
+            word-break: break-word;
+            line-height: 1.45;
+          }
+          .order-extra-bar {
+            flex-direction: column !important;
+            gap: 6px !important;
+          }
+          .order-details-drawer.open {
+            max-height: 3200px !important;
+            margin-top: 12px !important;
+            padding-top: 12px !important;
+          }
+          .detail-card {
+            padding: 12px !important;
+            border-radius: 14px !important;
+          }
+          .detail-card h4 {
+            font-size: 0.8rem !important;
+            line-height: 1.4 !important;
+          }
+          .detail-card-header {
+            margin-bottom: 8px !important;
+            padding-bottom: 8px !important;
+          }
+          .detail-item-list,
+          .detail-kv-list {
+            font-size: 0.8rem !important;
+            gap: 8px !important;
+            word-break: break-word;
+          }
+          .detail-kv-row {
+            grid-template-columns: 82px minmax(0, 1fr) !important;
+            gap: 8px !important;
+          }
+          .detail-kv-label {
+            font-size: 0.72rem !important;
+          }
+          .detail-kv-value,
+          .detail-empty-text {
+            font-size: 0.78rem !important;
+          }
+          .detail-note-box {
+            padding: 9px 10px !important;
+          }
+          .status-select-btn {
+            width: 100%;
+            min-height: 48px;
+            padding: 11px 12px !important;
+            font-size: 0.78rem !important;
+            line-height: 1.45 !important;
+            white-space: normal;
           }
         }
 
@@ -1415,16 +2162,66 @@ export default function AdminPage() {
             gap: 8px !important;
             border-radius: 14px !important;
           }
-          .stat-icon {
-            width: 32px !important;
-            height: 32px !important;
-            font-size: 1rem !important;
-          }
           .stat-label {
             font-size: 0.68rem !important;
           }
           .stat-value {
             font-size: 0.9rem !important;
+          }
+          .stat-ring {
+            --size: 50px;
+            --thickness: 6px;
+          }
+          .stat-ring-label {
+            font-size: 0.72rem;
+          }
+          .stats-grid {
+            grid-template-columns: 1fr !important;
+          }
+          .header-date-chip,
+          .header-icon-btn {
+            height: 44px !important;
+          }
+          .orders-section {
+            padding: 14px !important;
+          }
+          .orders-search {
+            padding: 7px 10px;
+          }
+          .order-main-info {
+            gap: 10px !important;
+          }
+          .order-avatar {
+            width: 46px !important;
+            height: 46px !important;
+          }
+          .order-id {
+            font-size: 0.92rem !important;
+          }
+          .order-date,
+          .order-phone,
+          .order-delivery-time,
+          .order-mobile-meta,
+          .order-extra-bar,
+          .detail-item-list {
+            font-size: 0.78rem !important;
+          }
+          .order-right-meta {
+            flex-direction: column !important;
+            align-items: flex-start !important;
+          }
+          .order-price {
+            font-size: 1rem !important;
+          }
+          .detail-card {
+            padding: 12px !important;
+          }
+          .detail-status-line {
+            flex-direction: column;
+            align-items: flex-start;
+          }
+          .detail-card-chip {
+            font-size: 0.66rem !important;
           }
         }
 
@@ -1647,23 +2444,21 @@ export default function AdminPage() {
 
         .florist-card {
           background: #fff;
-          border-radius: 20px;
-          padding: 16px;
+          border-radius: 18px;
+          padding: 14px;
           display: flex;
-          gap: 16px;
-          box-shadow: 0 4px 15px rgba(0,0,0,0.03);
+          flex-direction: column;
+          gap: 10px;
+          box-shadow: 0 8px 22px rgba(80, 50, 57, 0.04);
           border: 1px solid rgba(219, 138, 158, 0.1);
           position: relative;
-          flex-direction: row;
-          align-items: center;
           transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
         @media (min-width: 1024px) {
           .florist-card {
-            gap: 24px;
-            padding: 24px;
-            align-items: flex-start;
+            padding: 18px;
+            gap: 12px;
           }
         }
 
@@ -1674,32 +2469,33 @@ export default function AdminPage() {
         }
 
         .florist-img-container {
-          width: 90px;
-          height: 90px;
+          width: 84px;
+          height: 84px;
           background: #fdf5f6;
-          border-radius: 16px;
+          border-radius: 18px;
           display: flex;
           align-items: center;
           justify-content: center;
-          font-size: 2.2rem;
+          font-size: 2rem;
           flex-shrink: 0;
+          border: 1px solid rgba(219, 138, 158, 0.1);
         }
 
         .florist-img-container svg {
-          width: 58px !important;
-          height: 58px !important;
+          width: 54px !important;
+          height: 54px !important;
         }
 
         @media (min-width: 1024px) {
           .florist-img-container {
-            width: 220px !important;
-            height: 220px !important;
-            border-radius: 18px;
-            font-size: 4rem;
+            width: 100px !important;
+            height: 100px !important;
+            border-radius: 20px;
+            font-size: 2.3rem;
           }
           .florist-img-container svg {
-            width: 140px !important;
-            height: 140px !important;
+            width: 64px !important;
+            height: 64px !important;
           }
         }
 
@@ -1707,15 +2503,107 @@ export default function AdminPage() {
           flex: 1;
           display: flex;
           flex-direction: column;
+          min-width: 0;
+        }
+
+        .florist-header {
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+          padding: 2px 0 4px;
+          border-bottom: 1px solid #f7e8ed;
+        }
+
+        .florist-header-main {
+          display: grid;
+          grid-template-columns: 84px minmax(0, 1fr);
+          gap: 32px;
+          align-items: center;
+        }
+
+        .florist-topbar2 {
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: 12px;
+          margin-bottom: 8px;
+        }
+
+        .florist-title-block {
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+          min-width: 0;
+        }
+
+        .florist-meta-row {
+          display: flex;
+          justify-content: flex-end;
+        }
+
+        .florist-meta-chips {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 6px;
+          justify-content: flex-end;
+        }
+
+        .florist-meta-chip {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          padding: 4px 8px;
+          border-radius: 999px;
+          background: #fff4f7;
+          color: #d46f92;
+          font-size: 0.68rem;
+          font-weight: 700;
+          white-space: nowrap;
+          border: 1px solid rgba(219, 138, 158, 0.12);
+        }
+
+        .florist-meta-chip.strong {
+          background: linear-gradient(135deg, #e05c7a, #ff8a9e);
+          color: #fff;
+          border-color: transparent;
+          box-shadow: 0 6px 12px rgba(224, 92, 122, 0.18);
+        }
+
+        .florist-summary-strip {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+          margin-bottom: 10px;
+        }
+
+        .florist-summary-pill {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          min-width: 0;
+          padding: 6px 10px;
+          border-radius: 12px;
+          background: #fffafb;
+          border: 1px solid #f6e5ea;
+          color: #826a73;
+          font-size: 0.74rem;
+          font-weight: 600;
+        }
+
+        .florist-summary-pill strong {
+          color: #5c4738;
+          font-weight: 700;
         }
 
         .florist-item-name {
-          font-weight: 600;
-          font-size: 0.95rem;
-          color: #5c4738;
+          font-weight: 700;
+          font-size: 0.92rem;
+          color: #4f3c44;
           display: flex;
           align-items: center;
+          flex-wrap: wrap;
           gap: 8px;
+          line-height: 1.4;
         }
 
         .florist-badge {
@@ -1727,17 +2615,16 @@ export default function AdminPage() {
           font-weight: 600;
         }
 
-        /* 4-column details box EXACTLY like cart page */
         .florist-details-box {
-          display: flex;
-          flex-direction: column;
-          gap: 12px;
-          background: #fffcfd;
-          padding: 14px;
-          border-radius: 12px;
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 10px;
+          background: #fffdfd;
+          padding: 12px;
+          border-radius: 14px;
           margin-top: 10px;
-          border: 1px dashed rgba(219, 138, 158, 0.25);
-          font-size: 0.82rem;
+          border: none;
+          font-size: 0.8rem;
           color: #5c4738;
           text-align: left;
           width: 100%;
@@ -1745,52 +2632,68 @@ export default function AdminPage() {
 
         @media (min-width: 1024px) {
           .florist-details-box {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 16px;
-            padding: 16px;
-            margin-top: 12px;
-            font-size: 0.85rem;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+            padding: 12px;
+            margin-top: 10px;
+            font-size: 0.8rem;
           }
+        }
+
+        .florist-detail-card {
+          background: #fff8fa;
+          border: 1px solid #f8e6ec;
+          border-radius: 12px;
+          padding: 10px;
+          min-width: 0;
         }
 
         .florist-details-box .detail-group-title {
           font-weight: 700;
-          color: #db8a9e;
-          margin-bottom: 6px;
+          color: #c9708d;
+          margin-bottom: 8px;
           display: flex;
           align-items: center;
           gap: 6px;
+          font-size: 0.75rem;
         }
 
         .florist-details-box .detail-item-list {
           margin: 0;
-          padding-left: 16px;
+          padding: 0;
           color: #7a6352;
-          list-style-type: disc;
+          list-style: none;
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
         }
 
         .florist-details-box .detail-item-list li {
-          margin-bottom: 4px;
+          margin-bottom: 0;
+          line-height: 1.45;
+          word-break: break-word;
         }
 
         .florist-bottom-row {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          margin-top: 12px;
+          gap: 12px;
+          margin-top: 0;
           width: 100%;
+          padding-top: 10px;
+          border-top: 1px dashed #f3e0e6;
         }
 
         .florist-price-label {
           color: #db8a9e;
-          font-weight: 700;
-          font-size: 1.25rem;
+          font-weight: 800;
+          font-size: 1.02rem;
         }
 
         @media (min-width: 1024px) {
           .florist-price-label {
-            font-size: 1.45rem !important;
+            font-size: 1.12rem !important;
           }
         }
 
@@ -1798,16 +2701,18 @@ export default function AdminPage() {
           border: none;
           background: #db8a9e;
           color: #fff;
-          padding: 8px 18px;
-          border-radius: 50px;
+          padding: 9px 14px;
+          border-radius: 12px;
           font-weight: 700;
-          font-size: 0.88rem;
+          font-size: 0.8rem;
           cursor: pointer;
           transition: all 0.2s ease;
           display: flex;
           align-items: center;
+          justify-content: center;
           gap: 6px;
-          box-shadow: 0 4px 12px rgba(219, 138, 158, 0.2);
+          box-shadow: 0 6px 14px rgba(219, 138, 158, 0.18);
+          line-height: 1.4;
         }
 
         .florist-done-btn:hover {
@@ -1818,6 +2723,107 @@ export default function AdminPage() {
 
         .florist-done-btn:active {
           transform: scale(0.98);
+        }
+
+        .florist-empty-note {
+          color: #9a848b;
+          font-size: 0.78rem;
+          line-height: 1.5;
+        }
+
+        @media (max-width: 768px) {
+          .florist-card {
+            gap: 10px !important;
+            padding: 12px !important;
+          }
+          .florist-header-main {
+            grid-template-columns: 72px minmax(0, 1fr) !important;
+            gap: 16px !important;
+          }
+          .florist-img-container {
+            width: 72px !important;
+            height: 72px !important;
+            border-radius: 16px !important;
+          }
+          .florist-img-container svg {
+            width: 46px !important;
+            height: 46px !important;
+          }
+          .florist-topbar {
+            flex-direction: row !important;
+            align-items: flex-start !important;
+            justify-content: space-between !important;
+            gap: 10px !important;
+          }
+          .florist-title-block {
+            flex: 1;
+          }
+          .florist-meta-chips {
+            justify-content: flex-end !important;
+            align-items: flex-start;
+            flex-shrink: 0;
+          }
+          .florist-badge {
+            display: none !important;
+          }
+          .florist-details-box {
+            grid-template-columns: 1fr !important;
+            gap: 8px !important;
+            padding: 10px !important;
+          }
+          .florist-detail-card {
+            padding: 9px !important;
+          }
+          .florist-bottom-row {
+            flex-direction: row !important;
+            align-items: center !important;
+            justify-content: space-between !important;
+          }
+          .florist-done-btn {
+            width: auto;
+          }
+          .florist-summary-strip {
+            gap: 6px !important;
+          }
+          .florist-summary-pill.recipient {
+            flex-basis: 100%;
+          }
+          .florist-summary-pill.time,
+          .florist-summary-pill.total {
+            flex: 1 1 calc(50% - 4px);
+          }
+        }
+
+        @media (max-width: 480px) {
+          .florist-header-main {
+            grid-template-columns: 64px minmax(0, 1fr) !important;
+            align-items: center !important;
+            gap: 12px !important;
+          }
+          .florist-img-container {
+            width: 64px !important;
+            height: 64px !important;
+          }
+          .florist-item-name {
+            font-size: 0.86rem !important;
+          }
+          .florist-summary-strip {
+            gap: 6px !important;
+          }
+          .florist-summary-pill,
+          .florist-meta-chip {
+            font-size: 0.66rem !important;
+          }
+          .florist-details-box {
+            margin-top: 8px !important;
+          }
+          .florist-price-label {
+            font-size: 0.96rem !important;
+          }
+          .florist-done-btn {
+            padding: 10px 12px !important;
+            font-size: 0.76rem !important;
+          }
         }
 
         .color-dot {
@@ -1848,16 +2854,12 @@ export default function AdminPage() {
 
         /* Profit & Loss summary cards */
         .finance-summary {
-          display: grid;
-          grid-template-columns: repeat(3, 1fr);
-          gap: 20px;
           margin-bottom: 30px;
         }
 
         @media (max-width: 1024px) {
           .finance-summary {
-            grid-template-columns: repeat(3, 1fr) !important;
-            gap: 12px !important;
+            margin-bottom: 24px !important;
           }
           .fin-card {
             padding: 16px 12px !important;
@@ -2721,21 +3723,21 @@ export default function AdminPage() {
         /* Mobile-first Responsive Adjustments for Finance Panel */
         @media (max-width: 767px) {
           /* 1. Header & Title adjustments */
-          .finance-section h2 {
+          .finance-section .dashboard-title {
             font-size: 1.15rem !important;
             text-align: left !important;
           }
-          .finance-section p {
+          .finance-section .dashboard-subtitle {
             font-size: 0.8rem !important;
             text-align: left !important;
           }
-          .finance-section > div:first-child {
+          .finance-section .dashboard-header {
             flex-direction: column !important;
             align-items: flex-start !important;
             text-align: left !important;
             gap: 12px;
           }
-          .finance-section > div:first-child > span {
+          .finance-section .header-date-chip {
             width: auto !important;
             text-align: left !important;
             font-size: 0.82rem !important;
@@ -2759,8 +3761,6 @@ export default function AdminPage() {
 
           /* 3. Summary P&L Cards Mobile optimization */
           .finance-summary {
-            grid-template-columns: 1fr !important;
-            gap: 12px !important;
             margin-bottom: 20px !important;
           }
           .fin-card {
@@ -2952,1003 +3952,1028 @@ export default function AdminPage() {
           }
       `}</style>
 
-        <div className="dashboard-container">
-          {/* Mode Switcher */}
-          {/* Desktop View Switcher */}
-          <div className="mode-switcher-container desktop-only">
-            <button
-              className={`mode-btn ${adminViewMode === 'manager' ? 'active' : ''}`}
-              onClick={() => setAdminViewMode('manager')}
-            >
-              Overview
-            </button>
-            <button
-              className={`mode-btn ${adminViewMode === 'florist' ? 'active' : ''}`}
-              onClick={() => setAdminViewMode('florist')}
-            >
-              ช่างจัดดอกไม้
-            </button>
-            <button
-              className={`mode-btn ${adminViewMode === 'finance' ? 'active' : ''}`}
-              onClick={() => setAdminViewMode('finance')}
-            >
-              รายรับ-รายจ่าย
-            </button>
-            <button
-              className={`mode-btn`}
-              onClick={() => window.location.href = '/admin/create-product'}
-            >
-              สร้างสินค้าใหม่
-            </button>
-            <button
-              className={`mode-btn`}
-              onClick={() => window.location.href = '/admin/create-product?manage=true'}
-            >
-              จัดเก็บสินค้า
-            </button>
-          </div>
+      <div className="dashboard-container">
+        {adminViewMode !== 'finance' && adminViewMode !== 'florist' ? (
+          <div className="dashboard-header">
+            <div className="dashboard-title-block">
+              <span className="dashboard-chip">Admin Overview</span>
+              <h1 className="dashboard-title">{viewTitleMap[adminViewMode]}</h1>
+              <p className="dashboard-subtitle">{viewSubtitleMap[adminViewMode]}</p>
+            </div>
 
-          {/* Custom Mobile View Dropdown Switcher */}
-          <div className="mode-dropdown-container mobile-only">
-            <button
-              className="mode-dropdown-trigger"
-              onClick={() => setIsModeDropdownOpen(!isModeDropdownOpen)}
-            >
-              <div className="dropdown-trigger-left">
-                <span className="dropdown-trigger-icon">
-                  {adminViewMode === 'manager' && '📊'}
-                  {adminViewMode === 'florist' && '🌹'}
-                  {adminViewMode === 'finance' && '💰'}
-                </span>
-                <span className="dropdown-trigger-text">
-                  {adminViewMode === 'manager' && 'Overview'}
-                  {adminViewMode === 'florist' && 'ช่างจัดดอกไม้'}
-                  {adminViewMode === 'finance' && 'รายรับ-รายจ่าย'}
-                </span>
-              </div>
-              <span className={`dropdown-trigger-arrow ${isModeDropdownOpen ? 'open' : ''}`}>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M6 9l6 6 6-6" />
+            <div className="dashboard-header-actions">
+              <button className="header-icon-btn" type="button" aria-label="Notifications">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M15 17h5l-1.4-1.4A2 2 0 0 1 18 14.2V11a6 6 0 1 0-12 0v3.2a2 2 0 0 1-.6 1.4L4 17h5" />
+                  <path d="M9 17a3 3 0 0 0 6 0" />
                 </svg>
-              </span>
-            </button>
+                {notificationCount > 0 ? <span className="header-icon-badge">{notificationLabel}</span> : null}
+              </button>
 
-            {isModeDropdownOpen && (
-              <>
-                <div className="dropdown-overlay" onClick={() => setIsModeDropdownOpen(false)} />
-                <div className="mode-dropdown-menu">
-                  <button
-                    className={`dropdown-item ${adminViewMode === 'manager' ? 'active' : ''}`}
-                    onClick={() => {
-                      setAdminViewMode('manager');
-                      setIsModeDropdownOpen(false);
-                    }}
-                  >
-                    <span className="item-icon">📊</span>
-                    <span className="item-text">Overview</span>
-                  </button>
-                  <button
-                    className={`dropdown-item ${adminViewMode === 'florist' ? 'active' : ''}`}
-                    onClick={() => {
-                      setAdminViewMode('florist');
-                      setIsModeDropdownOpen(false);
-                    }}
-                  >
-                    <span className="item-icon">🌹</span>
-                    <span className="item-text">ช่างจัดดอกไม้</span>
-                  </button>
-                  <button
-                    className={`dropdown-item ${adminViewMode === 'finance' ? 'active' : ''}`}
-                    onClick={() => {
-                      setAdminViewMode('finance');
-                      setIsModeDropdownOpen(false);
-                    }}
-                  >
-                    <span className="item-icon">💰</span>
-                    <span className="item-text">รายรับ-รายจ่าย</span>
-                  </button>
-
-                  <div className="dropdown-divider" />
-
-                  <button
-                    className="dropdown-item"
-                    onClick={() => {
-                      window.location.href = '/admin/create-product';
-                      setIsModeDropdownOpen(false);
-                    }}
-                  >
-                    <span className="item-icon">✨</span>
-                    <span className="item-text">สร้างสินค้าใหม่</span>
-                  </button>
-                  <button
-                    className="dropdown-item"
-                    onClick={() => {
-                      window.location.href = '/admin/create-product?manage=true';
-                      setIsModeDropdownOpen(false);
-                    }}
-                  >
-                    <span className="item-icon">📦</span>
-                    <span className="item-text">จัดเก็บสินค้า</span>
-                  </button>
-                </div>
-              </>
-            )}
+              <div className="header-date-chip">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M8 2v4" />
+                  <path d="M16 2v4" />
+                  <rect x="3" y="4" width="18" height="18" rx="2" />
+                  <path d="M3 10h18" />
+                </svg>
+                <span>{todayLabel}</span>
+              </div>
+            </div>
           </div>
+        ) : null}
 
-          {adminViewMode === 'manager' && (
-            <>
-              {/* Stats Grid */}
-              <div className="stats-grid">
-                <div className="stat-card sales">
-                  <div className="stat-icon" style={{ fontSize: '1.4rem' }}>💰</div>
+        {adminViewMode === 'manager' && (
+          <>
+            <div className="stats-grid">
+              {overviewCards.map((card) => (
+                <div key={card.key} className={`stat-card ${card.cardClass}`}>
                   <div className="stat-info">
-                    <span className="stat-label">ยอดขายทั้งหมด</span>
-                    <span className="stat-value">{totalSales.toLocaleString()} ฿</span>
+                    <span className="stat-label">
+                      {card.label}
+                      {card.key === 'active-users' ? <span className="live-dot"></span> : null}
+                    </span>
+                    <span className="stat-value">{card.value}</span>
+                    <span className="stat-detail" style={{ color: card.accent }}>
+                      <span>{card.detailPrefix}</span>
+                      <span>{card.detail}</span>
+                    </span>
+                  </div>
+                  <div
+                    className="stat-ring"
+                    style={{ ['--accent' as any]: card.accent, ['--p' as any]: card.progressPct } as React.CSSProperties}
+                    aria-hidden="true"
+                  >
+                    <span className="stat-ring-label">
+                      {card.ringPrefix}
+                      {card.ringLabelPct}%
+                    </span>
                   </div>
                 </div>
-                <div className="stat-card pending">
-                  <div className="stat-icon" style={{ fontSize: '1.4rem' }}>⏳</div>
-                  <div className="stat-info">
-                    <span className="stat-label">รอตรวจสอบเงิน</span>
-                    <span className="stat-value">{pendingCount} รายการ</span>
-                  </div>
-                </div>
-                <div className="stat-card preparing">
-                  <div className="stat-icon" style={{ fontSize: '1.4rem' }}>🌹</div>
-                  <div className="stat-info">
-                    <span className="stat-label">กำลังจัดเตรียม</span>
-                    <span className="stat-value">{preparingCount} รายการ</span>
-                  </div>
-                </div>
-                <div className="stat-card completed">
-                  <div className="stat-icon" style={{ fontSize: '1.4rem' }}>✅</div>
-                  <div className="stat-info">
-                    <span className="stat-label">ส่งสำเร็จแล้ว</span>
-                    <span className="stat-value">{completedCount} รายการ</span>
-                  </div>
-                </div>
-                <div className="stat-card active-users">
-                  <div className="stat-icon" style={{ fontSize: '1.4rem' }}>
-                    👥
-                    <span className="live-dot"></span>
-                  </div>
-                  <div className="stat-info">
-                    <span className="stat-label">ผู้ใช้งานขณะนี้ (Live)</span>
-                    <span className="stat-value">{activeUsersCount} คน</span>
-                  </div>
-                </div>
-                <div className="stat-card registered-users">
-                  <div className="stat-icon" style={{ fontSize: '1.4rem' }}>✨</div>
-                  <div className="stat-info">
-                    <span className="stat-label">ผู้สมัครใช้งานทั้งหมด</span>
-                    <span className="stat-value">{registeredUsersCount} คน</span>
-                  </div>
-                </div>
-              </div>
+              ))}
+            </div>
 
-              {/* Tabs Filter */}
-              <div className="tabs-filter">
-                <button className={`tab-btn ${activeFilter === 'all' ? 'active' : ''}`} onClick={() => setActiveFilter('all')}>
-                  ทั้งหมด ({orders.length})
-                </button>
-                <button className={`tab-btn ${activeFilter === 'pending_verification' ? 'active' : ''}`} onClick={() => setActiveFilter('pending_verification')}>
-                  รอตรวจเงิน ({pendingCount})
-                </button>
-                <button className={`tab-btn ${activeFilter === 'preparing' ? 'active' : ''}`} onClick={() => setActiveFilter('preparing')}>
-                  กำลังจัดทำ ({preparingCount})
-                </button>
-                <button className={`tab-btn ${activeFilter === 'shipping' ? 'active' : ''}`} onClick={() => setActiveFilter('shipping')}>
-                  กำลังจัดส่ง ({orders.filter(o => o.status === 'shipping').length})
-                </button>
-                <button className={`tab-btn ${activeFilter === 'completed' ? 'active' : ''}`} onClick={() => setActiveFilter('completed')}>
-                  สำเร็จแล้ว ({completedCount})
-                </button>
-                <button className={`tab-btn ${activeFilter === 'cancelled' ? 'active' : ''}`} onClick={() => setActiveFilter('cancelled')}>
-                  ยกเลิก ({orders.filter(o => o.status === 'cancelled').length})
-                </button>
-              </div>
+            {/* Tabs Filter */}
+            <div className="tabs-filter">
+              <button className={`tab-btn ${activeFilter === 'all' ? 'active' : ''}`} onClick={() => setActiveFilter('all')}>
+                ทั้งหมด ({orders.length})
+              </button>
+              <button className={`tab-btn ${activeFilter === 'pending_verification' ? 'active' : ''}`} onClick={() => setActiveFilter('pending_verification')}>
+                รอตรวจเงิน ({pendingCount})
+              </button>
+              <button className={`tab-btn ${activeFilter === 'preparing' ? 'active' : ''}`} onClick={() => setActiveFilter('preparing')}>
+                กำลังจัดทำ ({preparingCount})
+              </button>
+              <button className={`tab-btn ${activeFilter === 'shipping' ? 'active' : ''}`} onClick={() => setActiveFilter('shipping')}>
+                กำลังจัดส่ง ({orders.filter(o => o.status === 'shipping').length})
+              </button>
+              <button className={`tab-btn ${activeFilter === 'completed' ? 'active' : ''}`} onClick={() => setActiveFilter('completed')}>
+                สำเร็จแล้ว ({completedCount})
+              </button>
+              <button className={`tab-btn ${activeFilter === 'cancelled' ? 'active' : ''}`} onClick={() => setActiveFilter('cancelled')}>
+                ยกเลิก ({orders.filter(o => o.status === 'cancelled').length})
+              </button>
+            </div>
 
-              {/* Live Orders Box */}
-              <div className="orders-section">
-                <div className="section-header">
+            {/* Live Orders Box */}
+            <div className="orders-section">
+              <div className="section-header">
+                <div>
                   <h2>คำสั่งซื้อแบบเรียลไทม์</h2>
+                  <p className="section-subtitle">คลิกที่รายการเพื่อดูรายละเอียดและอัปเดตสถานะ</p>
+                </div>
+                <div className="orders-header-actions">
+                  <label className="orders-search" aria-label="ค้นหาชื่อผู้รับ">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <circle cx="11" cy="11" r="8" />
+                      <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                    </svg>
+                    <input
+                      className="orders-search-input"
+                      type="search"
+                      placeholder="ค้นหาด้วยชื่อ หรือ ID"
+                      value={recipientSearch}
+                      onChange={(e) => setRecipientSearch(e.target.value)}
+                    />
+                  </label>
                   <span className="order-count-badge">แสดง {filteredOrders.length} รายการ</span>
                 </div>
-
-                {filteredOrders.length === 0 ? (
-                  <div className="empty-orders">
-                    <div className="empty-orders-icon">
-                      <img src="/images/Empty State Icon.png" alt="Empty State" style={{ width: '120px', height: 'auto', display: 'block', margin: '0 auto' }} />
-                    </div>
-                    <p>ไม่มีคำสั่งซื้อที่อยู่ในสถานะนี้</p>
-                  </div>
-                ) : (
-                  <div className="orders-list">
-                    {filteredOrders.map((order) => {
-                      const status = getStatusLabel(order.status);
-                      const isExpanded = expandedOrder === order.id;
-
-                      return (
-                        <div
-                          key={order.id}
-                          className="order-row"
-                          onClick={() => setExpandedOrder(isExpanded ? null : order.id)}
-                        >
-                          {/* Summary row */}
-                          <div className="order-summary-row">
-                            <div className="order-main-info">
-                              <div className="order-avatar">🛒</div>
-                              <div className="order-meta">
-                                {
-                                  (() => {
-                                    const customItem = order.items?.find((i: any) => i.config);
-                                    const customerName = customItem?.config?.customerName || 'ไม่ระบุ';
-                                    return <span className="order-id">ออเดอร์ {customerName}</span>;
-                                  })()
-                                }
-                                <span className="order-date">{formatOrderDate(order.createdAt)}</span>
-                              </div>
-                            </div>
-                            <div className="order-right-meta">
-                              <span className="order-price">{order.total?.toLocaleString() || 0} ฿</span>
-                              <span className="status-badge" style={{ color: status.color, background: status.bg }}>
-                                {status.label}
-                              </span>
-                            </div>
-                          </div>
-
-                          {/* Expanded details */}
-                          <div className={`order-details-drawer ${isExpanded ? 'open' : ''}`} onClick={(e) => e.stopPropagation()}>
-                            <div className="detail-grid">
-
-                              {/* 1. Products Detail */}
-                              <div className="detail-card">
-                                <h4>💐 สินค้าในออเดอร์</h4>
-                                <div className="detail-item-list">
-                                  {order.items?.map((item: any, idx: number) => {
-                                    const cfg = item.config || null;
-                                    return (
-                                      <div key={idx} style={{ marginBottom: '8px', borderBottom: '1px solid #faf0f2', paddingBottom: '8px' }}>
-                                        <div style={{ fontWeight: 600 }}>{item.name} (x{item.qty || 1})</div>
-                                        <div style={{ fontSize: '0.8rem', color: '#db8a9e', margin: '2px 0' }}>{item.price?.toLocaleString()} ฿</div>
-
-                                        {cfg && (
-                                          <div style={{ fontSize: '0.75rem', color: '#a08a8e', background: '#fff', padding: '6px', borderRadius: '6px', marginTop: '4px' }}>
-                                            <div><b>กุหลาบ:</b> {cfg.selectedQty} ดอก</div>
-                                            {cfg.customerName && <div><b>ผู้รับ:</b> {cfg.customerName} ({cfg.customerPhone})</div>}
-                                            {cfg.deliveryDate && <div><b>วันส่ง:</b> {cfg.deliveryDate} ({cfg.deliveryTime || 'ไม่ระบุเวลา'})</div>}
-                                            {cfg.additionalNote && <div><b>โน๊ต:</b> "{cfg.additionalNote}"</div>}
-                                          </div>
-                                        )}
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              </div>
-
-                              {/* 2. Customer & Delivery Address */}
-                              <div className="detail-card">
-                                <h4>📍 รายละเอียดการจัดส่ง</h4>
-                                <div className="detail-item-list">
-                                  {order.items?.some((i: any) => i.config) ? (
-                                    // Extract delivery info from customizer config
-                                    (() => {
-                                      const customItem = order.items.find((i: any) => i.config);
-                                      const cfg = customItem.config;
-                                      return (
-                                        <>
-                                          <div><b>ผู้สั่งซื้อ/ผู้รับ:</b> {cfg.customerName || 'ไม่ระบุ'}</div>
-                                          <div><b>เบอร์โทร:</b> {cfg.customerPhone || 'ไม่ระบุ'}</div>
-                                          <div><b>ที่อยู่จัดส่ง:</b> {cfg.customerAddress || 'จัดส่งตามที่อยู่ร้าน / หรือระบุทีหลัง'}</div>
-                                          <div><b>วันที่จัดส่ง:</b> {cfg.deliveryDate || 'ไม่ระบุ'}</div>
-                                          <div><b>เวลาจัดส่ง:</b> {cfg.deliveryTime ? `${cfg.deliveryTime} น.` : 'ไม่ระบุ'}</div>
-                                          {cfg.additionalNote && <div><b>โน๊ต:</b> "{cfg.additionalNote}"</div>}
-                                        </>
-                                      );
-                                    })()
-                                  ) : (
-                                    <div>ไม่มีการจัดส่งแบบปรับแต่ง / ติดต่อลูกค้าตามประวัติ</div>
-                                  )}
-                                </div>
-                              </div>
-
-                              {/* 3. Status Action Control Panel */}
-                              <div className="detail-card">
-                                <h4>⚙️ อัปเดตสถานะ (การควบคุมหลังบ้าน)</h4>
-                                <div className="control-panel">
-                                  {order.status === 'pending_verification' && (
-                                    <button
-                                      className="status-select-btn"
-                                      style={{ background: '#2ecc71' }}
-                                      onClick={() => updateOrderStatus(order.id, 'preparing')}
-                                    >
-                                      ยืนยันยอดเงินสำเร็จ (เริ่มทำช่อดอกไม้)
-                                    </button>
-                                  )}
-
-                                  {order.status === 'preparing' && (
-                                    <button
-                                      className="status-select-btn"
-                                      style={{ background: '#3498db' }}
-                                      onClick={() => updateOrderStatus(order.id, 'shipping')}
-                                    >
-                                      ดอกไม้จัดเสร็จแล้ว (เริ่มนำจัดส่ง)
-                                    </button>
-                                  )}
-
-                                  {order.status === 'shipping' && (
-                                    <button
-                                      className="status-select-btn"
-                                      style={{ background: '#27ae60' }}
-                                      onClick={() => updateOrderStatus(order.id, 'completed')}
-                                    >
-                                      จัดส่งสำเร็จเรียบร้อย (ปิดออเดอร์)
-                                    </button>
-                                  )}
-
-                                  {order.status !== 'completed' && order.status !== 'cancelled' && (
-                                    <button
-                                      className="status-select-btn"
-                                      style={{ background: '#e74c3c' }}
-                                      onClick={() => {
-                                        (window as any).showBeautifulConfirm('คุณแน่ใจหรือไม่ว่าต้องการยกเลิกคำสั่งซื้อนี้?', 'ยืนยันการยกเลิกคำสั่งซื้อ').then((ok: boolean) => {
-                                          if (ok) {
-                                            updateOrderStatus(order.id, 'cancelled');
-                                          }
-                                        });
-                                      }}
-                                    >
-                                      ยกเลิกออเดอร์นี้
-                                    </button>
-                                  )}
-
-                                  {order.status === 'completed' && (
-                                    <div style={{ color: '#2ecc71', fontSize: '0.88rem', fontWeight: 600, textAlign: 'center', padding: '10px' }}>
-                                      คำสั่งซื้อนี้เสร็จสิ้นอย่างสมบูรณ์แล้ว
-                                    </div>
-                                  )}
-
-                                  {order.status === 'cancelled' && (
-                                    <>
-                                      <div style={{ color: '#e74c3c', fontSize: '0.88rem', fontWeight: 600, textAlign: 'center', padding: '10px' }}>
-                                        คำสั่งซื้อนี้ถูกยกเลิกแล้ว
-                                      </div>
-                                      <button
-                                        className="status-select-btn"
-                                        style={{ background: '#7f8c8d', marginTop: '10px' }}
-                                        onClick={async () => {
-                                          const ok = await (window as any).showBeautifulConfirm('คุณแน่ใจหรือไม่ว่าต้องการลบออเดอร์นี้ออกจากฐานข้อมูลอย่างถาวร?', 'ยืนยันการลบถาวร');
-                                          if (ok) {
-                                            try {
-                                              await deleteDoc(doc(db, 'orders', order.id));
-                                              await (window as any).showBeautifulAlert('ลบข้อมูลออเดอร์ถาวรเรียบร้อยแล้ว!', 'success', 'ลบสำเร็จ');
-                                            } catch (err) {
-                                              console.error('Failed to delete order:', err);
-                                              await (window as any).showBeautifulAlert('เกิดข้อผิดพลาดในการลบข้อมูล', 'error', 'ผิดพลาด');
-                                            }
-                                          }
-                                        }}
-                                      >
-                                        🗑️ ลบข้อมูลถาวร (ลบออกจากดาต้าเบส)
-                                      </button>
-                                    </>
-                                  )}
-                                </div>
-                              </div>
-
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            </>
-          )}
-
-          {adminViewMode === 'florist' && (
-            /* Florist View Mode */
-            <div className="florist-section">
-              <div style={{ marginBottom: '25px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
-                <div>
-                  <h2 style={{ fontSize: '1.4rem', fontWeight: 700, color: '#5c4738', margin: 0 }}>คิวงานจัดช่อดอกไม้</h2>
-                  <p style={{ color: '#a08a8e', fontSize: '0.85rem', margin: '4px 0 0' }}>รายการออเดอร์ที่ชำระเงินเรียบร้อยแล้วและรอดำเนินการผลิต (เรียงตามกำหนดส่งด่วนที่สุดไว้บนสุด)</p>
-                </div>
-                <span style={{
-                  background: '#fdf5f6',
-                  color: '#db8a9e',
-                  padding: '8px 16px',
-                  borderRadius: '15px',
-                  fontSize: '0.9rem',
-                  fontWeight: 700,
-                  border: '1px solid #fbd3da',
-                  marginLeft: 'auto'
-                }}>
-                  ทั้งหมด: {preparingOrdersSorted.length} คิว
-                </span>
               </div>
 
-              {preparingOrdersSorted.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '70px 20px', background: '#fff', borderRadius: '24px', border: '1.5px dashed #fdf5f6', color: '#a08a8e', boxShadow: '0 10px 30px rgba(219, 138, 158, 0.02)' }}>
-                  <div style={{ fontSize: '3.5rem', marginBottom: '20px' }}>
+              {filteredOrders.length === 0 ? (
+                <div className="empty-orders">
+                  <div className="empty-orders-icon">
                     <img src="/images/Empty State Icon.png" alt="Empty State" style={{ width: '120px', height: 'auto', display: 'block', margin: '0 auto' }} />
                   </div>
-                  <h3 style={{ color: '#5c4738', fontWeight: 600, marginBottom: '8px', fontSize: '1.2rem' }}>ไม่มีออเดอร์ค้างในคิวจัดทำช่อดอกไม้</h3>
-                  <p style={{ fontSize: '0.92rem', margin: 0 }}>ช่างจัดดอกไม้สามารถพักผ่อน หรือจัดเตรียมวัตถุดิบเพื่อรอคิวถัดไปได้เลยค่ะ!</p>
+                  <p>ไม่มีคำสั่งซื้อที่อยู่ในสถานะนี้</p>
                 </div>
               ) : (
-                <div className="florist-board animate-fade">
-                  {preparingOrdersSorted.map((order) => {
-                    return (order.items || []).map((item: any, idx: number) => {
-                      const isGlitterRose = item.type === 'glitter_rose' || !!item.config;
-                      const cfg = item.config || null;
-                      const itemColors = cfg && cfg.selectedColors && cfg.selectedColors.length > 0
-                        ? cfg.selectedColors.map((id: string) => getRoseColorHex(id))
-                        : ['#db8a9e'];
+                <div className="orders-list">
+                  {filteredOrders.map((order) => {
+                    const status = getStatusLabel(order.status);
+                    const isExpanded = expandedOrder === order.id;
+                    const customItem = order.items?.find((i: any) => i.config);
+                    const primaryItem = order.items?.[0];
+                    const customerName = customItem?.config?.customerName || 'ไม่ระบุ';
+                    const customerPhone = customItem?.config?.customerPhone || '-';
+                    const deliveryDate = customItem?.config?.deliveryDate || formatOrderDate(order.createdAt);
+                    const deliveryTime = customItem?.config?.deliveryTime ? `${customItem.config.deliveryTime} น.` : 'ไม่ระบุเวลา';
+                    const customerAddress = customItem?.config?.customerAddress || 'จัดส่งตามที่อยู่ร้าน / หรือระบุทีหลัง';
+                    const additionalNote = customItem?.config?.additionalNote?.trim?.() || '';
+                    const hasCustomDelivery = order.items?.some((i: any) => i.config);
+                    const itemColors = customItem?.config?.selectedColors?.length
+                      ? customItem.config.selectedColors.map((id: string) => getRoseColorHex(id))
+                      : ['#F48FB1'];
 
-                      const cardKey = `${order.id}-${idx}`;
+                    return (
+                      <div
+                        key={order.id}
+                        className="order-row"
+                        onClick={() => setExpandedOrder(isExpanded ? null : order.id)}
+                      >
+                        <div className="order-summary-row">
+                          <div className="order-main-info order-cell-order">
+                            <div className="order-avatar">
+                              {customItem?.config ? (
+                                <BasketIcon colors={itemColors} size={40} />
+                              ) : (
+                                <span>🛒</span>
+                              )}
+                            </div>
+                            <div className="order-meta">
+                              <span className="order-id">{primaryItem?.name || 'คำสั่งซื้อ'}</span>
+                              <span className="order-date">#{String(order.id).slice(0, 8).toUpperCase()}</span>
+                            </div>
+                          </div>
 
-                      // Extract translated config properties
-                      const colorsTrans = cfg && cfg.selectedColors
-                        ? (cfg.selectedColors || []).map((id: string) => ROSE_COLORS_MAP[id] || id).join(', ')
-                        : '';
-                      const layersTrans = cfg && cfg.selectedLayers
-                        ? (cfg.selectedLayers || []).map((id: string) => ROSE_LAYERS_MAP[id] || id).join(', ')
-                        : '';
-                      const paperTrans = cfg && cfg.selectedPaper
-                        ? (ROSE_PAPERS_MAP[cfg.selectedPaper] || cfg.selectedPaper)
-                        : '';
-                      const shapeTrans = cfg && cfg.selectedShape
-                        ? (ROSE_SHAPES_MAP[cfg.selectedShape] || cfg.selectedShape)
-                        : '';
-                      const decorationsTrans = cfg && cfg.selectedDecorations
-                        ? (cfg.selectedDecorations || []).map((id: string) => ROSE_DECORATIONS_MAP[id] || id).join(', ')
-                        : '';
+                          <div className="order-middle-meta">
+                            <span className="order-customer">{customerName}</span>
+                            <span className="order-phone">{customerPhone}</span>
+                          </div>
 
-                      const deliveryDate = cfg?.deliveryDate || '';
+                          <div className="order-delivery-meta">
+                            <span className="order-delivery-date">{deliveryDate}</span>
+                            <span className="order-delivery-time">{deliveryTime}</span>
+                          </div>
 
-                      return (
-                        <div key={cardKey} className="florist-card">
-                          {/* Order ID and Delivery date at top-right */}
-                          <div style={{
-                            position: 'absolute', top: '14px', right: '16px',
-                            display: 'flex', gap: '8px', alignItems: 'center'
-                          }}>
-                            {deliveryDate && (
-                              <span style={{
-                                fontSize: '.72rem', color: '#fff', fontWeight: 700,
-                                background: 'linear-gradient(135deg, #e05c7a, #ff8a9e)',
-                                padding: '3px 10px', borderRadius: '20px',
-                                boxShadow: '0 4px 10px rgba(224, 92, 122, 0.25)',
-                                whiteSpace: 'nowrap'
-                              }}>
-                                📅 จัดส่ง: {deliveryDate}
-                              </span>
-                            )}
-                            <span style={{
-                              fontSize: '.72rem', color: '#db8a9e', fontWeight: 700,
-                              background: '#fdf5f6', padding: '3px 8px', borderRadius: '20px',
-                              whiteSpace: 'nowrap', border: '1px solid rgba(219, 138, 158, 0.2)'
-                            }}>
-                              ออเดอร์ #{order.id.substring(0, 8).toUpperCase()}
+                          <div className="order-right-meta">
+                            <span className="status-badge" style={{ color: status.color, background: status.bg }}>
+                              {status.label}
                             </span>
+                            <span className="order-price">{order.total?.toLocaleString() || 0} ฿</span>
                           </div>
 
-                          {/* Left: Dynamic Visual Image */}
-                          <div className="florist-img-container">
-                            {isGlitterRose ? (
-                              <BasketIcon colors={itemColors} />
-                            ) : (
-                              '🛍️'
-                            )}
-                          </div>
-
-                          {/* Right: Info and 4-column details box */}
-                          <div className="florist-info">
-                            <div className="florist-item-name">
-                              {item.name}
-                              {isGlitterRose && <span className="florist-badge">Glitter Rose</span>}
-                            </div>
-
-                            {/* 4-column details box EXACTLY matching Cart Page */}
-                            {cfg ? (
-                              <div className="florist-details-box">
-                                {/* Col 1: Rose details */}
-                                <div>
-                                  <div className="detail-group-title">🌹 ช่อดอกกุหลาบ</div>
-                                  <ul className="detail-item-list">
-                                    <li>จำนวน: {cfg.selectedQty || 0} ดอก</li>
-                                    {colorsTrans && <li>สี: {colorsTrans}</li>}
-                                  </ul>
-                                </div>
-
-                                {/* Col 2: Wrapping details */}
-                                {(layersTrans || paperTrans || shapeTrans) && (
-                                  <div>
-                                    <div className="detail-group-title">📜 องค์ประกอบการห่อ</div>
-                                    <ul className="detail-item-list">
-                                      {layersTrans && <li>รองช่อ: {layersTrans}</li>}
-                                      {paperTrans && <li>กระดาษห่อ: {paperTrans}</li>}
-                                      {shapeTrans && <li>รูปทรง: {shapeTrans}</li>}
-                                    </ul>
-                                  </div>
-                                )}
-
-                                {/* Col 3: Accessories */}
-                                {decorationsTrans && (
-                                  <div>
-                                    <div className="detail-group-title">✨ ของตกแต่งเพิ่มเติม</div>
-                                    <ul className="detail-item-list">
-                                      <li>{decorationsTrans}</li>
-                                    </ul>
-                                  </div>
-                                )}
-
-                                {/* Col 4: Shipping Info */}
-                                {(cfg.customerName || cfg.deliveryDate || cfg.additionalNote) && (
-                                  <div>
-                                    <div className="detail-group-title">📍 ข้อมูลการจัดส่ง</div>
-                                    <ul className="detail-item-list">
-                                      {cfg.customerName && <li>ผู้รับ: {cfg.customerName} ({cfg.customerPhone || 'ไม่ระบุเบอร์'})</li>}
-                                      {cfg.customerAddress && <li>ที่อยู่: {cfg.customerAddress}</li>}
-                                      {cfg.deliveryDate && <li>ส่ง: {cfg.deliveryDate} ({cfg.deliveryTime || 'ไม่ระบุเวลา'})</li>}
-                                      {cfg.additionalNote && <li style={{ color: '#db8a9e', fontWeight: 600 }}>โน๊ต: "{cfg.additionalNote}"</li>}
-                                    </ul>
-                                  </div>
-                                )}
-                              </div>
-                            ) : (
-                              <div className="florist-details-box" style={{ gridTemplateColumns: '1fr' }}>
-                                <div style={{ color: '#a08a8e', fontSize: '0.82rem' }}>
-                                  สินค้าปกติสำเร็จรูปของร้านค้า ไม่ต้องจัดทำสเปกพิเศษ
-                                </div>
-                              </div>
-                            )}
-
-                            {/* Bottom Row */}
-                            <div className="florist-bottom-row">
-                              <div className="florist-price-label">
-                                {item.price?.toLocaleString() || 0} ฿
-                              </div>
-
-                              <button
-                                className="florist-done-btn"
-                                onClick={() => updateOrderStatus(order.id, 'shipping')}
-                              >
-                                จัดทำช่อดอกไม้เสร็จเรียบร้อย
-                              </button>
-                            </div>
+                          <div className={`order-expand-indicator ${isExpanded ? 'open' : ''}`}>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M6 9l6 6 6-6" />
+                            </svg>
                           </div>
                         </div>
-                      );
-                    });
+
+                        <div className="order-mobile-meta">
+                          <span>{customerName}</span>
+                          <span>{formatOrderDate(order.createdAt)}</span>
+                        </div>
+
+                        <div className="order-extra-bar">
+                          <span>สถานะ: {status.label}</span>
+                          <span>ยอดรวม {order.total?.toLocaleString() || 0} ฿</span>
+                          <span>สร้างเมื่อ {formatOrderDate(order.createdAt)}</span>
+                        </div>
+
+                        {/* Expanded details */}
+                        <div className={`order-details-drawer ${isExpanded ? 'open' : ''}`} onClick={(e) => e.stopPropagation()}>
+                          <div className="detail-grid">
+                            {/* 1. Customer & Delivery Address */}
+                            <div className="detail-card">
+                              <div className="detail-card-header">
+                                <h4>รายละเอียดการจัดส่ง</h4>
+                                <span className="detail-card-chip">Delivery</span>
+                              </div>
+                              {hasCustomDelivery ? (
+                                <>
+                                  <div className="detail-kv-list">
+                                    <div className="detail-kv-row">
+                                      <span className="detail-kv-label">ผู้รับ</span>
+                                      <span className="detail-kv-value">{customerName}</span>
+                                    </div>
+                                    <div className="detail-kv-row">
+                                      <span className="detail-kv-label">เบอร์โทร</span>
+                                      <span className="detail-kv-value">{customerPhone}</span>
+                                    </div>
+                                    <div className="detail-kv-row">
+                                      <span className="detail-kv-label">วันที่ส่ง</span>
+                                      <span className="detail-kv-value">{deliveryDate}</span>
+                                    </div>
+                                    <div className="detail-kv-row">
+                                      <span className="detail-kv-label">เวลา</span>
+                                      <span className="detail-kv-value">{deliveryTime}</span>
+                                    </div>
+                                    <div className="detail-kv-row">
+                                      <span className="detail-kv-label">ที่อยู่</span>
+                                      <span className="detail-kv-value">{customerAddress}</span>
+                                    </div>
+                                  </div>
+                                  {additionalNote ? (
+                                    <div className="detail-note-box">
+                                      <span className="detail-note-label">โน้ตเพิ่มเติม</span>
+                                      <div className="detail-note-text">{additionalNote}</div>
+                                    </div>
+                                  ) : null}
+                                </>
+                              ) : (
+                                <div className="detail-empty-text">ไม่มีข้อมูลจัดส่งแบบปรับแต่ง กรุณาติดต่อลูกค้าตามประวัติคำสั่งซื้อ</div>
+                              )}
+                            </div>
+
+                            {/* 2. Status Action Control Panel */}
+                            <div className="detail-card">
+                              <div className="detail-card-header">
+                                <h4>จัดการคำสั่งซื้อ</h4>
+                                <span className="status-badge" style={{ color: status.color, background: status.bg }}>
+                                  {status.label}
+                                </span>
+                              </div>
+                              <div className="detail-status-line">
+                                <span className="detail-status-meta">ชำระแล้ว {Math.round((order.total || 0) / 2).toLocaleString()} ฿</span>
+                                <span className="detail-status-meta">รหัส #{String(order.id).slice(0, 8).toUpperCase()}</span>
+                              </div>
+                              <div className="control-panel">
+                                {order.status === 'pending_verification' && (
+                                  <button
+                                    className="status-select-btn"
+                                    style={{ background: '#2ecc71' }}
+                                    onClick={() => updateOrderStatus(order.id, 'preparing')}
+                                  >
+                                    ยืนยันยอดเงินสำเร็จ (เริ่มทำช่อดอกไม้)
+                                  </button>
+                                )}
+
+                                {order.status === 'preparing' && (
+                                  <>
+                                    <div style={{ marginBottom: '15px', background: '#fdf5f6', padding: '20px 15px', borderRadius: '16px', border: '2px dashed #f8bbd9', textAlign: 'center', transition: 'all 0.3s' }}>
+                                      <div style={{ fontSize: '1.5rem', marginBottom: '8px' }}>📸</div>
+                                      <p style={{ fontSize: '0.95rem', color: '#db8a9e', marginBottom: '12px', fontWeight: 'bold' }}>รูปภาพช่อดอกไม้ที่จัดเสร็จแล้ว</p>
+
+                                      <label style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        background: '#fff',
+                                        border: '1px solid #f48fb1',
+                                        color: '#db8a9e',
+                                        padding: '8px 20px',
+                                        borderRadius: '50px',
+                                        cursor: 'pointer',
+                                        fontSize: '0.9rem',
+                                        fontWeight: '700',
+                                        transition: 'all 0.2s ease',
+                                        boxShadow: '0 4px 10px rgba(219,138,158,0.15)'
+                                      }}>
+                                        <input
+                                          type="file"
+                                          accept="image/*"
+                                          onChange={(e) => {
+                                            const file = e.target.files?.[0];
+                                            if (file) {
+                                              setFinishedImageFiles(prev => ({ ...prev, [order.id]: file }));
+                                              const previewUrl = URL.createObjectURL(file);
+                                              setFinishedImagePreviews(prev => ({ ...prev, [order.id]: previewUrl }));
+                                            }
+                                          }}
+                                          style={{ display: 'none' }}
+                                        />
+                                        {finishedImageFiles[order.id] ? 'เปลี่ยนรูปภาพใหม่' : 'กดเพื่อเลือกรูปภาพ'}
+                                      </label>
+
+                                      {finishedImagePreviews[order.id] && (
+                                        <div style={{ marginTop: '16px', display: 'flex', justifyContent: 'center', animation: 'fadeIn 0.3s ease' }}>
+                                          <div style={{ position: 'relative', display: 'inline-block' }}>
+                                            <img src={finishedImagePreviews[order.id]} alt="Preview" style={{ width: '100%', maxWidth: '160px', borderRadius: '12px', border: '3px solid #fff', boxShadow: '0 6px 15px rgba(0,0,0,0.1)' }} />
+                                            <button
+                                              title="ลบรูปภาพ"
+                                              onClick={(e) => {
+                                                e.preventDefault();
+                                                const newFiles = { ...finishedImageFiles }; delete newFiles[order.id]; setFinishedImageFiles(newFiles);
+                                                const newPreviews = { ...finishedImagePreviews }; delete newPreviews[order.id]; setFinishedImagePreviews(newPreviews);
+                                              }}
+                                              style={{ position: 'absolute', top: '-10px', right: '-10px', background: '#ff4d4f', color: '#fff', border: 'none', borderRadius: '50%', width: '28px', height: '28px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.85rem', fontWeight: 'bold', boxShadow: '0 4px 8px rgba(255, 77, 79, 0.4)' }}
+                                            >
+                                              ✕
+                                            </button>
+                                          </div>
+                                        </div>
+                                      )}
+                                    </div>
+                                    <button
+                                      className="status-select-btn"
+                                      style={{ background: '#3498db', opacity: isUploadingImage ? 0.7 : 1 }}
+                                      disabled={isUploadingImage}
+                                      onClick={() => updateOrderStatus(order.id, 'shipping')}
+                                    >
+                                      {isUploadingImage ? 'กำลังอัปโหลดรูปภาพและบันทึก...' : 'ดอกไม้จัดเสร็จแล้ว (เริ่มนำจัดส่ง)'}
+                                    </button>
+                                  </>
+                                )}
+
+                                {order.status === 'shipping' && (
+                                  <button
+                                    className="status-select-btn"
+                                    style={{ background: '#27ae60' }}
+                                    onClick={() => updateOrderStatus(order.id, 'delivering')}
+                                  >
+                                    ลูกค้าชำระเงินครบแล้ว (เริ่มนำจัดส่ง)
+                                  </button>
+                                )}
+
+                                {order.status === 'pending_final_verification' && (
+                                  <button
+                                    className="status-select-btn"
+                                    style={{ background: '#2ecc71' }}
+                                    onClick={() => updateOrderStatus(order.id, 'delivering')}
+                                  >
+                                    ยืนยันยอดเงินส่วนที่เหลือสำเร็จ (เริ่มนำจัดส่ง)
+                                  </button>
+                                )}
+
+                                {order.status === 'delivering' && (
+                                  <button
+                                    className="status-select-btn"
+                                    style={{ background: '#27ae60' }}
+                                    onClick={() => updateOrderStatus(order.id, 'completed')}
+                                  >
+                                    จัดส่งสำเร็จเรียบร้อย (ปิดออเดอร์)
+                                  </button>
+                                )}
+
+                                {order.status !== 'completed' && order.status !== 'cancelled' && (
+                                  <button
+                                    className="status-select-btn"
+                                    style={{ background: '#e74c3c' }}
+                                    onClick={() => {
+                                      (window as any).showBeautifulConfirm('คุณแน่ใจหรือไม่ว่าต้องการยกเลิกคำสั่งซื้อนี้?', 'ยืนยันการยกเลิกคำสั่งซื้อ').then((ok: boolean) => {
+                                        if (ok) {
+                                          updateOrderStatus(order.id, 'cancelled');
+                                        }
+                                      });
+                                    }}
+                                  >
+                                    ยกเลิกออเดอร์นี้
+                                  </button>
+                                )}
+
+                                {order.status === 'completed' && (
+                                  <div className="status-note success">
+                                    คำสั่งซื้อนี้เสร็จสิ้นอย่างสมบูรณ์แล้ว
+                                  </div>
+                                )}
+
+                                {order.status === 'cancelled' && (
+                                  <>
+                                    <div className="status-note danger">
+                                      คำสั่งซื้อนี้ถูกยกเลิกแล้ว
+                                    </div>
+                                    <button
+                                      className="status-select-btn"
+                                      style={{ background: '#7f8c8d', marginTop: '10px' }}
+                                      onClick={async () => {
+                                        const ok = await (window as any).showBeautifulConfirm('คุณแน่ใจหรือไม่ว่าต้องการลบออเดอร์นี้ออกจากฐานข้อมูลอย่างถาวร?', 'ยืนยันการลบถาวร');
+                                        if (ok) {
+                                          try {
+                                            await deleteDoc(doc(db, 'orders', order.id));
+                                            await (window as any).showBeautifulAlert('ลบข้อมูลออเดอร์ถาวรเรียบร้อยแล้ว!', 'success', 'ลบสำเร็จ');
+                                          } catch (err) {
+                                            console.error('Failed to delete order:', err);
+                                            await (window as any).showBeautifulAlert('เกิดข้อผิดพลาดในการลบข้อมูล', 'error', 'ผิดพลาด');
+                                          }
+                                        }
+                                      }}
+                                    >
+                                      🗑️ ลบข้อมูลถาวร (ลบออกจากดาต้าเบส)
+                                    </button>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+
+                          </div>
+                        </div>
+                      </div>
+                    );
                   })}
                 </div>
               )}
             </div>
-          )}
+          </>
+        )}
 
-          {adminViewMode === 'finance' && (
-            <div className="finance-section">
-              {/* Financial Dashboard Header */}
-              <div style={{ marginBottom: '25px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
-                <div>
-                  <h2 style={{ fontSize: '1.4rem', fontWeight: 700, color: '#5c4738', margin: 0 }}>บัญชีรายรับ-รายจ่าย</h2>
-                  <p style={{ color: '#a08a8e', fontSize: '0.85rem', margin: '4px 0 0' }}>บันทึกต้นทุนจัดซื้อวัตถุดิบ คำนวณกำไรสุทธิ และรายงานงบการเงินร้านแบบแยกเป็นรายเดือน</p>
-                </div>
-                <span style={{ background: '#fff', border: '1px solid #f2e2e5', color: '#db8a9e', padding: '8px 16px', borderRadius: '15px', fontSize: '0.9rem', fontWeight: 700 }}>
-                  รอบบัญชีเดือน: {formatMonthThai(selectedMonth)}
-                </span>
-              </div>
-
-              {/* Monthly Filter Bar */}
-              <div className="monthly-filter-bar">
-                <div className="month-select-label">
-                  <span>เลือกเดือนบัญชีเพื่อดูข้อมูลย้อนหลัง:</span>
-                </div>
-                <div className="month-pill-container">
-                  {availableMonths.map(m => (
-                    <button
-                      key={m}
-                      className={`month-pill-btn ${selectedMonth === m ? 'active' : ''}`}
-                      onClick={() => setSelectedMonth(m)}
-                    >
-                      {formatMonthThai(m)}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Profit & Loss Cards Summary */}
-              <div className="finance-summary">
-                {/* Revenue Card */}
-                <div className="fin-card revenue">
-                  <div className="fin-icon-container">💰</div>
-                  <div className="fin-info">
-                    <span className="fin-label">รายรับประจำเดือน (จากระบบ)</span>
-                    <span className="fin-value">{monthlySales.toLocaleString()} ฿</span>
-                  </div>
-                </div>
-
-                {/* Expense Card */}
-                <div className="fin-card expense">
-                  <div className="fin-icon-container">📉</div>
-                  <div className="fin-info">
-                    <span className="fin-label">รายจ่ายจัดซื้อประจำเดือน</span>
-                    <span className="fin-value">{monthlyExpensesTotal.toLocaleString()} ฿</span>
-                  </div>
-                </div>
-
-                {/* Profit/Loss Card */}
-                <div className={`fin-card ${monthlyNetProfit >= 0 ? 'profit' : 'loss'}`}>
-                  <div className="fin-icon-container">{monthlyNetProfit >= 0 ? '🎉' : '⚠️'}</div>
-                  <div className="fin-info">
-                    <span className="fin-label">กำไรสุทธิเดือนนี้</span>
-                    <span className="fin-value" style={{ color: monthlyNetProfit >= 0 ? '#27ae60' : '#e74c3c' }}>
-                      {monthlyNetProfit.toLocaleString()} ฿
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Salary & Profit Allocation Card */}
-              <div className="salary-sharing-card">
-                <h3 className="sharing-title">
-                  <span>💰</span> การจัดสรรรายได้ & ส่วนแบ่งเงินเดือน
-                </h3>
-                <p className="sharing-subtitle">
-                  ระบบคำนวณส่วนแบ่งอัตโนมัติจากกำไรสุทธิรอบบัญชี {formatMonthThai(selectedMonth)}
+        {adminViewMode === 'florist' && (
+          /* Florist View Mode */
+          <div className="florist-section">
+            <div className="dashboard-header">
+              <div className="dashboard-title-block">
+                <span className="dashboard-chip">Admin Overview</span>
+                <h1 className="dashboard-title">{viewTitleMap[adminViewMode]}</h1>
+                <p className="dashboard-subtitle">
+                  รายการออเดอร์ที่ชำระเงินเรียบร้อยแล้วและรอดำเนินการผลิต (เรียงตามกำหนดส่งด่วนที่สุดไว้บนสุด)
                 </p>
-
-                {monthlyNetProfit <= 0 ? (
-                  <div className="sharing-empty-state">
-                    <span>
-                      <img src="/images/Empty State Icon.png" alt="Empty State" style={{ width: '120px', height: 'auto', display: 'block', margin: '0 auto' }} />
-                    </span>
-                    <p>รอบบัญชีเดือนนี้ยังไม่มียอดกำไรสุทธิที่เป็นบวก จึงยังไม่มีการจัดสรรงบประมาณและส่วนแบ่งเงินเดือนค่ะ</p>
-                  </div>
-                ) : (
-                  <div className="sharing-content-layout">
-                    {/* Visual Allocation Bar */}
-                    <div className="allocation-bar-wrapper">
-                      <div className="allocation-bar">
-                        <div className="bar-segment segment-materials" style={{ width: '40%' }}>
-                          <span>40%</span>
-                        </div>
-                        <div className="bar-segment segment-savings" style={{ width: '30%' }}>
-                          <span>30%</span>
-                        </div>
-                        <div className="bar-segment segment-admin1" style={{ width: '15%' }}>
-                          <span>15%</span>
-                        </div>
-                        <div className="bar-segment segment-admin2" style={{ width: '15%' }}>
-                          <span>15%</span>
-                        </div>
-                      </div>
-
-                      {/* Allocation Legend */}
-                      <div className="bar-legend">
-                        <span className="legend-item"><span className="legend-dot dot-materials"></span> ทุนซื้อของ (40%)</span>
-                        <span className="legend-item"><span className="legend-dot dot-savings"></span> เงินเก็บร้าน (30%)</span>
-                        <span className="legend-item"><span className="legend-dot dot-admin1"></span> แอดมินคนที่ 1 (15%)</span>
-                        <span className="legend-item"><span className="legend-dot dot-admin2"></span> แอดมินคนที่ 2 (15%)</span>
-                      </div>
-                    </div>
-
-                    {/* Detailed Split Cards */}
-                    <div className="split-cards-grid">
-                      {/* 1. Purchasing Fund Card */}
-                      <div className="split-card fund-card purchasing">
-                        <div className="card-header-row">
-                          <span className="card-badge badge-purchasing">📦 ทุนหมุนเวียน 40%</span>
-                        </div>
-                        <div className="card-body">
-                          <span className="split-label">หักเก็บสะสมทุนซื้อของ</span>
-                          <span className="split-value">{(monthlyNetProfit * 0.40).toLocaleString('th-TH', { maximumFractionDigits: 2 })} ฿</span>
-                        </div>
-                      </div>
-
-                      {/* 2. Shop Savings Card */}
-                      <div className="split-card fund-card savings">
-                        <div className="card-header-row">
-                          <span className="card-badge badge-savings">🏦 เงินเก็บร้าน 30%</span>
-                        </div>
-                        <div className="card-body">
-                          <span className="split-label">หักเก็บเป็นเงินเก็บสะสมร้าน</span>
-                          <span className="split-value">{(monthlyNetProfit * 0.30).toLocaleString('th-TH', { maximumFractionDigits: 2 })} ฿</span>
-                        </div>
-                      </div>
-
-                      {/* 3. Admin 1 Salary Card */}
-                      <div className="split-card profile-card admin1">
-                        <div className="card-header-row">
-                          <span className="card-badge badge-admin1">👥 แอดมินคนที่ 1 (15%)</span>
-                        </div>
-                        <div className="profile-body">
-                          <div className="profile-avatar">👨‍💻</div>
-                          <div className="profile-info">
-                            <span className="profile-role">ผู้ดูแลระบบหลัก</span>
-                            <span className="profile-salary">{(monthlyNetProfit * 0.15).toLocaleString('th-TH', { maximumFractionDigits: 2 })} ฿</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* 4. Admin 2 Salary Card */}
-                      <div className="split-card profile-card admin2">
-                        <div className="card-header-row">
-                          <span className="card-badge badge-admin2">👥 แอดมินคนที่ 2 (15%)</span>
-                        </div>
-                        <div className="profile-body">
-                          <div className="profile-avatar">👩‍💻</div>
-                          <div className="profile-info">
-                            <span className="profile-role">ผู้ร่วมดูแลระบบ</span>
-                            <span className="profile-salary">{(monthlyNetProfit * 0.15).toLocaleString('th-TH', { maximumFractionDigits: 2 })} ฿</span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
               </div>
 
-              {/* Interactive Workspace Grid */}
-              <div className="finance-grid">
-                {/* Left Side: Expense Form Card */}
-                <div className="finance-form-card">
-                  <h3 className="form-title">
-                    <span style={{ fontSize: '1.2rem' }}>➕</span> บันทึกจัดซื้อ & รายจ่ายใหม่
-                  </h3>
-                  <div className="ai-receipt-card">
-                    <div className="ai-receipt-title">
-                      <span>🤖</span> อ่านใบเสร็จด้วย AI
-                    </div>
-                    <p className="ai-receipt-subtitle">
-                      อัปโหลดรูปใบเสร็จหรือสลิปได้หลายรูป แล้วให้ AI ช่วยกรอกฟอร์มให้อัตโนมัติ
-                    </p>
-                    <div className="ai-file-control">
-                      <span className="ai-file-button">วางรูป</span>
-                      <div className="ai-file-stack">
-                        <span className="ai-file-name">
-                          {receiptFileNames.length > 0 ? `เลือกแล้ว ${receiptFileNames.length} รูป` : 'ยังไม่ได้เลือกไฟล์'}
-                        </span>
-                      </div>
-                      <input
-                        type="file"
-                        className="ai-receipt-input"
-                        accept="image/*"
-                        multiple
-                        onChange={handleReceiptFileChange}
-                      />
-                    </div>
-                    {receiptFileNames.length > 0 && (
-                      <div style={{ marginTop: '0.6rem', fontSize: '0.85rem', color: '#7d5d4f' }}>
-                        {receiptFileNames.join(', ')}
-                      </div>
-                    )}
-                    {receiptPreviews.length > 0 && (
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '0.7rem' }}>
-                        {receiptPreviews.map((preview, index) => (
-                          <img
-                            key={`${receiptFileNames[index] || 'receipt'}-${index}`}
-                            src={preview}
-                            alt={`Receipt preview ${index + 1}`}
-                            className="ai-receipt-preview"
-                            style={{ marginTop: 0 }}
-                          />
-                        ))}
-                      </div>
-                    )}
-                    <div className="ai-receipt-actions">
-                      <button
-                        type="button"
-                        className="submit-btn"
-                        onClick={handleParseReceipt}
-                        disabled={isParsingReceipt}
-                      >
-                        {isParsingReceipt ? 'กำลังอ่านใบเสร็จ...' : 'อ่านใบเสร็จ'}
-                      </button>
-                      <button
-                        type="button"
-                        className="ghost-btn"
-                        onClick={() => {
-                          setReceiptPreviews([]);
-                          setReceiptDataUrls([]);
-                          setReceiptParseError(null);
-                          setReceiptFileNames([]);
-                        }}
-                        disabled={isParsingReceipt}
-                      >
-                        ล้างรูป
-                      </button>
-                    </div>
-                    {receiptParseError && (
-                      <div className="ai-error-text">{receiptParseError}</div>
-                    )}
-                  </div>
-                  <form onSubmit={handleAddExpense}>
-                    {expenseItems.map((item, idx) => (
-                      <div key={item.id} className="expense-item-card">
-                        <div className="expense-item-grid">
-                          <div className="form-group" style={{ marginBottom: 0 }}>
-                            <label className="form-label">คำอธิบายรายการ</label>
-                            <input
-                              type="text"
-                              className="form-input"
-                              placeholder="เช่น ซื้อดอกกุหลาบสด 200 ดอก"
-                              value={item.title}
-                              onChange={(e) => {
-                                const next = [...expenseItems];
-                                next[idx] = { ...next[idx], title: e.target.value };
-                                setExpenseItems(next);
-                              }}
-                              required
-                            />
-                          </div>
-                        </div>
+              <div className="dashboard-header-actions">
+                <div className="header-date-chip">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="8" y1="6" x2="21" y2="6" />
+                    <line x1="8" y1="12" x2="21" y2="12" />
+                    <line x1="8" y1="18" x2="21" y2="18" />
+                    <line x1="3" y1="6" x2="3.01" y2="6" />
+                    <line x1="3" y1="12" x2="3.01" y2="12" />
+                    <line x1="3" y1="18" x2="3.01" y2="18" />
+                  </svg>
+                  <span>ทั้งหมด: {preparingOrdersSorted.length} คิว</span>
+                </div>
+              </div>
+            </div>
 
-                        <div className="expense-item-subgrid">
-                          <div className="form-group" style={{ marginBottom: 0 }}>
-                            <label className="form-label">จำนวนเงิน (฿)</label>
-                            <input
-                              type="number"
-                              className="form-input"
-                              placeholder="0.00"
-                              min="1"
-                              step="any"
-                              value={item.amount}
-                              onChange={(e) => {
-                                const next = [...expenseItems];
-                                next[idx] = { ...next[idx], amount: e.target.value };
-                                setExpenseItems(next);
-                              }}
-                              required
-                            />
-                          </div>
-                          <div className="form-group" style={{ marginBottom: 0 }}>
-                            <label className="form-label">วันที่ทำรายการ</label>
-                            <div className="custom-date-container">
-                              <input
-                                type="date"
-                                className="form-input custom-date-input"
-                                value={item.date}
-                                onChange={(e) => {
-                                  const next = [...expenseItems];
-                                  next[idx] = { ...next[idx], date: e.target.value };
-                                  setExpenseItems(next);
-                                }}
-                                required
-                              />
-                              <div className="custom-date-icon-box">
-                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#db8a9e" strokeWidth="2.5">
-                                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-                                  <line x1="16" y1="2" x2="16" y2="6" />
-                                  <line x1="8" y1="2" x2="8" y2="6" />
-                                  <line x1="3" y1="10" x2="21" y2="10" />
-                                </svg>
+            {preparingOrdersSorted.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '70px 20px', background: '#fff', borderRadius: '24px', border: '1.5px dashed #fdf5f6', color: '#a08a8e', boxShadow: '0 10px 30px rgba(219, 138, 158, 0.02)' }}>
+                <div style={{ fontSize: '3.5rem', marginBottom: '20px' }}>
+                  <img src="/images/Empty State Icon.png" alt="Empty State" style={{ width: '120px', height: 'auto', display: 'block', margin: '0 auto' }} />
+                </div>
+                <h3 style={{ color: '#5c4738', fontWeight: 600, marginBottom: '8px', fontSize: '1.2rem' }}>ไม่มีออเดอร์ค้างในคิวจัดทำช่อดอกไม้</h3>
+                <p style={{ fontSize: '0.92rem', margin: 0 }}>ช่างจัดดอกไม้สามารถพักผ่อน หรือจัดเตรียมวัตถุดิบเพื่อรอคิวถัดไปได้เลยค่ะ!</p>
+              </div>
+            ) : (
+              <div className="florist-board animate-fade">
+                {preparingOrdersSorted.map((order) => {
+                  return (order.items || []).map((item: any, idx: number) => {
+                    const isGlitterRose = item.type === 'glitter_rose' || !!item.config;
+                    const cfg = item.config || null;
+                    const itemColors = cfg && cfg.selectedColors && cfg.selectedColors.length > 0
+                      ? cfg.selectedColors.map((id: string) => getRoseColorHex(id))
+                      : ['#db8a9e'];
+
+                    const cardKey = `${order.id}-${idx}`;
+
+                    // Extract translated config properties
+                    const colorsTrans = cfg && cfg.selectedColors
+                      ? (cfg.selectedColors || []).map((id: string) => ROSE_COLORS_MAP[id] || id).join(', ')
+                      : '';
+                    const layersTrans = cfg && cfg.selectedLayers
+                      ? (cfg.selectedLayers || []).map((id: string) => ROSE_LAYERS_MAP[id] || id).join(', ')
+                      : '';
+                    const paperTrans = cfg && cfg.selectedPaper
+                      ? (ROSE_PAPERS_MAP[cfg.selectedPaper] || cfg.selectedPaper)
+                      : '';
+                    const shapeTrans = cfg && cfg.selectedShape
+                      ? (ROSE_SHAPES_MAP[cfg.selectedShape] || cfg.selectedShape)
+                      : '';
+                    const decorationsTrans = cfg && cfg.selectedDecorations
+                      ? (cfg.selectedDecorations || []).map((id: string) => ROSE_DECORATIONS_MAP[id] || id).join(', ')
+                      : '';
+
+                    const deliveryDate = cfg?.deliveryDate || '';
+                    const deliveryTime = cfg?.deliveryTime ? `${cfg.deliveryTime} น.` : 'ไม่ระบุเวลา';
+                    const customerName = cfg?.customerName || 'ไม่ระบุ';
+                    const customerPhone = cfg?.customerPhone || 'ไม่ระบุเบอร์';
+                    const customerAddress = cfg?.customerAddress || 'จัดส่งตามที่อยู่ร้าน / หรือระบุทีหลัง';
+                    const additionalNote = cfg?.additionalNote?.trim?.() || '';
+                    const hasSpecDetails = Boolean(layersTrans || paperTrans || shapeTrans || decorationsTrans || cfg?.customerName || cfg?.deliveryDate || cfg?.additionalNote);
+
+                    return (
+                      <div key={cardKey} className="florist-card">
+                        <div className="florist-header">
+                          <div className="florist-header-main">
+                            <div className="florist-img-container">
+                              {isGlitterRose ? (
+                                <BasketIcon colors={itemColors} />
+                              ) : (
+                                '🛍️'
+                              )}
+                            </div>
+
+                            <div className="florist-info">
+                              <div className="florist-topbar">
+                                <div className="florist-title-block">
+                                  <div className="florist-meta-row">
+                                    <div className="florist-meta-chips">
+                                      {deliveryDate ? (
+                                        <span className="florist-meta-chip strong">ส่ง {deliveryDate}</span>
+                                      ) : null}
+                                    </div>
+                                  </div>
+                                  <div className="florist-item-name">
+                                    {item.name}
+                                    {isGlitterRose && <span className="florist-badge">Glitter Rose</span>}
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="florist-summary-strip">
+                                <span className="florist-summary-pill recipient"><strong>ผู้รับ:</strong> {customerName}</span>
+                                <span className="florist-summary-pill time"><strong>เวลา:</strong> {deliveryTime}</span>
+                                <span className="florist-summary-pill total"><strong>ยอด:</strong> {item.price?.toLocaleString() || 0} ฿</span>
                               </div>
                             </div>
                           </div>
                         </div>
 
-                        <div className="expense-item-actions">
-                          <span style={{ color: '#a08a8e', fontSize: '0.78rem' }}>รายการที่ {idx + 1}</span>
-                          {expenseItems.length > 1 && (
-                            <button
-                              type="button"
-                              className="remove-row-btn"
-                              onClick={() => {
-                                const next = expenseItems.filter((row) => row.id !== item.id);
-                                setExpenseItems(next.length ? next : expenseItems);
-                              }}
-                            >
-                              ลบรายการนี้
-                            </button>
-                          )}
+                        {cfg && hasSpecDetails ? (
+                          <div className="florist-details-box">
+                            <div className="florist-detail-card">
+                              <div className="detail-group-title">🌹 ช่อดอกกุหลาบ</div>
+                              <ul className="detail-item-list">
+                                <li>จำนวน: {cfg.selectedQty || 0} ดอก</li>
+                                {colorsTrans && <li>สี: {colorsTrans}</li>}
+                              </ul>
+                            </div>
+
+                            {(layersTrans || paperTrans || shapeTrans) && (
+                              <div className="florist-detail-card">
+                                <div className="detail-group-title">📜 องค์ประกอบการห่อ</div>
+                                <ul className="detail-item-list">
+                                  {layersTrans && <li>รองช่อ: {layersTrans}</li>}
+                                  {paperTrans && <li>กระดาษห่อ: {paperTrans}</li>}
+                                  {shapeTrans && <li>รูปทรง: {shapeTrans}</li>}
+                                </ul>
+                              </div>
+                            )}
+
+                            {decorationsTrans && (
+                              <div className="florist-detail-card">
+                                <div className="detail-group-title">✨ ของตกแต่งเพิ่มเติม</div>
+                                <ul className="detail-item-list">
+                                  <li>{decorationsTrans}</li>
+                                </ul>
+                              </div>
+                            )}
+
+                            {(cfg.customerName || cfg.deliveryDate || cfg.additionalNote) && (
+                              <div className="florist-detail-card">
+                                <div className="detail-group-title">📍 ข้อมูลการจัดส่ง</div>
+                                <ul className="detail-item-list">
+                                  <li>ผู้รับ: {customerName} ({customerPhone})</li>
+                                  <li>ที่อยู่: {customerAddress}</li>
+                                  {deliveryDate && <li>ส่ง: {deliveryDate} ({deliveryTime})</li>}
+                                  {additionalNote && <li style={{ color: '#db8a9e', fontWeight: 700 }}>โน้ต: "{additionalNote}"</li>}
+                                </ul>
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="florist-details-box" style={{ gridTemplateColumns: '1fr' }}>
+                            <div className="florist-empty-note">
+                              สินค้าปกติสำเร็จรูปของร้านค้า ไม่ต้องจัดทำสเปกพิเศษ
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="florist-bottom-row">
+                          <div className="florist-price-label">
+                            {item.price?.toLocaleString() || 0} ฿
+                          </div>
+
+                          <button
+                            className="florist-done-btn"
+                            onClick={() => updateOrderStatus(order.id, 'shipping')}
+                          >
+                            จัดทำช่อดอกไม้เสร็จเรียบร้อย
+                          </button>
                         </div>
                       </div>
-                    ))}
+                    );
+                  });
+                })}
+              </div>
+            )}
+          </div>
+        )}
 
-                    <button
-                      type="button"
-                      className="add-row-btn"
-                      onClick={() => {
-                        setExpenseItems((prev) => [
-                          ...prev,
-                          {
-                            id: crypto?.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random()),
-                            title: '',
-                            amount: '',
-                            date: new Date().toISOString().substring(0, 10)
-                          }
-                        ]);
-                      }}
-                    >
-                      เพิ่มบรรทัดรายการใหม่
-                    </button>
+        {adminViewMode === 'finance' && (
+          <div className="finance-section">
+            <div className="dashboard-header">
+              <div className="dashboard-title-block">
+                <span className="dashboard-chip">Admin Overview</span>
+                <h1 className="dashboard-title">{viewTitleMap[adminViewMode]}</h1>
+                <p className="dashboard-subtitle">
+                  บันทึกต้นทุนจัดซื้อวัตถุดิบ คำนวณกำไรสุทธิ และรายงานงบการเงินร้านแบบแยกเป็นรายเดือน
+                </p>
+              </div>
 
-                    <button
-                      type="submit"
-                      className="submit-btn"
-                      disabled={isSubmittingExpense}
-                    >
-                      {isSubmittingExpense ? 'กำลังบันทึกข้อมูล...' : 'บันทึกข้อมูลรายจ่าย'}
-                    </button>
-                  </form>
-                </div>
-
-                {/* Right Side: Ledger Table Ledger */}
-                <div className="ledger-card">
-                  <h3 className="form-title">
-                    <span style={{ fontSize: '1.2rem' }}>📜</span> สมุดบัญชีรายรับ-รายจ่าย ({formatMonthThai(selectedMonth)})
-                  </h3>
-
-                  {monthlyLedgerItems.length === 0 ? (
-                    <div style={{ textAlign: 'center', padding: '50px 20px', color: '#a08a8e' }}>
-                      <span style={{ fontSize: '2.5rem' }}>
-                        <img src="/images/Empty State Icon.png" alt="Empty State" style={{ width: '120px', height: 'auto', display: 'block', margin: '0 auto' }} />
-                      </span>
-                      <p style={{ marginTop: '10px', fontSize: '0.9rem' }}>ยังไม่มีรายการทางการเงินในรอบบัญชีเดือนนี้เลยค่ะ</p>
-                    </div>
-                  ) : (
-                    <div className="ledger-table-container">
-                      <table className="ledger-table">
-                        <thead>
-                          <tr>
-                            <th>วันที่</th>
-                            <th>ประเภท</th>
-                            <th>รายละเอียดรายการ</th>
-                            <th style={{ textAlign: 'right' }}>จำนวนเงิน</th>
-                            <th style={{ textAlign: 'center', width: '50px' }}>ลบ</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {monthlyLedgerItems.map((item) => {
-                            return (
-                              <tr key={item.id} className="ledger-row-item">
-                                <td style={{ fontWeight: 600, color: '#7a6352' }}>
-                                  {new Date(item.date).toLocaleDateString('th-TH', {
-                                    year: 'numeric',
-                                    month: 'short',
-                                    day: 'numeric'
-                                  })}
-                                </td>
-                                <td>
-                                  <span className={`fin-badge ${item.type}`}>
-                                    {item.type === 'revenue' ? '🟢 รายรับ' : '🔴 รายจ่าย'}
-                                  </span>
-                                </td>
-                                <td style={{ color: '#5c4738', fontSize: '0.85rem' }}>
-                                  {item.title}
-                                </td>
-                                <td className={`amount-text ${item.type}`} style={{ textAlign: 'right' }}>
-                                  {item.type === 'revenue' ? '+' : '-'}{item.amount.toLocaleString()} ฿
-                                </td>
-                                <td style={{ textAlign: 'center' }}>
-                                  {item.type === 'expense' ? (
-                                    <button
-                                      className="delete-btn-circle"
-                                      onClick={() => handleDeleteExpense(item.id)}
-                                      title="ลบรายการรายจ่ายนี้"
-                                    >
-                                      ✕
-                                    </button>
-                                  ) : (
-                                    <span style={{ color: '#ccc', fontSize: '0.75rem' }}>ระบบ</span>
-                                  )}
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
+              <div className="dashboard-header-actions">
+                <div className="header-date-chip">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M8 2v4" />
+                    <path d="M16 2v4" />
+                    <rect x="3" y="4" width="18" height="18" rx="2" />
+                    <path d="M3 10h18" />
+                  </svg>
+                  <span>รอบบัญชีเดือน: {formatMonthThai(selectedMonth)}</span>
                 </div>
               </div>
             </div>
-          )}
-        </div>
+
+            {/* Monthly Filter Bar */}
+            <div className="monthly-filter-bar">
+              <div className="month-select-label">
+                <span>เลือกเดือนบัญชีเพื่อดูข้อมูลย้อนหลัง:</span>
+              </div>
+              <div className="month-pill-container">
+                {availableMonths.map(m => (
+                  <button
+                    key={m}
+                    className={`month-pill-btn ${selectedMonth === m ? 'active' : ''}`}
+                    onClick={() => setSelectedMonth(m)}
+                  >
+                    {formatMonthThai(m)}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Profit & Loss Cards Summary */}
+            <div className="stats-grid finance-summary">
+              {financeCards.map((card) => (
+                <div key={card.key} className={`stat-card ${card.cardClass}`}>
+                  <div className="stat-info">
+                    <span className="stat-label">{card.label}</span>
+                    <span className="stat-value" style={card.valueColor ? { color: card.valueColor } : undefined}>
+                      {card.value}
+                    </span>
+                    <span className="stat-detail" style={{ color: card.accent }}>
+                      <span>{card.detailPrefix}</span>
+                      <span>{card.detail}</span>
+                    </span>
+                  </div>
+                  <div
+                    className="stat-ring"
+                    style={{ ['--accent' as any]: card.accent, ['--p' as any]: card.progressPct } as React.CSSProperties}
+                    aria-hidden="true"
+                  >
+                    <span className="stat-ring-label">
+                      {card.ringPrefix}
+                      {card.ringLabelPct}%
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Salary & Profit Allocation Card */}
+            <div className="salary-sharing-card">
+              <h3 className="sharing-title">
+                <span>💰</span> การจัดสรรรายได้ & ส่วนแบ่งเงินเดือน
+              </h3>
+              <p className="sharing-subtitle">
+                ระบบคำนวณส่วนแบ่งอัตโนมัติจากกำไรสุทธิรอบบัญชี {formatMonthThai(selectedMonth)}
+              </p>
+
+              {monthlyNetProfit <= 0 ? (
+                <div className="sharing-empty-state">
+                  <span>
+                    <img src="/images/Empty State Icon.png" alt="Empty State" style={{ width: '120px', height: 'auto', display: 'block', margin: '0 auto' }} />
+                  </span>
+                  <p>รอบบัญชีเดือนนี้ยังไม่มียอดกำไรสุทธิที่เป็นบวก จึงยังไม่มีการจัดสรรงบประมาณและส่วนแบ่งเงินเดือนค่ะ</p>
+                </div>
+              ) : (
+                <div className="sharing-content-layout">
+                  {/* Visual Allocation Bar */}
+                  <div className="allocation-bar-wrapper">
+                    <div className="allocation-bar">
+                      <div className="bar-segment segment-materials" style={{ width: '40%' }}>
+                        <span>40%</span>
+                      </div>
+                      <div className="bar-segment segment-savings" style={{ width: '30%' }}>
+                        <span>30%</span>
+                      </div>
+                      <div className="bar-segment segment-admin1" style={{ width: '15%' }}>
+                        <span>15%</span>
+                      </div>
+                      <div className="bar-segment segment-admin2" style={{ width: '15%' }}>
+                        <span>15%</span>
+                      </div>
+                    </div>
+
+                    {/* Allocation Legend */}
+                    <div className="bar-legend">
+                      <span className="legend-item"><span className="legend-dot dot-materials"></span> ทุนซื้อของ (40%)</span>
+                      <span className="legend-item"><span className="legend-dot dot-savings"></span> เงินเก็บร้าน (30%)</span>
+                      <span className="legend-item"><span className="legend-dot dot-admin1"></span> แอดมินคนที่ 1 (15%)</span>
+                      <span className="legend-item"><span className="legend-dot dot-admin2"></span> แอดมินคนที่ 2 (15%)</span>
+                    </div>
+                  </div>
+
+                  {/* Detailed Split Cards */}
+                  <div className="split-cards-grid">
+                    {/* 1. Purchasing Fund Card */}
+                    <div className="split-card fund-card purchasing">
+                      <div className="card-header-row">
+                        <span className="card-badge badge-purchasing">📦 ทุนหมุนเวียน 40%</span>
+                      </div>
+                      <div className="card-body">
+                        <span className="split-label">หักเก็บสะสมทุนซื้อของ</span>
+                        <span className="split-value">{(monthlyNetProfit * 0.40).toLocaleString('th-TH', { maximumFractionDigits: 2 })} ฿</span>
+                      </div>
+                    </div>
+
+                    {/* 2. Shop Savings Card */}
+                    <div className="split-card fund-card savings">
+                      <div className="card-header-row">
+                        <span className="card-badge badge-savings">🏦 เงินเก็บร้าน 30%</span>
+                      </div>
+                      <div className="card-body">
+                        <span className="split-label">หักเก็บเป็นเงินเก็บสะสมร้าน</span>
+                        <span className="split-value">{(monthlyNetProfit * 0.30).toLocaleString('th-TH', { maximumFractionDigits: 2 })} ฿</span>
+                      </div>
+                    </div>
+
+                    {/* 3. Admin 1 Salary Card */}
+                    <div className="split-card profile-card admin1">
+                      <div className="card-header-row">
+                        <span className="card-badge badge-admin1">👥 แอดมินคนที่ 1 (15%)</span>
+                      </div>
+                      <div className="profile-body">
+                        <div className="profile-avatar">👨‍💻</div>
+                        <div className="profile-info">
+                          <span className="profile-role">ผู้ดูแลระบบหลัก</span>
+                          <span className="profile-salary">{(monthlyNetProfit * 0.15).toLocaleString('th-TH', { maximumFractionDigits: 2 })} ฿</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 4. Admin 2 Salary Card */}
+                    <div className="split-card profile-card admin2">
+                      <div className="card-header-row">
+                        <span className="card-badge badge-admin2">👥 แอดมินคนที่ 2 (15%)</span>
+                      </div>
+                      <div className="profile-body">
+                        <div className="profile-avatar">👩‍💻</div>
+                        <div className="profile-info">
+                          <span className="profile-role">ผู้ร่วมดูแลระบบ</span>
+                          <span className="profile-salary">{(monthlyNetProfit * 0.15).toLocaleString('th-TH', { maximumFractionDigits: 2 })} ฿</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Interactive Workspace Grid */}
+            <div className="finance-grid">
+              {/* Left Side: Expense Form Card */}
+              <div className="finance-form-card">
+                <h3 className="form-title">
+                  <span style={{ fontSize: '1.2rem' }}>➕</span> บันทึกจัดซื้อ & รายจ่ายใหม่
+                </h3>
+                <div className="ai-receipt-card">
+                  <div className="ai-receipt-title">
+                    <span>🤖</span> อ่านใบเสร็จด้วย AI
+                  </div>
+                  <p className="ai-receipt-subtitle">
+                    อัปโหลดรูปใบเสร็จหรือสลิปได้หลายรูป แล้วให้ AI ช่วยกรอกฟอร์มให้อัตโนมัติ
+                  </p>
+                  <div className="ai-file-control">
+                    <span className="ai-file-button">วางรูป</span>
+                    <div className="ai-file-stack">
+                      <span className="ai-file-name">
+                        {receiptFileNames.length > 0 ? `เลือกแล้ว ${receiptFileNames.length} รูป` : 'ยังไม่ได้เลือกไฟล์'}
+                      </span>
+                    </div>
+                    <input
+                      type="file"
+                      className="ai-receipt-input"
+                      accept="image/*"
+                      multiple
+                      onChange={handleReceiptFileChange}
+                    />
+                  </div>
+                  {receiptFileNames.length > 0 && (
+                    <div style={{ marginTop: '0.6rem', fontSize: '0.85rem', color: '#7d5d4f' }}>
+                      {receiptFileNames.join(', ')}
+                    </div>
+                  )}
+                  {receiptPreviews.length > 0 && (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '0.7rem' }}>
+                      {receiptPreviews.map((preview, index) => (
+                        <img
+                          key={`${receiptFileNames[index] || 'receipt'}-${index}`}
+                          src={preview}
+                          alt={`Receipt preview ${index + 1}`}
+                          className="ai-receipt-preview"
+                          style={{ marginTop: 0 }}
+                        />
+                      ))}
+                    </div>
+                  )}
+                  <div className="ai-receipt-actions">
+                    <button
+                      type="button"
+                      className="submit-btn"
+                      onClick={handleParseReceipt}
+                      disabled={isParsingReceipt}
+                    >
+                      {isParsingReceipt ? 'กำลังอ่านใบเสร็จ...' : 'อ่านใบเสร็จ'}
+                    </button>
+                    <button
+                      type="button"
+                      className="ghost-btn"
+                      onClick={() => {
+                        setReceiptPreviews([]);
+                        setReceiptDataUrls([]);
+                        setReceiptParseError(null);
+                        setReceiptFileNames([]);
+                      }}
+                      disabled={isParsingReceipt}
+                    >
+                      ล้างรูป
+                    </button>
+                  </div>
+                  {receiptParseError && (
+                    <div className="ai-error-text">{receiptParseError}</div>
+                  )}
+                </div>
+                <form onSubmit={handleAddExpense}>
+                  {expenseItems.map((item, idx) => (
+                    <div key={item.id} className="expense-item-card">
+                      <div className="expense-item-grid">
+                        <div className="form-group" style={{ marginBottom: 0 }}>
+                          <label className="form-label">คำอธิบายรายการ</label>
+                          <input
+                            type="text"
+                            className="form-input"
+                            placeholder="เช่น ซื้อดอกกุหลาบสด 200 ดอก"
+                            value={item.title}
+                            onChange={(e) => {
+                              const next = [...expenseItems];
+                              next[idx] = { ...next[idx], title: e.target.value };
+                              setExpenseItems(next);
+                            }}
+                            required
+                          />
+                        </div>
+                      </div>
+
+                      <div className="expense-item-subgrid">
+                        <div className="form-group" style={{ marginBottom: 0 }}>
+                          <label className="form-label">จำนวนเงิน</label>
+                          <input
+                            type="number"
+                            className="form-input"
+                            placeholder="0.00"
+                            min="1"
+                            step="any"
+                            value={item.amount}
+                            onChange={(e) => {
+                              const next = [...expenseItems];
+                              next[idx] = { ...next[idx], amount: e.target.value };
+                              setExpenseItems(next);
+                            }}
+                            required
+                          />
+                        </div>
+                        <div className="form-group" style={{ marginBottom: 0 }}>
+                          <label className="form-label">วันที่ทำรายการ</label>
+                          <div className="custom-date-container">
+                            <input
+                              type="date"
+                              className="form-input custom-date-input"
+                              value={item.date}
+                              onChange={(e) => {
+                                const next = [...expenseItems];
+                                next[idx] = { ...next[idx], date: e.target.value };
+                                setExpenseItems(next);
+                              }}
+                              required
+                            />
+                            <div className="custom-date-icon-box">
+                              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#db8a9e" strokeWidth="2.5">
+                                <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                                <line x1="16" y1="2" x2="16" y2="6" />
+                                <line x1="8" y1="2" x2="8" y2="6" />
+                                <line x1="3" y1="10" x2="21" y2="10" />
+                              </svg>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="expense-item-actions">
+                        <span style={{ color: '#a08a8e', fontSize: '0.78rem' }}>รายการที่ {idx + 1}</span>
+                        {expenseItems.length > 1 && (
+                          <button
+                            type="button"
+                            className="remove-row-btn"
+                            onClick={() => {
+                              const next = expenseItems.filter((row) => row.id !== item.id);
+                              setExpenseItems(next.length ? next : expenseItems);
+                            }}
+                          >
+                            ลบรายการนี้
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+
+                  <button
+                    type="button"
+                    className="add-row-btn"
+                    onClick={() => {
+                      setExpenseItems((prev) => [
+                        ...prev,
+                        {
+                          id: crypto?.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random()),
+                          title: '',
+                          amount: '',
+                          date: new Date().toISOString().substring(0, 10)
+                        }
+                      ]);
+                    }}
+                  >
+                    เพิ่มบรรทัดรายการใหม่
+                  </button>
+
+                  <button
+                    type="submit"
+                    className="submit-btn"
+                    disabled={isSubmittingExpense}
+                  >
+                    {isSubmittingExpense ? 'กำลังบันทึกข้อมูล...' : 'บันทึกข้อมูลรายจ่าย'}
+                  </button>
+                </form>
+              </div>
+
+              {/* Right Side: Ledger Table Ledger */}
+              <div className="ledger-card">
+                <h3 className="form-title">
+                  <span style={{ fontSize: '1.2rem' }}>📜</span> สมุดบัญชีรายรับ-รายจ่าย ({formatMonthThai(selectedMonth)})
+                </h3>
+
+                {monthlyLedgerItems.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '50px 20px', color: '#a08a8e' }}>
+                    <span style={{ fontSize: '2.5rem' }}>
+                      <img src="/images/Empty State Icon.png" alt="Empty State" style={{ width: '120px', height: 'auto', display: 'block', margin: '0 auto' }} />
+                    </span>
+                    <p style={{ marginTop: '10px', fontSize: '0.9rem' }}>ยังไม่มีรายการทางการเงินในรอบบัญชีเดือนนี้เลยค่ะ</p>
+                  </div>
+                ) : (
+                  <div className="ledger-table-container">
+                    <table className="ledger-table">
+                      <thead>
+                        <tr>
+                          <th>วันที่</th>
+                          <th>ประเภท</th>
+                          <th>รายละเอียดรายการ</th>
+                          <th style={{ textAlign: 'right' }}>จำนวนเงิน</th>
+                          <th style={{ textAlign: 'center', width: '50px' }}>ลบ</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {monthlyLedgerItems.map((item) => {
+                          return (
+                            <tr key={item.id} className="ledger-row-item">
+                              <td style={{ fontWeight: 600, color: '#7a6352' }}>
+                                {new Date(item.date).toLocaleDateString('th-TH', {
+                                  year: 'numeric',
+                                  month: 'short',
+                                  day: 'numeric'
+                                })}
+                              </td>
+                              <td>
+                                <span className={`fin-badge ${item.type}`}>
+                                  {item.type === 'revenue' ? '🟢 รายรับ' : '🔴 รายจ่าย'}
+                                </span>
+                              </td>
+                              <td style={{ color: '#5c4738', fontSize: '0.85rem' }}>
+                                {item.title}
+                              </td>
+                              <td className={`amount-text ${item.type}`} style={{ textAlign: 'right' }}>
+                                {item.type === 'revenue' ? '+' : '-'}{item.amount.toLocaleString()} ฿
+                              </td>
+                              <td style={{ textAlign: 'center' }}>
+                                {item.type === 'expense' ? (
+                                  <button
+                                    className="delete-btn-circle"
+                                    onClick={() => handleDeleteExpense(item.id)}
+                                    title="ลบรายการรายจ่ายนี้"
+                                  >
+                                    ✕
+                                  </button>
+                                ) : (
+                                  <span style={{ color: '#ccc', fontSize: '0.75rem' }}>ระบบ</span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

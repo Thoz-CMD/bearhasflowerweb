@@ -250,7 +250,10 @@ export default function Home() {
           const cart = JSON.parse(localStorage.getItem(CART_KEY) || '[]');
           const count = cart.reduce((acc: number, item: any) => acc + (item.qty || 1), 0);
           const cartEl = document.getElementById('cart-count');
-          if (cartEl) cartEl.textContent = count;
+          if (cartEl) {
+            cartEl.textContent = String(count);
+            (cartEl as HTMLElement).style.display = count > 0 ? 'flex' : 'none';
+          }
         } catch (e) { }
       };
 
@@ -417,6 +420,80 @@ export default function Home() {
       const cartBtn = document.getElementById('nav-cart-btn');
       if (cartBtn) cartBtn.onclick = () => { window.location.href = '/cart'; };
 
+      // Listeners for Notification Bell
+      const notifBtn = document.getElementById('nav-notif-btn');
+      const notifDropdown = document.getElementById('notif-dropdown');
+      if (notifBtn && notifDropdown) {
+        notifBtn.onclick = (e) => {
+          if ((e.target as HTMLElement).closest('#notif-dropdown')) return;
+          const isHidden = notifDropdown.style.display === 'none';
+          notifDropdown.style.display = isHidden ? 'block' : 'none';
+          
+          // close profile dropdown if open
+          const profileDropdown = document.getElementById('profile-dropdown');
+          if(profileDropdown) profileDropdown.classList.remove('show');
+        };
+      }
+
+      const handleNotifEvent = (e: any) => {
+        const notifs = e.detail || [];
+        const unreadNotifs = notifs.filter((n: any) => n.status !== 'read');
+        const countEl = document.getElementById('notif-count');
+        if(countEl) {
+          countEl.textContent = String(unreadNotifs.length);
+          countEl.style.display = unreadNotifs.length > 0 ? 'flex' : 'none';
+        }
+        const container = document.getElementById('notif-list-container');
+        if(container) {
+          if(notifs.length === 0) {
+            container.innerHTML = '<div style="padding:20px; text-align:center; color:#a08a8e; font-size:0.9rem;">ไม่มีการแจ้งเตือน</div>';
+          } else {
+            container.innerHTML = notifs.map((n: any) => {
+              const isRead = n.status === 'read';
+              const titleColor = isRead ? '#a08a8e' : '#db8a9e';
+              const textColor = isRead ? '#a08a8e' : '#5c4738';
+              const bgStyle = isRead ? 'background:#fafafa;' : 'background:#fff;';
+              const hoverOutBg = isRead ? '#fafafa' : '#fff';
+              const dateStr = new Date(n.createdAt?.seconds * 1000 || Date.now()).toLocaleString('th-TH', { 
+                day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' 
+              });
+              const imgUrl = n.imageUrl || '/images/logo-placeholder.png';
+
+              return '<div class="notif-item" onclick="handleNotifClick(&quot;' + n.id + '&quot;)" style="display:flex; gap:12px; padding:16px; border-bottom:1px solid #fdf5f6; cursor:pointer; transition:all 0.2s; align-items:center;' + bgStyle + '" onmouseover="this.style.background=&quot;#fffafb&quot;; this.style.transform=&quot;translateY(-1px)&quot;" onmouseout="this.style.background=&quot;' + hoverOutBg + '&quot;; this.style.transform=&quot;none&quot;">' +
+                '<div style="flex-shrink:0; width:52px; height:52px; border-radius:12px; overflow:hidden; border:1px solid #fdf5f6; position:relative; box-shadow:0 2px 8px rgba(219,138,158,0.1);">' +
+                  '<img src="'+imgUrl+'" style="width:100%; height:100%; object-fit:cover;" />' +
+                  (!isRead ? '<div style="position:absolute; top:0px; right:0px; width:12px; height:12px; background:#e74c3c; border-radius:50%; border:2px solid #fff;"></div>' : '') +
+                '</div>' +
+                '<div style="flex-grow:1; display:flex; flex-direction:column; gap:4px; min-width:0;">' +
+                  '<div style="font-weight:700; color:' + titleColor + '; font-size:0.95rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + (n.title || '') + '</div>' +
+                  '<div style="color:' + textColor + '; font-size:0.85rem; line-height:1.4; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;">' + (n.message || '') + '</div>' +
+                  '<div style="color:#a08a8e; font-size:0.75rem; font-weight:500;">' + dateStr + '</div>' +
+                '</div>' +
+                '<div style="flex-shrink:0; color:#db8a9e; opacity:' + (isRead ? '0.4' : '1') + '; display:flex; align-items:center; justify-content:center; width:28px; height:28px; border-radius:50%; background:' + (isRead ? 'transparent' : '#fffafb') + ';">' +
+                  '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">' +
+                    '<path d="M9 18l6-6-6-6"/>' +
+                  '</svg>' +
+                '</div>' +
+              '</div>';
+            }).join('');
+          }
+        }
+      };
+      
+      window.addEventListener('bearhasflower-notifs', handleNotifEvent);
+
+      (window as any).handleNotifClick = async (notifId: string) => {
+        try {
+          const { db } = await import('@/lib/firebase');
+          const { doc, updateDoc } = await import('firebase/firestore');
+          await updateDoc(doc(db, 'notifications', notifId), { status: 'read' });
+          window.location.href = '/cart?tab=history';
+        } catch(e) {
+          console.error(e);
+          window.location.href = '/cart?tab=history';
+        }
+      };
+
       // ===== Hamburger / Drawer =====
       const hamburger = document.getElementById('hamburger-btn');
       const drawer = document.getElementById('mobile-drawer');
@@ -468,7 +545,6 @@ export default function Home() {
           const target = document.querySelector(href);
           if (target) target.scrollIntoView({ behavior: 'smooth' });
 
-          // หากกดลิงก์ประเภทเลื่อนหน้าในหน้าต่างเมนูสไลด์ (Drawer) ให้ปิด Drawer ด้วย
           if (this.classList.contains('drawer-link')) {
             const drawer = document.getElementById('mobile-drawer');
             const hamburger = document.getElementById('hamburger-btn');
@@ -490,19 +566,25 @@ export default function Home() {
         if (profileDropdown && profileBtn && !profileDropdown.contains(e.target) && !profileBtn.contains(e.target)) {
           profileDropdown.classList.remove('show');
         }
+        if (notifDropdown && notifBtn && !notifDropdown.contains(e.target) && !notifBtn.contains(e.target)) {
+          notifDropdown.style.display = 'none';
+        }
       };
+      
       if (profileBtn && profileDropdown) {
         profileBtn.onclick = (e) => {
           e.stopPropagation();
           profileDropdown.classList.toggle('show');
+          if(notifDropdown) notifDropdown.style.display = 'none';
         };
-        document.addEventListener('click', clickOutsideHandler);
       }
+      document.addEventListener('click', clickOutsideHandler);
 
       // Cleanup on re-run
       return () => {
         clearInterval(slideshowInterval);
         document.removeEventListener('click', clickOutsideHandler);
+        window.removeEventListener('bearhasflower-notifs', handleNotifEvent);
       };
     };
 
@@ -542,6 +624,23 @@ export default function Home() {
         <li><a href="/contact">ติดต่อ</a></li>
       </ul>
       <div style="display:flex;align-items:center;gap:4px;">
+        
+        <!-- Notification Bell -->
+        <div class="nav-cart" id="nav-notif-btn" title="การแจ้งเตือน" style="position:relative;">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+            <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+          </svg>
+          <span class="nav-cart-badge" id="notif-count" style="display:none;background:#e74c3c;">0</span>
+          
+          <div class="profile-dropdown" id="notif-dropdown" style="display:none; position:absolute; top:40px; right:-50px; background:#fff; border-radius:12px; box-shadow:0 10px 25px rgba(0,0,0,0.1); width:300px; max-height:400px; overflow-y:auto; z-index:100; border: 1px solid #fdf5f6; cursor:default;">
+            <div style="padding:15px; font-weight:700; border-bottom:1px solid #fdf5f6; color:#5c4738;">การแจ้งเตือน</div>
+            <div id="notif-list-container">
+              <div style="padding:20px; text-align:center; color:#a08a8e; font-size:0.9rem;">ไม่มีการแจ้งเตือน</div>
+            </div>
+          </div>
+        </div>
+
         <div class="nav-cart" id="nav-cart-btn" title="ตะกร้าสินค้า">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
             stroke-linecap="round" stroke-linejoin="round">
@@ -549,7 +648,7 @@ export default function Home() {
             <line x1="3" y1="6" x2="21" y2="6" />
             <path d="M16 10a4 4 0 0 1-8 0" />
           </svg>
-          <span class="nav-cart-badge" id="cart-count">0</span>
+          <span class="nav-cart-badge" id="cart-count" style="display:none">0</span>
         </div>
 
         <!-- Profile Menu -->
@@ -744,6 +843,11 @@ export default function Home() {
         </div>
         <div class="slide">
           <div class="slide-label">Wire Velvet Flowers</div>
+
+
+
+
+          
         </div>
         <div class="slide">
           <div class="slide-label">Bespoke Bouquets</div>
