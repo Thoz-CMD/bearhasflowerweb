@@ -89,7 +89,7 @@ export async function POST(req: Request) {
         'Content-Type': contentType,
         'Content-Length': buffer.length.toString(),
       },
-      body: buffer,
+      body: buffer.buffer,
     });
 
     if (!uploadRes.ok) {
