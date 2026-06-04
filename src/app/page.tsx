@@ -915,7 +915,7 @@ export default function Home() {
         </div>
         <div class="slide" onclick="window.location.href='/login'" style="cursor:pointer;">
         </div>
-        <div class="slide">
+        <div class="slide" onclick="window.open('https://line.me/ti/g2/DWiHGO3pg2QUjM0ikHEFrqB4AddZTnsjTbjmrA?utm_source=invitation&utm_medium=link_copy&utm_campaign=default', '_blank')" style="cursor:pointer;">
         </div>
       </div>
       <button class="banner-btn prev" id="btn-prev" onclick="moveSlide(-1)" aria-label="ก่อนหน้า">&#10094;</button>
