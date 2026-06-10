@@ -138,12 +138,14 @@ function AdminPageContent() {
     title: string;
     amount: string;
     date: string;
+    type: 'expense' | 'income';
   }>>(() => [
     {
       id: crypto?.randomUUID ? crypto.randomUUID() : String(Date.now()),
       title: '',
       amount: '',
-      date: new Date().toISOString().substring(0, 10)
+      date: new Date().toISOString().substring(0, 10),
+      type: 'expense'
     }
   ]);
   const [receiptPreviews, setReceiptPreviews] = useState<string[]>([]);
@@ -650,7 +652,8 @@ function AdminPageContent() {
           id: crypto?.randomUUID ? crypto.randomUUID() : String(Date.now()),
           title: '',
           amount: '',
-          date: new Date().toISOString().substring(0, 10)
+          date: new Date().toISOString().substring(0, 10),
+          type: 'expense'
         }
       ]);
       await (window as any).showBeautifulAlert('บันทึกรายจ่ายสำเร็จเรียบร้อยแล้วค่ะ!', 'success', 'บันทึกสำเร็จ');
@@ -743,7 +746,8 @@ function AdminPageContent() {
             id: crypto?.randomUUID ? crypto.randomUUID() : String(Date.now()),
             title: String(data?.title || ''),
             amount: data?.amount !== undefined && data?.amount !== null ? String(data.amount) : '',
-            date: String(data?.date || expenseDate)
+            date: String(data?.date || expenseDate),
+            type: 'expense'
           }
         ]);
       }
@@ -4841,7 +4845,31 @@ function AdminPageContent() {
                     <div key={item.id} className="expense-item-card">
                       <div className="expense-item-grid">
                         <div className="form-group" style={{ marginBottom: 0 }}>
-                          <label className="form-label">คำอธิบายรายการ</label>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                            <label className="form-label" style={{ marginBottom: 0 }}>คำอธิบายรายการ</label>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const next = [...expenseItems];
+                                next[idx] = { ...next[idx], type: item.type === 'expense' ? 'income' : 'expense' };
+                                setExpenseItems(next);
+                              }}
+                              style={{
+                                padding: '8px 16px',
+                                borderRadius: '8px',
+                                border: 'none',
+                                backgroundColor: item.type === 'income' ? '#23C560' : '#F14344',
+                                color: '#ffffff',
+                                fontSize: '0.75rem',
+                                fontWeight: '600',
+                                cursor: 'pointer',
+                                transition: 'all 0.2s',
+                                minWidth: '60px'
+                              }}
+                            >
+                              {item.type === 'income' ? 'รับ' : 'จ่าย'}
+                            </button>
+                          </div>
                           <input
                             type="text"
                             className="form-input"
@@ -4929,7 +4957,8 @@ function AdminPageContent() {
                           id: crypto?.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random()),
                           title: '',
                           amount: '',
-                          date: new Date().toISOString().substring(0, 10)
+                          date: new Date().toISOString().substring(0, 10),
+                          type: 'expense'
                         }
                       ]);
                     }}
