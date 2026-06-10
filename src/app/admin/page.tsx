@@ -640,6 +640,7 @@ function AdminPageContent() {
         amount: parseFloat(item.amount),
         category: 'other',
         date: item.date,
+        type: item.type || 'expense',
         createdAt: serverTimestamp ? serverTimestamp() : new Date().toISOString(),
         recordedBy: user?.phoneNumber || user?.email || 'Admin'
       })));
@@ -656,10 +657,10 @@ function AdminPageContent() {
           type: 'expense'
         }
       ]);
-      await (window as any).showBeautifulAlert('บันทึกรายจ่ายสำเร็จเรียบร้อยแล้วค่ะ!', 'success', 'บันทึกสำเร็จ');
+      await (window as any).showBeautifulAlert('บันทึกรายการสำเร็จเรียบร้อยแล้วค่ะ!', 'success', 'บันทึกสำเร็จ');
     } catch (err) {
       console.error("Failed to add expense:", err);
-      await (window as any).showBeautifulAlert('เกิดข้อผิดพลาดในการบันทึกรายจ่าย', 'error', 'เกิดข้อผิดพลาด');
+      await (window as any).showBeautifulAlert('เกิดข้อผิดพลาดในการบันทึกรายการ', 'error', 'เกิดข้อผิดพลาด');
     } finally {
       setIsSubmittingExpense(false);
     }
@@ -1055,7 +1056,10 @@ function AdminPageContent() {
   // Statistics calculations
   const totalSales = orders
     .filter(o => o.status !== 'cancelled')
-    .reduce((acc, o) => acc + (o.total || 0), 0);
+    .reduce((acc, o) => acc + (o.total || 0), 0) +
+    expenses
+    .filter(e => e.type === 'income')
+    .reduce((acc, e) => acc + (e.amount || 0), 0);
   const pendingCount = orders.filter(o => o.status === 'pending_verification').length;
   const preparingCount = orders.filter(o => o.status === 'preparing').length;
   const completedCount = orders.filter(o => o.status === 'completed').length;
@@ -1121,7 +1125,9 @@ function AdminPageContent() {
     ? (currentMonthSales > 0 ? 100 : 0)
     : ((currentMonthSales - previousMonthSales) / previousMonthSales) * 100;
 
-  const totalExpenses = expenses.reduce((acc, exp) => acc + (exp.amount || 0), 0);
+  const totalExpenses = expenses
+    .filter(e => e.type === 'expense')
+    .reduce((acc, e) => acc + (e.amount || 0), 0);
   const netProfit = totalSales - totalExpenses;
   const safeOrderCount = Math.max(orders.length, 1);
   const todayLabel = new Intl.DateTimeFormat('th-TH', {
@@ -1238,9 +1244,14 @@ function AdminPageContent() {
   // Calculate monthly stats
   const monthlySales = monthlyOrders
     .filter(o => o.status !== 'cancelled')
-    .reduce((acc, o) => acc + (o.total || 0), 0);
+    .reduce((acc, o) => acc + (o.total || 0), 0) +
+    monthlyExpenses
+    .filter(e => e.type === 'income')
+    .reduce((acc, e) => acc + (e.amount || 0), 0);
 
-  const monthlyExpensesTotal = monthlyExpenses.reduce((acc, exp) => acc + (exp.amount || 0), 0);
+  const monthlyExpensesTotal = monthlyExpenses
+    .filter(e => e.type === 'expense')
+    .reduce((acc, e) => acc + (e.amount || 0), 0);
   const monthlyNetProfit = monthlySales - monthlyExpensesTotal;
   const previousMonthFinance = getPreviousYearMonth(selectedMonth);
   const previousMonthSalesFinance = previousMonthFinance
@@ -1257,7 +1268,7 @@ function AdminPageContent() {
   const financeCards = [
     {
       key: 'finance-sales',
-      label: 'รายรับประจำเดือน (จากระบบ)',
+      label: 'รายรับประจำเดือน',
       value: `${monthlySales.toLocaleString()} ฿`,
       detail: `${salesFinanceGrowth.detailLabel} ${salesFinanceGrowth.formattedPct}% จาก${previousMonthLabelFinance}`,
       accent: '#ff5f87',
@@ -1323,7 +1334,7 @@ function AdminPageContent() {
       id: e.id,
       title: e.title,
       amount: e.amount || 0,
-      type: 'expense',
+      type: e.type || 'expense',
       category: e.category,
       date: e.date
     }))
@@ -3502,6 +3513,12 @@ function AdminPageContent() {
           color: #2ecc71;
         }
 
+        .fin-badge.income {
+          background: #eafaf1;
+          color: #2ecc71;
+          padding: 4px 13px;
+        }
+
         .fin-badge.expense {
           background: #fdedec;
           color: #e74c3c;
@@ -4771,7 +4788,7 @@ function AdminPageContent() {
               {/* Left Side: Expense Form Card */}
               <div className="finance-form-card">
                 <h3 className="form-title">
-                  <span style={{ fontSize: '1.2rem' }}>➕</span> บันทึกจัดซื้อ & รายจ่ายใหม่
+                  <span style={{ fontSize: '1.2rem' }}>➕</span> บันทึกจัดซื้อ
                 </h3>
                 <div className="ai-receipt-card">
                   <div className="ai-receipt-title">
@@ -5014,21 +5031,21 @@ function AdminPageContent() {
                               </td>
                               <td>
                                 <span className={`fin-badge ${item.type}`}>
-                                  {item.type === 'revenue' ? '🟢 รายรับ' : '🔴 รายจ่าย'}
+                                  {item.type === 'revenue' || item.type === 'income' ? '🟢 รายรับ' : '🔴 รายจ่าย'}
                                 </span>
                               </td>
                               <td style={{ color: '#5c4738', fontSize: '0.85rem' }}>
                                 {item.title}
                               </td>
                               <td className={`amount-text ${item.type}`} style={{ textAlign: 'right' }}>
-                                {item.type === 'revenue' ? '+' : '-'}{item.amount.toLocaleString()} ฿
+                                {item.type === 'revenue' || item.type === 'income' ? '+' : '-'}{item.amount.toLocaleString()} ฿
                               </td>
                               <td style={{ textAlign: 'center' }}>
-                                {item.type === 'expense' ? (
+                                {item.type === 'expense' || item.type === 'income' ? (
                                   <button
                                     className="delete-btn-circle"
                                     onClick={() => handleDeleteExpense(item.id)}
-                                    title="ลบรายการรายจ่ายนี้"
+                                    title={item.type === 'income' ? 'ลบรายการรายรับนี้' : 'ลบรายการรายจ่ายนี้'}
                                   >
                                     ✕
                                   </button>
