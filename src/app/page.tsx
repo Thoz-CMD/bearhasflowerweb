@@ -1296,15 +1296,17 @@ export default function Home() {
   </div>
 
   <div class="product-filter-shell" id="product-filter-shell">
-    <button class="product-filter-toggle" id="product-filter-toggle" type="button" onclick="toggleProductFilters()" aria-expanded="false" aria-controls="product-filter-panel" aria-label="ตัวกรองสินค้า">
-      <span class="product-filter-toggle-icon" aria-hidden="true">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M3 6h18"></path>
-          <path d="M6 12h12"></path>
-          <path d="M10 18h4"></path>
-        </svg>
-      </span>
-    </button>
+    <div style="max-width: 1280px; margin: 0 auto; display: flex; justify-content: flex-end;">
+      <button class="product-filter-toggle" style="margin: 0;" id="product-filter-toggle" type="button" onclick="toggleProductFilters()" aria-expanded="false" aria-controls="product-filter-panel" aria-label="ตัวกรองสินค้า">
+        <span class="product-filter-toggle-icon" aria-hidden="true">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 6h18"></path>
+            <path d="M6 12h12"></path>
+            <path d="M10 18h4"></path>
+          </svg>
+        </span>
+      </button>
+    </div>
 
     <div class="product-filter-panel-wrap" id="product-filter-panel" aria-hidden="true">
       <div class="product-filter-panel-inner">
