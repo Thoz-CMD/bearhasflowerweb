@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { db, auth } from '@/lib/firebase';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, doc, runTransaction } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 import generatePayload from 'promptpay-qr';
 import { QRCodeSVG } from 'qrcode.react';
@@ -53,48 +53,95 @@ export default function CheckoutPage() {
     }
   }, []);
 
+  const createOrderAndReserveStock = async (item: any, orderData: any) => {
+    const productId = item.presetId || item.config?.presetId;
+    const shouldTrackStock = Boolean(item.readyToShip && productId);
+
+    if (!shouldTrackStock) {
+      await addDoc(collection(db, "orders"), orderData);
+      return;
+    }
+
+    const orderRef = doc(collection(db, "orders"));
+    const productRef = doc(db, 'products', productId);
+    const requestedQty = item.qty || 1;
+
+    await runTransaction(db, async (transaction) => {
+      const productSnap = await transaction.get(productRef);
+      if (!productSnap.exists()) {
+        throw new Error('Product not found');
+      }
+
+      const product = productSnap.data();
+      const currentStock = Number(product.stockQuantity || 0);
+      if (currentStock < requestedQty) {
+        throw new Error('Out of stock');
+      }
+
+      const nextStock = currentStock - requestedQty;
+      transaction.update(productRef, {
+        stockQuantity: nextStock,
+        badge: nextStock <= 0 ? 'หมดชั่วคราว' : 'พร้อมส่ง ' + nextStock,
+        soldOut: nextStock <= 0,
+        updatedAt: serverTimestamp(),
+      });
+      transaction.set(orderRef, orderData);
+    });
+  };
+
   const handleConfirmPayment = async () => {
     if (cartItems.length === 0 || isProcessing) return;
     setIsProcessing(true);
 
-    const orderData = {
-      items: cartItems.map((item: any) => ({
-        name: item.name,
-        price: item.price,
-        qty: item.qty || 1,
-        details: item.details || '',
-        type: item.type || 'regular',
-        image: item.coverImage || item.image || item.imageUrl || (item.type === 'glitter_rose' ? '/images/Glitter Rose/ริบบิ้นแดง.jpg' : ''),
-        coverImage: item.coverImage || item.image || item.imageUrl || (item.type === 'glitter_rose' ? '/images/Glitter Rose/ริบบิ้นแดง.jpg' : ''),
-        config: item.config || null
-      })),
-      total: total,
-      depositPaid: deposit,
-      status: 'pending_verification', // รอตรวจสอบยอดเงิน
-      createdAt: serverTimestamp(),
-      userId: userId || 'guest',
-    };
-
     try {
-      await addDoc(collection(db, "orders"), orderData);
+      // Create separate order for each cart item
+      for (const item of cartItems) {
+        const itemTotal = item.price * (item.qty || 1);
+        const itemDeposit = Math.ceil(itemTotal * 0.5);
 
-      // Trigger LINE Notify
-      try {
-        await fetch('/api/line-notify', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ orderData })
-        });
-      } catch (err) {
-        console.error("Failed to notify LINE:", err);
+        const orderData = {
+          items: [{
+            name: item.name,
+            price: item.price,
+            qty: item.qty || 1,
+            details: item.details || '',
+            type: item.type || 'regular',
+            image: item.coverImage || item.image || item.imageUrl || (item.type === 'glitter_rose' ? '/images/Glitter Rose/ริบบิ้นแดง.jpg' : ''),
+            coverImage: item.coverImage || item.image || item.imageUrl || (item.type === 'glitter_rose' ? '/images/Glitter Rose/ริบบิ้นแดง.jpg' : ''),
+            config: item.config || null,
+            productId: item.presetId || item.config?.presetId || null,
+            presetId: item.presetId || item.config?.presetId || null,
+            readyToShip: Boolean(item.readyToShip),
+            isPreset: item.id && !item.id.startsWith('custom_') // true for Our Products, false for custom products
+          }],
+          total: itemTotal,
+          depositPaid: itemDeposit,
+          status: 'pending_verification', // รอตรวจสอบยอดเงิน
+          createdAt: serverTimestamp(),
+          userId: userId || 'guest',
+        };
+
+        await createOrderAndReserveStock(item, orderData);
+
+        // Trigger LINE Notify for each order
+        try {
+          await fetch('/api/line-notify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ orderData })
+          });
+        } catch (err) {
+          console.error("Failed to notify LINE:", err);
+        }
       }
 
       localStorage.removeItem(STORAGE_CART);
       setShowSuccessPopup(true);
     } catch (e) {
-      // Fallback for demo mode
-      localStorage.removeItem(STORAGE_CART);
-      setShowSuccessPopup(true);
+      console.error("Checkout failed:", e);
+      window.alert(e instanceof Error && e.message === 'Out of stock'
+        ? 'สินค้าหมดชั่วคราว กรุณานำสินค้าออกจากตะกร้าก่อนทำรายการอีกครั้ง'
+        : 'เกิดข้อผิดพลาดในการสร้างคำสั่งซื้อ กรุณาลองใหม่อีกครั้ง');
     }
     setIsProcessing(false);
   };

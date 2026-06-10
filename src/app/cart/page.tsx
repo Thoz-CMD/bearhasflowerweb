@@ -707,6 +707,13 @@ export default function CartPage() {
                     const statusInfo = getStatusLabel(order.status);
                     return (order.items || []).map((item: any, idx: number) => {
                       const isGlitterRose = item.type === 'glitter_rose' || !!item.config;
+                      const cfg = item.config || null;
+                      // Check if coverImage is the default ribbon image (used for custom products)
+                      const isDefaultRibbonImage = item.coverImage && item.coverImage.includes('ริบบิ้นแดง.jpg');
+                      const isPreset = item.isPreset === true;
+                      const isCustomId = item.id && item.id.startsWith('custom_');
+                      // Show coverImage if explicitly preset OR if not custom AND not default ribbon image
+                      const shouldShowCoverImage = isPreset || (!isCustomId && item.coverImage && !isDefaultRibbonImage);
                       const itemColors = item.config?.selectedColors?.length > 0
                         ? item.config.selectedColors.map((id: string) => getRoseColorHex(id))
                         : ['#F48FB1'];
@@ -715,7 +722,6 @@ export default function CartPage() {
                       const isExpanded = expandedOrderKey === cardKey;
 
                       // Build mobile detail sections
-                      const cfg = item.config || null;
                       const mobileColors = cfg ? (cfg.selectedColors || []).map((id: string) => ROSE_COLORS_MAP[id] || id).join(', ') : '';
                       const mobileLayers = cfg ? (cfg.selectedLayers || []).map((id: string) => ROSE_LAYERS_MAP[id] || id).join(', ') : '';
                       const mobilePaper = cfg ? (ROSE_PAPERS_MAP[cfg.selectedPaper] || cfg.selectedPaper || '') : '';
@@ -742,11 +748,11 @@ export default function CartPage() {
                             </div>
                           )}
                           <div className="item-img-placeholder">
-                            {item.coverImage ? (
+                            {shouldShowCoverImage ? (
                               <img src={item.coverImage} alt={item.name} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />
-                            ) : isGlitterRose ? (
+                            ) : (
                               <BasketIcon colors={itemColors} />
-                            ) : '🛍️'}
+                            )}
                           </div>
                           <div className="item-info">
                             <div className="item-name" style={{ paddingRight: order.date ? '120px' : '0' }}>
@@ -861,15 +867,9 @@ export default function CartPage() {
             <span className="total-label">รวมทั้งหมด</span>
             <span className="total-value">{calculateTotal().toLocaleString()} ฿</span>
           </div>
-          {isFirebaseEnabled ? (
-            <button className="checkout-btn" onClick={handleCheckout}>
-              สั่งซื้อสินค้า
-            </button>
-          ) : (
-            <button className="checkout-btn" onClick={() => window.location.href = '/login'}>
-              เข้าสู่ระบบเพื่อสั่งซื้อสินค้า
-            </button>
-          )}
+          <button className="checkout-btn" onClick={handleCheckout}>
+            สั่งซื้อสินค้า
+          </button>
         </div>
       )}
     </div>

@@ -160,6 +160,7 @@ export default function VelvetWire() {
       let deliveryTime = '';
       let additionalNote = '';
       let productCoverImage = '';
+      let isPresetReadyToShip = false;
 
       const STORAGE_KEY = 'bear_flower_velvet_v1';
 
@@ -268,16 +269,15 @@ export default function VelvetWire() {
               <label>ที่อยู่จัดส่ง</label>
               <textarea id="ipt-address" placeholder="ชื่อหอ.." oninput="updateFormState()" style="font-size: 16px;">\${customerAddress}</textarea>
               <div class="form-note">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5l10 -10"/></svg> ส่งฟรีบริเวณกำแพงแสน
+              ส่งฟรีบริเวณกำแพงแสน
               </div>
             </div>
 
             <div class="form-group">
               <label>วันที่และเวลาจัดส่ง</label>
               <input type="text" id="ipt-date" placeholder="เลือกวันที่และเวลา" readonly style="font-size: 16px; background-color: #fff; cursor: pointer;">
-              <div class="form-note">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg> สั่งล่วงหน้าอย่างน้อย 1 วัน
-              </div>
+              <span id="delivery-warning" style="font-size:.75rem; color:red; margin-top:6px; display:block; line-height:1.4;">
+              </span>
             </div>
 
             <div class="form-group">
@@ -286,6 +286,16 @@ export default function VelvetWire() {
             </div>
           </div>
         \`;
+
+        // Update delivery warning message
+        const warningEl = document.getElementById('delivery-warning');
+        if (warningEl) {
+          if (!isPresetReadyToShip) {
+            warningEl.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg> สั่งล่วงหน้าอย่างน้อย 1 วัน';
+          } else {
+            warningEl.textContent = '';
+          }
+        }
 
         // Init flatpickr
         setTimeout(() => {
@@ -351,6 +361,10 @@ export default function VelvetWire() {
         }
 
         const CART_KEY = 'bear_flower_cart';
+        if (isPresetReadyToShip && Number(presetProduct.stockQuantity || 0) <= 0) {
+          showToast('สินค้าหมดชั่วคราว');
+          return;
+        }
         
         const customItem = {
           id: 'vw_' + Date.now(),
@@ -360,6 +374,9 @@ export default function VelvetWire() {
           qty: 1,
           details: presetProduct.description || 'ดอกไม้ลวดกำมะหยี่',
           coverImage: presetProduct.coverImage,
+          presetId: presetProduct.id,
+          readyToShip: isPresetReadyToShip,
+          stockQuantity: Number(presetProduct.stockQuantity || 0),
           config: {
             customerName, customerPhone, customerAddress, 
             deliveryDate, deliveryTime, additionalNote,
@@ -393,6 +410,12 @@ export default function VelvetWire() {
               presetProduct.id = presetId;
               basePrice = p.price || 0;
               productCoverImage = p.coverImage || '';
+              isPresetReadyToShip = Boolean(p.readyToShip);
+              if (isPresetReadyToShip && Number(p.stockQuantity || 0) <= 0) {
+                showToast('สินค้าหมดชั่วคราว');
+                setTimeout(() => { window.location.href = '/'; }, 900);
+                return;
+              }
 
               updateSummary();
               renderForm();

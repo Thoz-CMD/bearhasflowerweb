@@ -823,29 +823,39 @@ function AdminPageContent() {
         const userId = orderData.userId || 'guest';
         const primaryItem = orderData.items?.[0];
         const itemName = primaryItem?.name || 'ช่อดอกไม้';
-        // Get product image: use saved image field, or fallback based on type
-        const itemImage = primaryItem?.image || 
+        // For custom-designed orders (with config), check if they have coverImage
+        const isCustomOrder = !!primaryItem?.config;
+        // Get product image: use coverImage first, then image, or fallback based on type
+        // For custom orders, only use image if coverImage is explicitly set (not default ribbon)
+        const isDefaultRibbonImage = primaryItem?.coverImage?.includes('ริบบิ้นแดง.jpg');
+        const itemImage = (!isDefaultRibbonImage && primaryItem?.coverImage) || 
+          primaryItem?.image || 
           (primaryItem?.type === 'glitter_rose' ? '/images/Glitter Rose/ริบบิ้นแดง.jpg' : '') ||
           '';
+        
+        // Additional info for notification display logic
+        const isPreset = primaryItem?.isPreset === true;
+        const itemId = primaryItem?.id || '';
+        const isCustomId = itemId && itemId.startsWith('custom_');
 
         if (userId !== 'guest') {
           let title = 'อัปเดตสถานะออเดอร์';
           let message = `ออเดอร์ "${itemName}" อัปเดตสถานะใหม่`;
-          
+
           if (newStatus === 'preparing') {
-            title = '🌸 เริ่มจัดดอกไม้แล้ว';
+            title = 'เริ่มจัดดอกไม้แล้ว';
             message = `ออเดอร์ "${itemName}" กำลังถูกจัดเตรียมค่ะ`;
           } else if (newStatus === 'shipping') {
-            title = '✨ จัดดอกไม้เสร็จเรียบร้อย';
+            title = 'จัดดอกไม้เสร็จเรียบร้อย';
             message = `กรุณาชำระเงินส่วนที่เหลือเพื่อจัดส่ง "${itemName}" ค่ะ`;
           } else if (newStatus === 'delivering') {
-            title = '🚚 กำลังจัดส่ง';
+            title = 'กำลังจัดส่ง';
             message = `ออเดอร์ "${itemName}" กำลังเดินทางไปหาคุณค่ะ`;
           } else if (newStatus === 'completed') {
-            title = '💖 จัดส่งสำเร็จ';
+            title = 'จัดส่งสำเร็จ';
             message = `ส่งมอบ "${itemName}" เรียบร้อย ขอบคุณที่ใช้บริการค่ะ`;
           } else if (newStatus === 'cancelled') {
-            title = '❌ ออเดอร์ถูกยกเลิก';
+            title = 'ออเดอร์ถูกยกเลิก';
             message = `ออเดอร์ "${itemName}" ถูกยกเลิก ติดต่อแอดมินเพื่อสอบถามเพิ่มค่ะ`;
           }
 
@@ -860,6 +870,10 @@ function AdminPageContent() {
               type: 'status_update',
               status: 'unread',
               createdAt: serverTimestamp(),
+              config: isCustomOrder ? primaryItem?.config : null,
+              itemType: primaryItem?.type || null,
+              isPreset: isPreset,
+              itemId: itemId,
             });
           }
         }
@@ -1347,6 +1361,25 @@ function AdminPageContent() {
           gap: 10px;
         }
 
+        @media (max-width: 767px) {
+          .dashboard-title-block {
+            flex-direction: row;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+          }
+          .dashboard-title {
+            order: 1;
+          }
+          .dashboard-chip {
+            order: 2;
+          }
+          .dashboard-subtitle {
+            order: 3;
+            width: 100%;
+          }
+        }
+
         .dashboard-chip {
           display: inline-flex;
           align-items: center;
@@ -1655,12 +1688,16 @@ function AdminPageContent() {
         }
 
         .order-count-badge {
-          background: #fff1f5;
           color: #ea678f;
-          padding: 9px 14px;
           border-radius: 999px;
           font-size: 0.82rem;
           font-weight: 700;
+        }
+
+        @media (max-width: 767px) {
+          .order-count-badge {
+            margin-left: auto;
+          }
         }
 
         .orders-list {
@@ -2072,6 +2109,7 @@ function AdminPageContent() {
             display: none !important;
           }
           .order-right-meta {
+            display: flex !important;
             flex-direction: row !important;
             align-items: center !important;
             justify-content: space-between !important;
@@ -2118,8 +2156,7 @@ function AdminPageContent() {
             line-height: 1.4 !important;
           }
           .detail-card-header {
-            margin-bottom: 8px !important;
-            padding-bottom: 8px !important;
+            display: none !important;
           }
           .detail-item-list,
           .detail-kv-list {
@@ -2207,8 +2244,11 @@ function AdminPageContent() {
             font-size: 0.78rem !important;
           }
           .order-right-meta {
-            flex-direction: column !important;
-            align-items: flex-start !important;
+            display: flex !important;
+            flex-direction: row !important;
+            align-items: center !important;
+            justify-content: space-between !important;
+            gap: 10px !important;
           }
           .order-price {
             font-size: 1rem !important;
@@ -3724,7 +3764,6 @@ function AdminPageContent() {
         @media (max-width: 767px) {
           /* 1. Header & Title adjustments */
           .finance-section .dashboard-title {
-            font-size: 1.15rem !important;
             text-align: left !important;
           }
           .finance-section .dashboard-subtitle {
@@ -4072,7 +4111,7 @@ function AdminPageContent() {
                   {filteredOrders.map((order) => {
                     const status = getStatusLabel(order.status);
                     const isExpanded = expandedOrder === order.id;
-                    const customItem = order.items?.find((i: any) => i.config);
+                    const customItem = order.items?.find((i: any) => i.config) || order.items?.[0];
                     const primaryItem = order.items?.[0];
                     const customerName = customItem?.config?.customerName || 'ไม่ระบุ';
                     const customerPhone = customItem?.config?.customerPhone || '-';
@@ -4084,6 +4123,11 @@ function AdminPageContent() {
                     const itemColors = customItem?.config?.selectedColors?.length
                       ? customItem.config.selectedColors.map((id: string) => getRoseColorHex(id))
                       : ['#F48FB1'];
+                    // Logic for displaying product images (same as cart page)
+                    const isDefaultRibbonImage = customItem?.coverImage && customItem.coverImage.includes('ริบบิ้นแดง.jpg');
+                    const isPreset = customItem?.isPreset === true;
+                    const isCustomId = customItem?.id && customItem.id.startsWith('custom_');
+                    const shouldShowCoverImage = isPreset || (!isCustomId && customItem?.coverImage && !isDefaultRibbonImage);
 
                     return (
                       <div
@@ -4091,57 +4135,50 @@ function AdminPageContent() {
                         className="order-row"
                         onClick={() => setExpandedOrder(isExpanded ? null : order.id)}
                       >
-                        <div className="order-summary-row">
-                          <div className="order-main-info order-cell-order">
-                            <div className="order-avatar">
-                              {customItem?.coverImage ? (
-                                <img src={customItem.coverImage} alt={customItem.name} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />
-                              ) : customItem?.config ? (
-                                <BasketIcon colors={itemColors} size={40} />
-                              ) : (
-                                <span>🛒</span>
-                              )}
-                            </div>
-                            <div className="order-meta">
-                              <span className="order-id">{primaryItem?.name || 'คำสั่งซื้อ'}</span>
-                              <span className="order-date">#{String(order.id).slice(0, 8).toUpperCase()}</span>
-                            </div>
+                      <div className="order-summary-row">
+                        <div className="order-main-info order-cell-order">
+                          <div className="order-avatar">
+                            {shouldShowCoverImage ? (
+                              <img src={customItem.coverImage} alt={customItem.name} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />
+                            ) : (
+                              <BasketIcon colors={itemColors} size={40} />
+                            )}
                           </div>
-
-                          <div className="order-middle-meta">
-                            <span className="order-customer">{customerName}</span>
-                            <span className="order-phone">{customerPhone}</span>
-                          </div>
-
-                          <div className="order-delivery-meta">
-                            <span className="order-delivery-date">{deliveryDate}</span>
-                            <span className="order-delivery-time">{deliveryTime}</span>
-                          </div>
-
-                          <div className="order-right-meta">
-                            <span className="status-badge" style={{ color: status.color, background: status.bg }}>
-                              {status.label}
-                            </span>
-                            <span className="order-price">{order.total?.toLocaleString() || 0} ฿</span>
-                          </div>
-
-                          <div className={`order-expand-indicator ${isExpanded ? 'open' : ''}`}>
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                              <path d="M6 9l6 6 6-6" />
-                            </svg>
+                          <div className="order-meta">
+                            <span className="order-id">{primaryItem?.name || 'คำสั่งซื้อ'}</span>
+                            <span className="order-date">#{String(order.id).slice(0, 8).toUpperCase()}</span>
                           </div>
                         </div>
 
-                        <div className="order-mobile-meta">
-                          <span>{customerName}</span>
-                          <span>{formatOrderDate(order.createdAt)}</span>
+                        <div className="order-middle-meta">
+                          <span className="order-customer">{customerName}</span>
+                          <span className="order-phone">{customerPhone}</span>
                         </div>
 
-                        <div className="order-extra-bar">
-                          <span>สถานะ: {status.label}</span>
-                          <span>ยอดรวม {order.total?.toLocaleString() || 0} ฿</span>
-                          <span>สร้างเมื่อ {formatOrderDate(order.createdAt)}</span>
+                        <div className="order-delivery-meta">
+                          <span className="order-delivery-date">{deliveryDate}</span>
+                          <span className="order-delivery-time">{deliveryTime}</span>
                         </div>
+
+                        <div className="order-right-meta">
+                          <span className="status-badge" style={{ color: status.color, background: status.bg }}>
+                            {status.label}
+                          </span>
+                          <span className="order-price">{order.total?.toLocaleString() || 0} ฿</span>
+                        </div>
+
+                        <div className={`order-expand-indicator ${isExpanded ? 'open' : ''}`}>
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M6 9l6 6 6-6" />
+                          </svg>
+                        </div>
+                      </div>
+
+                      <div className="order-mobile-meta">
+                        <span>สถานะ: {status.label}</span>
+                        <span>ยอดรวม {order.total?.toLocaleString() || 0} ฿</span>
+                        <span>สร้างเมื่อ {formatOrderDate(order.createdAt)}</span>
+                      </div>
 
                         {/* Expanded details */}
                         <div className={`order-details-drawer ${isExpanded ? 'open' : ''}`} onClick={(e) => e.stopPropagation()}>
@@ -4197,7 +4234,7 @@ function AdminPageContent() {
                                 </span>
                               </div>
                               <div className="detail-status-line">
-                                <span className="detail-status-meta">ชำระแล้ว {Math.round((order.total || 0) / 2).toLocaleString()} ฿</span>
+                                <span className="detail-status-meta">ชำระแล้ว {order.status === 'delivering' || order.status === 'completed' ? order.total?.toLocaleString() : Math.round((order.total || 0) / 2).toLocaleString()} ฿</span>
                                 <span className="detail-status-meta">รหัส #{String(order.id).slice(0, 8).toUpperCase()}</span>
                               </div>
                               <div className="control-panel">
@@ -4273,7 +4310,7 @@ function AdminPageContent() {
                                       disabled={isUploadingImage}
                                       onClick={() => updateOrderStatus(order.id, 'shipping')}
                                     >
-                                      {isUploadingImage ? 'กำลังอัปโหลดรูปภาพและบันทึก...' : 'ดอกไม้จัดเสร็จแล้ว (เริ่มนำจัดส่ง)'}
+                                      {isUploadingImage ? 'กำลังอัปโหลดรูปภาพและบันทึก...' : 'ดอกไม้จัดเสร็จแล้ว (ส่งงาน)'}
                                     </button>
                                   </>
                                 )}
@@ -4351,7 +4388,7 @@ function AdminPageContent() {
                                         }
                                       }}
                                     >
-                                      🗑️ ลบข้อมูลถาวร (ลบออกจากดาต้าเบส)
+                                      ลบข้อมูลถาวร (ลบออกจากดาต้าเบส)
                                     </button>
                                   </>
                                 )}
@@ -4377,7 +4414,7 @@ function AdminPageContent() {
                 <span className="dashboard-chip">Admin Overview</span>
                 <h1 className="dashboard-title">{viewTitleMap[adminViewMode]}</h1>
                 <p className="dashboard-subtitle">
-                  รายการออเดอร์ที่ชำระเงินเรียบร้อยแล้วและรอดำเนินการผลิต (เรียงตามกำหนดส่งด่วนที่สุดไว้บนสุด)
+                  รายการออเดอร์
                 </p>
               </div>
 
@@ -4413,6 +4450,11 @@ function AdminPageContent() {
                     const itemColors = cfg && cfg.selectedColors && cfg.selectedColors.length > 0
                       ? cfg.selectedColors.map((id: string) => getRoseColorHex(id))
                       : ['#db8a9e'];
+                    // Logic for displaying product images (same as cart page)
+                    const isDefaultRibbonImage = item.coverImage && item.coverImage.includes('ริบบิ้นแดง.jpg');
+                    const isPreset = item.isPreset === true;
+                    const isCustomId = item.id && item.id.startsWith('custom_');
+                    const shouldShowCoverImage = isPreset || (!isCustomId && item.coverImage && !isDefaultRibbonImage);
 
                     const cardKey = `${order.id}-${idx}`;
 
@@ -4446,12 +4488,10 @@ function AdminPageContent() {
                         <div className="florist-header">
                           <div className="florist-header-main">
                             <div className="florist-img-container">
-                              {item.coverImage ? (
+                              {shouldShowCoverImage ? (
                                 <img src={item.coverImage} alt={item.name} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />
-                              ) : isGlitterRose ? (
-                                <BasketIcon colors={itemColors} />
                               ) : (
-                                '🛍️'
+                                <BasketIcon colors={itemColors} />
                               )}
                             </div>
 
@@ -4559,7 +4599,7 @@ function AdminPageContent() {
                 <span className="dashboard-chip">Admin Overview</span>
                 <h1 className="dashboard-title">{viewTitleMap[adminViewMode]}</h1>
                 <p className="dashboard-subtitle">
-                  บันทึกต้นทุนจัดซื้อวัตถุดิบ คำนวณกำไรสุทธิ และรายงานงบการเงินร้านแบบแยกเป็นรายเดือน
+                  บันทึกและรายงานงบการเงิน
                 </p>
               </div>
 

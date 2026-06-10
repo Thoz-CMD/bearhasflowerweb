@@ -65,7 +65,7 @@ const navItems: NavItem[] = [
     description: 'เพิ่มสินค้า',
     icon: PackagePlus,
     isActive: (pathname, searchParams) =>
-      pathname === '/admin/create-product' && searchParams.get('manage') !== 'true',
+      pathname.startsWith('/admin/create-product') && searchParams.get('manage') !== 'true',
     showInMobile: true,
     mobileOrder: 4,
   },

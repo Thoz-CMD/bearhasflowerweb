@@ -179,8 +179,17 @@ export default function Home() {
           await deleteDoc(doc(db, 'products', productId));
           const cache = (window as any).__adminProductCache;
           if (cache) delete cache[productId];
-          const card = buttonEl?.closest('.product-card');
-          if (card) card.remove();
+          const homeState = (window as any).__homeProductsState;
+          if (homeState?.allProducts) {
+            homeState.allProducts = homeState.allProducts.filter((item: any) => item.id !== productId);
+          }
+          const rerenderProducts = (window as any).applyProductFilters;
+          if (typeof rerenderProducts === 'function') {
+            rerenderProducts(false);
+          } else {
+            const card = buttonEl?.closest('.product-card');
+            if (card) card.remove();
+          }
           (window as any).showBeautifulAlert('ลบสินค้าเรียบร้อยแล้ว', 'success', 'ลบสำเร็จ');
         } catch (e) {
           console.error('Admin delete failed:', e);
@@ -190,21 +199,150 @@ export default function Home() {
     }
 
     const initApp = () => {
-      (window as any).filterProducts = function (type: string) {
-        const section = document.getElementById('products');
-        if (section) {
-          const yOffset = -80; // account for navbar
-          const y = section.getBoundingClientRect().top + window.scrollY + yOffset;
-          window.scrollTo({ top: y, behavior: 'smooth' });
+      const PRODUCT_PRICE_MIN = 79;
+      const PRODUCT_PRICE_MAX = 2000;
+      const productState = (window as any).__homeProductsState || {
+        allProducts: [],
+        filters: {
+          type: 'all',
+          minPrice: PRODUCT_PRICE_MIN,
+          maxPrice: PRODUCT_PRICE_MAX,
+          shipping: 'all',
+          sort: 'latest',
+          combined: 'all'
+        },
+        ui: {
+          filterOpen: false
         }
-        
-        document.querySelectorAll('.product-card').forEach((card: any) => {
-          if (type === 'all' || card.getAttribute('data-product-type') === type) {
-            card.style.display = '';
-          } else {
-            card.style.display = 'none';
-          }
+      };
+      (window as any).__homeProductsState = productState;
+      if (!productState.ui) {
+        productState.ui = { filterOpen: false };
+      }
+
+      const scrollToProductsSection = () => {
+        const section = document.getElementById('products');
+        if (!section) return;
+        const yOffset = -80;
+        const y = section.getBoundingClientRect().top + window.scrollY + yOffset;
+        window.scrollTo({ top: y, behavior: 'smooth' });
+      };
+
+      const getProductCreatedAtMs = (product: any) => {
+        if (typeof product?.createdAt?.toMillis === 'function') return product.createdAt.toMillis();
+        if (typeof product?.createdAt?.seconds === 'number') return product.createdAt.seconds * 1000;
+        return 0;
+      };
+
+      const getProductTypeKey = (product: any) => {
+        const isVelvet = product.type === 'velvet_flower'
+          || (product.name && product.name.includes('กำมะหยี่'))
+          || (product.description && product.description.includes('กำมะหยี่'));
+        return isVelvet ? 'velvet' : 'glitter';
+      };
+
+      const getShippingFilterKey = (product: any) => {
+        const hasReadyStock = Boolean(product.readyToShip) && Number(product.stockQuantity || 0) > 0;
+        if (hasReadyStock) return 'ready';
+        const badgeText = String(product.badge || '');
+        if (badgeText.includes('1 วัน')) return '1d';
+        if (badgeText.includes('2 วัน')) return '2d';
+        if (badgeText.includes('3 วัน')) return '3d';
+        return 'other';
+      };
+
+      const formatPriceLabel = (value: number) => `${Number(value || 0).toLocaleString('th-TH')} บาท`;
+
+      const getActiveFilterCount = () => {
+        let count = 0;
+        if (productState.filters.type !== 'all') count++;
+        if (productState.filters.minPrice !== PRODUCT_PRICE_MIN || productState.filters.maxPrice !== PRODUCT_PRICE_MAX) count++;
+        if (productState.filters.shipping !== 'all') count++;
+        if (productState.filters.sort !== 'latest') count++;
+        return count;
+      };
+
+      const updatePriceSliderVisual = () => {
+        const highlight = document.getElementById('product-price-track') as HTMLElement | null;
+        if (!highlight) return;
+        const minPercent = ((productState.filters.minPrice - PRODUCT_PRICE_MIN) / (PRODUCT_PRICE_MAX - PRODUCT_PRICE_MIN)) * 100;
+        const maxPercent = ((productState.filters.maxPrice - PRODUCT_PRICE_MIN) / (PRODUCT_PRICE_MAX - PRODUCT_PRICE_MIN)) * 100;
+        highlight.style.left = `${Math.max(0, minPercent)}%`;
+        highlight.style.right = `${Math.max(0, 100 - maxPercent)}%`;
+      };
+
+      const syncProductFilterUI = (visibleCount: number) => {
+        const minValue = document.getElementById('price-min-value');
+        const maxValue = document.getElementById('price-max-value');
+        const minRange = document.getElementById('product-price-min') as HTMLInputElement | null;
+        const maxRange = document.getElementById('product-price-max') as HTMLInputElement | null;
+        const resultCount = document.getElementById('product-results-count');
+        const activeFilterText = document.getElementById('product-active-filter-text');
+        const toggleButton = document.getElementById('product-filter-toggle');
+        const filterShell = document.getElementById('product-filter-shell');
+        const filterPanel = document.getElementById('product-filter-panel');
+
+        if (minValue) minValue.textContent = formatPriceLabel(productState.filters.minPrice);
+        if (maxValue) maxValue.textContent = formatPriceLabel(productState.filters.maxPrice);
+        if (minRange) minRange.value = String(productState.filters.minPrice);
+        if (maxRange) maxRange.value = String(productState.filters.maxPrice);
+
+        document.querySelectorAll('[data-filter-type]').forEach((button: any) => {
+          const isActive = button.dataset.filterType === productState.filters.combined;
+          button.classList.toggle('active', isActive);
         });
+
+        if (resultCount) {
+          const total = productState.allProducts.length;
+          resultCount.textContent = total > 0
+            ? `แสดง ${visibleCount.toLocaleString('th-TH')} จาก ${total.toLocaleString('th-TH')} ช่อ`
+            : 'กำลังโหลดสินค้า...';
+        }
+
+        if (activeFilterText) {
+          const shippingMap: Record<string, string> = {
+            all: 'ทุกสถานะ',
+            ready: 'ช่อพร้อมส่ง',
+            '1d': 'จัดส่งใน 1 วัน',
+            '2d': 'จัดส่งใน 2 วัน',
+            '3d': 'จัดส่งใน 3 วัน'
+          };
+          const typeMap: Record<string, string> = {
+            all: 'สินค้าทั้งหมด',
+            glitter: 'กุหลาบกลิตเตอร์',
+            velvet: 'ดอกไม้ลวดกำมะหยี่'
+          };
+          const sortLabel = productState.filters.sort === 'likes' ? 'เรียงตามยอดถูกใจ' : 'เรียงตามสินค้าล่าสุด';
+          const summaryText = `${typeMap[productState.filters.type] || 'สินค้าทั้งหมด'} • ${formatPriceLabel(productState.filters.minPrice)} - ${formatPriceLabel(productState.filters.maxPrice)} • ${shippingMap[productState.filters.shipping] || 'ทุกสถานะ'} • ${sortLabel}`;
+          activeFilterText.textContent = summaryText;
+
+          if (toggleButton) {
+            const activeCount = getActiveFilterCount();
+            const toggleText = activeCount > 0
+              ? `ตัวกรองสินค้า, ใช้งานอยู่ ${activeCount} ตัวกรอง, แสดง ${visibleCount.toLocaleString('th-TH')} ช่อ`
+              : `ตัวกรองสินค้า, สินค้าทั้งหมด, แสดง ${visibleCount.toLocaleString('th-TH')} ช่อ`;
+            toggleButton.setAttribute('title', summaryText);
+            toggleButton.setAttribute('aria-label', toggleText);
+          }
+        }
+
+        if (toggleButton) {
+          toggleButton.setAttribute('aria-expanded', String(Boolean(productState.ui?.filterOpen)));
+        }
+        if (filterPanel) {
+          filterPanel.setAttribute('aria-hidden', String(!Boolean(productState.ui?.filterOpen)));
+        }
+        if (filterShell) {
+          filterShell.classList.toggle('expanded', Boolean(productState.ui?.filterOpen));
+        }
+
+        updatePriceSliderVisual();
+      };
+
+      (window as any).toggleProductFilters = function (forceState?: boolean) {
+        const nextState = typeof forceState === 'boolean' ? forceState : !Boolean(productState.ui?.filterOpen);
+        productState.ui.filterOpen = nextState;
+        syncProductFilterUI(productState.allProducts.length || 0);
       };
 
       // ===== Slideshow =====
@@ -289,14 +427,23 @@ export default function Home() {
         } catch (e) { }
       };
 
-      // ===== Load Dynamic Products from Firestore =====
-      async function loadDynamicProducts() {
-        if (!(window as any).fetchDynamicProductsHelper) return;
-        const products = await (window as any).fetchDynamicProductsHelper();
+      const renderProductCards = (products: any[]) => {
         const grid = document.getElementById('main-product-grid');
-        if (!grid || !products || products.length === 0) return;
+        if (!grid) return;
 
-        const WISHLIST_KEY = 'bear_flower_wishlist';
+        grid.innerHTML = '';
+
+        if (!products || products.length === 0) {
+          grid.innerHTML = `
+            <div class="product-empty-state">
+              <div class="product-empty-icon">Bloom</div>
+              <h3>ยังไม่เจอช่อที่ตรงกับตัวกรองนี้</h3>
+              <p>ลองขยับช่วงราคา หรือเปลี่ยนตัวกรองการจัดส่งและยอดถูกใจดูนะคะ</p>
+            </div>
+          `;
+          return;
+        }
+
         let wishlist = [];
         try {
           wishlist = JSON.parse(localStorage.getItem(WISHLIST_KEY) || '[]');
@@ -308,25 +455,37 @@ export default function Home() {
         products.forEach((p: any, idx: number) => {
           const cleanIdForHearts = p.id;
           const existsInWishlist = wishlist.some((item: any) => item.id === cleanIdForHearts);
-          const currentLikes = Math.max(0, p.likes || 0);
+          const currentLikes = Math.max(0, Number(p.likes || p._likesValue || 0));
+          const priceValue = Number(p.price || p._priceValue || 0);
+          const productType = p._productType || getProductTypeKey(p);
 
           const card = document.createElement('article');
           card.className = 'product-card fade-in';
           card.style.animationDelay = (0.05 + idx * 0.05) + 's';
           card.setAttribute('data-product-id', p.id);
+          card.setAttribute('data-product-type', productType);
           adminCache[p.id] = p;
 
-          const isVelvet = p.type === 'velvet_flower' || (p.name && p.name.includes('กำมะหยี่')) || (p.description && p.description.includes('กำมะหยี่'));
+          const isVelvet = productType === 'velvet';
           const targetUrl = isVelvet ? '/velvet_wire?preset=' + p.id : '/glitter_rose?preset=' + p.id;
-          card.setAttribute('data-product-type', isVelvet ? 'velvet' : 'glitter');
+          const isReadyToShip = Boolean(p.readyToShip);
+          const stockQuantity = Number(p.stockQuantity || 0);
+          const hasReadyStock = isReadyToShip && stockQuantity > 0;
+          const isSoldOut = hasReadyStock
+            ? false
+            : Boolean(p.soldOut) || (isReadyToShip && stockQuantity <= 0) || (!isReadyToShip && p.badge === 'หมดชั่วคราว');
+          const readyStockLabel = stockQuantity > 0 ? `พร้อมส่ง ${stockQuantity.toLocaleString('th-TH')} ชิ้น` : 'พร้อมส่ง';
+          const badgeText = hasReadyStock ? readyStockLabel : (isSoldOut ? 'หมดชั่วคราว' : (p.badge || 'แนะนำ'));
+          const badgeClass = 'product-badge' + (isSoldOut ? ' product-badge-soldout' : (badgeText.includes('พร้อมส่ง') ? ' product-badge-ready' : ''));
+          const productNav = `window.location.href='${targetUrl}'`;
 
           card.innerHTML = `
-            <div class="product-image-wrap" onclick="window.location.href='${targetUrl}'" style="cursor:pointer; position:relative; overflow:hidden;">
+            <div class="product-image-wrap" ${isSoldOut ? '' : `onclick="${productNav}"`} style="cursor:${isSoldOut ? 'default' : 'pointer'}; position:relative; overflow:hidden;">
               ${p.coverImage
-              ? `<img src="${p.coverImage}" alt="${p.name}" class="product-image" style="width:100%; height:100%; object-fit:cover; position:absolute; top:0; left:0; border-radius:inherit;" />`
-              : `<div class="product-placeholder">🌹</div>`
-            }
-              <span class="product-badge">${p.badge || 'แนะนำ'}</span>
+                ? `<img src="${p.coverImage}" alt="${p.name}" class="product-image" style="width:100%; height:100%; object-fit:cover; position:absolute; top:0; left:0; border-radius:inherit;" />`
+                : `<div class="product-placeholder">🌹</div>`
+              }
+              <span class="${badgeClass}">${badgeText}</span>
               <button class="product-wishlist" aria-label="บันทึก" style="z-index: 10; display: flex; align-items: center; justify-content: center; gap: 4px; padding: 4px 8px; border-radius: 20px; width: auto; height: 30px; ${existsInWishlist ? 'color:#e05c7a; border-color:#e05c7a;' : ''}">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12Z" ${existsInWishlist ? 'fill="#e05c7a"' : ''} stroke-linejoin="round" />
@@ -335,11 +494,11 @@ export default function Home() {
               </button>
             </div>
             <div class="product-info">
-              <div class="product-name" onclick="window.location.href='${targetUrl}'" style="cursor:pointer;">${p.name}</div>
-              <div class="product-desc" onclick="window.location.href='${targetUrl}'" style="cursor:pointer;">${p.description}</div>
+              <div class="product-name" ${isSoldOut ? '' : `onclick="${productNav}"`} style="cursor:${isSoldOut ? 'default' : 'pointer'};">${p.name}</div>
+              <div class="product-desc" ${isSoldOut ? '' : `onclick="${productNav}"`} style="cursor:${isSoldOut ? 'default' : 'pointer'};">${p.description}</div>
               <div class="product-footer">
-                <div class="product-price">${p.price?.toLocaleString()} <span>บาท</span></div>
-                <button class="add-cart-btn" onclick="window.location.href='${targetUrl}'" aria-label="เพิ่มในตะกร้า">
+                <div class="product-price">${priceValue.toLocaleString('th-TH')} <span>บาท</span></div>
+                <button class="add-cart-btn ${isSoldOut ? 'disabled' : ''}" ${isSoldOut ? 'disabled' : `onclick="${productNav}"`} aria-label="${isSoldOut ? 'สินค้าหมดชั่วคราว' : 'เพิ่มในตะกร้า'}">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
                     <g stroke="white" stroke-width="2">
                       <path stroke-linejoin="round"
@@ -352,7 +511,6 @@ export default function Home() {
             </div>
           `;
 
-          // Add wishlist toggle handler specifically for this dynamic card
           const wishlistBtn = card.querySelector('.product-wishlist') as HTMLElement;
           if (wishlistBtn) {
             wishlistBtn.onclick = function (this: any, e: any) {
@@ -367,7 +525,7 @@ export default function Home() {
 
               const exists = currentWishlist.find((i: any) => i.id === id);
               const countSpan = this.querySelector('.likes-count');
-              let val = Math.max(0, parseInt(countSpan?.textContent || '0', 10));
+              const currentValue = Math.max(0, parseInt(countSpan?.textContent || '0', 10));
               let diff = 0;
 
               if (exists) {
@@ -375,20 +533,31 @@ export default function Home() {
                 this.querySelector('path')?.setAttribute('fill', 'none');
                 this.style.color = '';
                 this.style.borderColor = '';
-                if (countSpan) countSpan.textContent = String(Math.max(0, val - 1));
+                if (countSpan) countSpan.textContent = String(Math.max(0, currentValue - 1));
                 diff = -1;
               } else {
                 currentWishlist.push({ id, name });
                 this.querySelector('path')?.setAttribute('fill', '#e05c7a');
                 this.style.color = '#e05c7a';
                 this.style.borderColor = '#e05c7a';
-                if (countSpan) countSpan.textContent = String(val + 1);
+                if (countSpan) countSpan.textContent = String(currentValue + 1);
                 diff = 1;
               }
+
               localStorage.setItem(WISHLIST_KEY, JSON.stringify(currentWishlist));
               updateWishlistBadge();
 
-              // Write to Firestore asynchronously to persist the real likes count globally
+              const productIndex = productState.allProducts.findIndex((item: any) => item.id === id);
+              if (productIndex >= 0) {
+                const nextLikes = Math.max(0, Number(productState.allProducts[productIndex].likes || 0) + diff);
+                productState.allProducts[productIndex].likes = nextLikes;
+                productState.allProducts[productIndex]._likesValue = nextLikes;
+                adminCache[id] = productState.allProducts[productIndex];
+                if (productState.filters.sort === 'likes') {
+                  applyProductFilters(false);
+                }
+              }
+
               (async () => {
                 try {
                   const { db } = await import('@/lib/firebase');
@@ -404,16 +573,128 @@ export default function Home() {
             };
           }
 
-          grid.insertBefore(card, grid.firstChild);
+          grid.appendChild(card);
         });
 
-        // Initialize heart icons status for newly prepended items as well
         initializeWishlistHearts();
+      };
+
+      const applyProductFilters = (shouldScroll: boolean = false) => {
+        if (shouldScroll) scrollToProductsSection();
+
+        const filteredProducts = productState.allProducts
+          .filter((product: any) => {
+            const priceValue = Number(product._priceValue ?? product.price ?? 0);
+            const productType = product._productType || getProductTypeKey(product);
+            const shippingKey = product._shippingKey || getShippingFilterKey(product);
+
+            const matchType = productState.filters.type === 'all' || productType === productState.filters.type;
+            const matchPrice = priceValue >= productState.filters.minPrice && priceValue <= productState.filters.maxPrice;
+            const matchShipping = productState.filters.shipping === 'all' || shippingKey === productState.filters.shipping;
+
+            return matchType && matchPrice && matchShipping;
+          })
+          .sort((a: any, b: any) => {
+            if (productState.filters.sort === 'likes') {
+              const likesDiff = Number(b._likesValue ?? b.likes ?? 0) - Number(a._likesValue ?? a.likes ?? 0);
+              if (likesDiff !== 0) return likesDiff;
+            }
+
+            const createdAtDiff = Number(b._createdAtMs ?? 0) - Number(a._createdAtMs ?? 0);
+            if (createdAtDiff !== 0) return createdAtDiff;
+
+            return Number(a._originalIndex ?? 0) - Number(b._originalIndex ?? 0);
+          });
+
+        renderProductCards(filteredProducts);
+        syncProductFilterUI(filteredProducts.length);
+      };
+
+      (window as any).applyProductFilters = applyProductFilters;
+      (window as any).filterProducts = function (type: string) {
+        productState.filters.type = type === 'velvet' || type === 'glitter' ? type : 'all';
+        applyProductFilters(true);
+      };
+      (window as any).updateProductPriceFilter = function (bound: string, rawValue: string) {
+        const nextValue = Math.max(PRODUCT_PRICE_MIN, Math.min(PRODUCT_PRICE_MAX, Number(rawValue || PRODUCT_PRICE_MIN)));
+        if (bound === 'min') {
+          productState.filters.minPrice = Math.min(nextValue, productState.filters.maxPrice);
+        } else {
+          productState.filters.maxPrice = Math.max(nextValue, productState.filters.minPrice);
+        }
+        applyProductFilters(false);
+      };
+      (window as any).setProductSort = function (sortKey: string) {
+        productState.filters.sort = sortKey === 'likes' ? 'likes' : 'latest';
+        applyProductFilters(false);
+      };
+      (window as any).setShippingFilter = function (shippingKey: string) {
+        productState.filters.shipping = ['all', 'ready', '1d', '2d', '3d'].includes(shippingKey) ? shippingKey : 'all';
+        applyProductFilters(false);
+      };
+      (window as any).setCombinedFilter = function (filterType: string) {
+        const validTypes = ['all', 'latest', 'likes', 'ready', '1d', '2d', '3d'];
+        if (!validTypes.includes(filterType)) return;
+
+        productState.filters.combined = filterType;
+
+        // Update sort and shipping filters based on combined selection
+        if (filterType === 'latest' || filterType === 'likes') {
+          productState.filters.sort = filterType;
+          productState.filters.shipping = 'all';
+        } else if (filterType === 'all') {
+          productState.filters.sort = 'latest';
+          productState.filters.shipping = 'all';
+        } else {
+          productState.filters.shipping = filterType;
+          productState.filters.sort = 'latest';
+        }
+
+        applyProductFilters(false);
+      };
+      (window as any).resetProductFilters = function () {
+        productState.filters = {
+          type: 'all',
+          minPrice: PRODUCT_PRICE_MIN,
+          maxPrice: PRODUCT_PRICE_MAX,
+          shipping: 'all',
+          sort: 'latest',
+          combined: 'all'
+        };
+        applyProductFilters(false);
+      };
+
+      // ===== Load Dynamic Products from Firestore =====
+      async function loadDynamicProducts() {
+        if (!(window as any).fetchDynamicProductsHelper) return;
+        const products = await (window as any).fetchDynamicProductsHelper();
+        const grid = document.getElementById('main-product-grid');
+        if (!grid) return;
+
+        if (!products || products.length === 0) {
+          productState.allProducts = [];
+          renderProductCards([]);
+          syncProductFilterUI(0);
+          return;
+        }
+
+        productState.allProducts = products.map((product: any, index: number) => ({
+          ...product,
+          _originalIndex: index,
+          _createdAtMs: getProductCreatedAtMs(product),
+          _productType: getProductTypeKey(product),
+          _shippingKey: getShippingFilterKey(product),
+          _priceValue: Number(product.price || 0),
+          _likesValue: Math.max(0, Number(product.likes || 0))
+        }));
+
+        applyProductFilters(false);
       }
 
       updateCartUI();
       updateWishlistBadge();
       initializeWishlistHearts();
+      syncProductFilterUI(productState.allProducts.length);
       loadDynamicProducts();
 
       // Listeners for cart/wishlist
@@ -454,15 +735,56 @@ export default function Home() {
               const textColor = isRead ? '#a08a8e' : '#5c4738';
               const bgStyle = isRead ? 'background:#fafafa;' : 'background:#fff;';
               const hoverOutBg = isRead ? '#fafafa' : '#fff';
-              const dateStr = new Date(n.createdAt?.seconds * 1000 || Date.now()).toLocaleString('th-TH', { 
-                day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' 
+              const dateStr = new Date(n.createdAt?.seconds * 1000 || Date.now()).toLocaleString('th-TH', {
+                day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit'
               });
-              const imgUrl = n.imageUrl || '/images/logo-placeholder.png';
+
+              // For custom-designed orders (with config), render BasketIcon instead of image
+              // But prioritize imageUrl if available (for preset products with images)
+              const isCustomOrder = !!n.config;
+              const hasImageUrl = !!n.imageUrl && typeof n.imageUrl === 'string';
+              // Check if imageUrl is the default ribbon image (used for custom products)
+              const isDefaultRibbonImage = hasImageUrl && n.imageUrl.includes('ริบบิ้นแดง.jpg');
+              // Simplified logic: show image if it exists and is not the default ribbon image
+              const shouldShowImage = hasImageUrl && !isDefaultRibbonImage;
+              const itemColors = isCustomOrder && n.config?.selectedColors ? n.config.selectedColors : ['#db8a9e', '#f8bbd0'];
+              const c1 = itemColors[0] || '#F48FB1';
+              const c2 = itemColors[1] || c1;
+              const c3 = itemColors[2] || (itemColors.length > 1 ? itemColors[0] : c1);
+
+              let iconHtml = '';
+              if (shouldShowImage) {
+                // Use product cover image if available
+                const imgUrl = n.imageUrl;
+                iconHtml = '<img src="'+imgUrl+'" alt="Product" style="width:100%; height:100%; object-fit:cover;" onerror="this.style.display=\'none\'; this.parentElement.innerHTML=\'🌸\';" />';
+              } else if (isCustomOrder) {
+                // Render BasketIcon SVG with colors (matching the BasketIcon component)
+                iconHtml = '<svg height="40" width="40" viewBox="0 0 512 512" style="filter: drop-shadow(0px 4px 6px ' + c1 + '40);">' +
+                  '<path style="fill: #834E00" d="M401.171,150.142C401.171,67.354,333.818,0,251.031,0S100.889,67.354,100.889,150.142v74.557 c0,0.044,0.007,0.086,0.007,0.131c0.002,0.23,0.023,0.461,0.035,0.691c0.017,0.344,0.032,0.689,0.07,1.026 c0.006,0.045,0.003,0.089,0.009,0.134l33.31,271.053c1,8.146,7.919,14.266,16.126,14.266h201.168c8.207,0,15.125-6.12,16.126-14.266 l33.309-271.053c0.006-0.045,0.004-0.089,0.009-0.134c0.038-0.338,0.054-0.682,0.07-1.026c0.011-0.231,0.033-0.461,0.035-0.691 c0-0.044,0.007-0.086,0.007-0.131v-74.557H401.171z M133.384,150.142c0-64.871,52.777-117.647,117.647-117.647 s117.647,52.776,117.647,117.647v58.31H133.384V150.142z" />' +
+                  '<path style="fill: #DF871E" d="M100.93,225.521c0.002,0.044,0.007,0.087,0.009,0.131h300.182c0.002-0.044,0.007-0.086,0.009-0.131 c0.011-0.231,0.034-0.461,0.035-0.691c0-0.045,0.007-0.086,0.007-0.131v-74.557C401.171,67.354,333.819,0,251.031,0 c-82.788,0-150.142,67.354-150.142,150.142v74.557c0,0.044,0.007,0.086,0.007,0.131C100.897,225.06,100.919,225.29,100.93,225.521z M133.384,150.142c0-64.871,52.777-117.647,117.647-117.647c64.871,0,117.647,52.776,117.647,117.647v58.31H133.384V150.142z" />' +
+                  '<path style="fill: #A66300" d="M250.817,208.451H133.384v-58.31c0-64.799,52.662-117.528,117.434-117.644V0.002 c-82.692,0.116-149.93,67.422-149.93,150.14v74.557c0,0.044,0.007,0.086,0.007,0.131c0.002,0.23,0.023,0.46,0.035,0.691 c0.018,0.344,0.032,0.689,0.07,1.026c0.006,0.045,0.003,0.089,0.009,0.134l33.31,271.053c1,8.146,7.919,14.266,16.126,14.266 h100.371V208.451H250.817z" />' +
+                  '<path style="fill: #EDA637" d="M100.93,225.521c0.002,0.044,0.007,0.087,0.009,0.131h149.878v-17.199H133.384v-58.31 c0-64.799,52.662-117.528,117.434-117.644V0.002c-82.692,0.116-149.93,67.422-149.93,150.14v74.557c0,0.044,0.007,0.086,0.007,0.131 C100.897,225.06,100.919,225.29,100.93,225.521z" />' +
+                  '<g><polygon style="fill: #834E00" points="382.876,374.577 119.185,374.577 123.302,408.075 378.759,408.075" /><polygon style="fill: #834E00" points="374.922,439.293 127.139,439.293 131.256,472.791 370.807,472.791" /></g>' +
+                  '<g><polygon style="fill: #704300" points="251.031,374.577 251.031,408.075 378.759,408.075 382.876,374.577" /><polygon style="fill: #704300" points="251.031,439.293 251.031,472.791 370.807,472.791 374.922,439.293" /></g>' +
+                  '<g opacity="0.9"><path fill="' + c1 + '" d="M302.957,167.299h-42.325l-3.043-54.663c-0.773-13.897,10.287-25.59,24.206-25.59l0,0 c13.917,0,24.978,11.693,24.204,25.589L302.957,167.299z" /><path fill="' + c1 + '" d="M268.194,154.882l19.428,37.602l-47.168,27.794c-11.991,7.066-27.456,2.607-33.844-9.758l0,0 c-6.388-12.365-1.078-27.558,11.624-33.25L268.194,154.882z" /><path fill="' + c1 + '" d="M295.396,154.882l-19.428,37.602l47.168,27.794c11.991,7.066,27.456,2.607,33.844-9.758l0,0 c6.388-12.365,1.077-27.558-11.624-33.25L295.396,154.882z" /></g>' +
+                  '<g opacity="0.7"><path fill="' + c1 + '" d="M295.396,188.467l-19.428-37.602l47.168-27.794c11.991-7.066,27.456-2.607,33.844,9.758l0,0 c6.388,12.365,1.077,27.558-11.624,33.25L295.396,188.467z" /><path fill="' + c1 + '" d="M268.194,188.467l19.428-37.602l-47.168-27.794c-11.991-7.066-27.456-2.607-33.844,9.758l0,0 c-6.388,12.365-1.078,27.558,11.624,33.25L268.194,188.467z" /><path fill="' + c1 + '" d="M260.632,176.05h42.325l3.043,54.663c0.774,13.896-10.286,25.589-24.204,25.589l0,0 c-13.918,0-24.978-11.693-24.204-25.589L260.632,176.05z" /></g>' +
+                  '<circle style="fill: #FACE17" cx="282.521" cy="170.716" r="24.903" />' +
+                  '<g opacity="0.8"><path fill="' + c2 + '" d="M180.174,200.726h-42.325l-3.043-54.663c-0.774-13.896,10.286-25.589,24.204-25.589l0,0 c13.918,0,24.978,11.693,24.204,25.589L180.174,200.726z" /><path fill="' + c2 + '" d="M145.411,188.308l19.428,37.602l-47.168,27.794c-11.991,7.066-27.456,2.607-33.844-9.758l0,0 c-6.388-12.365-1.078-27.558,11.624-33.25L145.411,188.308z" /><path fill="' + c2 + '" d="M172.613,188.308l-19.428,37.602l47.168,27.794c11.991,7.066,27.456,2.607,33.844-9.758l0,0 c6.388-12.365,1.078-27.558-11.624-33.25L172.613,188.308z" /></g>' +
+                  '<g opacity="0.6"><path fill="' + c2 + '" d="M172.613,221.893l-19.428-37.602l47.168-27.794c11.991-7.066,27.456-2.607,33.844,9.758l0,0 c6.388,12.365,1.078,27.558-11.624,33.25L172.613,221.893z" /><path fill="' + c2 + '" d="M145.411,221.893l19.428-37.602l-47.168-27.794c-11.991-7.066-27.456-2.607-33.844,9.758l0,0 c-6.388,12.365,1.078,27.558,11.624,33.25L145.411,221.893z" /><path fill="' + c2 + '" d="M137.85,209.477h42.325l3.043,54.663c0.774,13.896-10.286,25.589-24.204,25.589l0,0 c-13.918,0-24.978-11.693-24.204-25.589L137.85,209.477z" /></g>' +
+                  '<circle style="fill: #FACE17" cx="159.74" cy="204.147" r="24.903" />' +
+                  '<g opacity="0.95"><path fill="' + c3 + '" d="M374.151,245.227h-42.325l-3.043-54.663c-0.774-13.896,10.286-25.589,24.204-25.589l0,0 c13.918,0,24.978,11.693,24.204,25.589L374.151,245.227z" /><path fill="' + c3 + '" d="M339.388,232.81l19.428,37.602l-47.168,27.794c-11.991,7.066-27.456,2.607-33.844-9.758l0,0 c-6.388-12.365-1.078-27.558,11.624-33.25L339.388,232.81z" /><path fill="' + c3 + '" d="M366.59,232.81l-19.428,37.602l47.168,27.794c11.991,7.066,27.456,2.607,33.844-9.758l0,0 c6.388-12.365,1.078-27.558-11.624-33.25L366.59,232.81z" /></g>' +
+                  '<g opacity="0.75"><path fill="' + c3 + '" d="M366.59,266.395l-19.428-37.602l47.168-27.794c11.991-7.066,27.456-2.607,33.844,9.758l0,0 c6.388,12.365,1.078,27.558-11.624,33.25L366.59,266.395z" /><path fill="' + c3 + '" d="M339.388,266.395l19.428-37.602l-47.168-27.794c-11.991-7.066-27.456-2.607-33.844,9.758l0,0 c-6.388,12.365,1.078,27.558,11.624,33.25L339.388,266.395z" /><path fill="' + c3 + '" d="M331.826,253.979h42.325l3.043,54.663c0.774,13.896-10.286,25.589-24.204,25.589l0,0 c-13.918,0-24.978-11.693-24.204-25.589L331.826,253.979z" /></g>' +
+                  '<circle style="fill: #FACE17" cx="353.715" cy="248.649" r="24.903" />' +
+                  '</svg>';
+              } else {
+                const imgUrl = '/images/logo-placeholder.png';
+                iconHtml = '<img src="'+imgUrl+'" style="width:100%; height:100%; object-fit:cover;" />';
+              }
 
               return '<div class="notif-item" onclick="handleNotifClick(&quot;' + n.id + '&quot;)" style="display:flex; gap:12px; padding:16px; border-bottom:1px solid #fdf5f6; cursor:pointer; transition:all 0.2s; align-items:center;' + bgStyle + '" onmouseover="this.style.background=&quot;#fffafb&quot;; this.style.transform=&quot;translateY(-1px)&quot;" onmouseout="this.style.background=&quot;' + hoverOutBg + '&quot;; this.style.transform=&quot;none&quot;">' +
-                '<div style="flex-shrink:0; width:52px; height:52px; border-radius:12px; overflow:hidden; border:1px solid #fdf5f6; position:relative; box-shadow:0 2px 8px rgba(219,138,158,0.1);">' +
-                  '<img src="'+imgUrl+'" style="width:100%; height:100%; object-fit:cover;" />' +
-                  (!isRead ? '<div style="position:absolute; top:0px; right:0px; width:12px; height:12px; background:#e74c3c; border-radius:50%; border:2px solid #fff;"></div>' : '') +
+                '<div style="flex-shrink:0; width:40px; height:40px; border-radius:10px; overflow:hidden; border:1px solid #fdf5f6; position:relative; box-shadow:0 2px 8px rgba(219,138,158,0.1); background:#fff;">' +
+                  iconHtml +
+                  (!isRead ? '<div style="position:absolute; top:0px; right:0px; width:10px; height:10px; background:#e74c3c; border-radius:50%; border:2px solid #fff;"></div>' : '') +
                 '</div>' +
                 '<div style="flex-grow:1; display:flex; flex-direction:column; gap:4px; min-width:0;">' +
                   '<div style="font-weight:700; color:' + titleColor + '; font-size:0.95rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + (n.title || '') + '</div>' +
@@ -695,7 +1017,7 @@ export default function Home() {
           </svg>
           <span class="nav-cart-badge" id="notif-count" style="display:none;background:#e74c3c;">0</span>
           
-          <div class="profile-dropdown" id="notif-dropdown" style="display:none; position:absolute; top:40px; right:-50px; background:#fff; border-radius:12px; box-shadow:0 10px 25px rgba(0,0,0,0.1); width:300px; max-height:400px; overflow-y:auto; z-index:100; border: 1px solid #fdf5f6; cursor:default;">
+          <div class="profile-dropdown" id="notif-dropdown" style="display:none; position:absolute; top:40px; right:-50px; background:#fff; border-radius:12px; box-shadow:0 10px 25px rgba(0,0,0,0.1); width:380px; max-height:400px; overflow-y:auto; z-index:100; border: 1px solid #fdf5f6; cursor:default;">
             <div style="padding:15px; font-weight:700; border-bottom:1px solid #fdf5f6; color:#5c4738; display:flex; justify-content:space-between; align-items:center;">
               <span>การแจ้งเตือน</span>
               <button onclick="handleClearAllNotifs()" style="border:none; background:none; color:#db8a9e; cursor:pointer; padding:8px; border-radius:8px; transition:all 0.2s; display:flex; align-items:center; justify-content:center; margin-left:8px;" onmouseover="this.style.background='#fdf5f6'" onmouseout="this.style.background='none'" title="ล้างทั้งหมด">
@@ -971,6 +1293,68 @@ export default function Home() {
   <div class="section-heading" id="products" onclick="filterProducts('all')" style="cursor:pointer;" title="แสดงสินค้าทั้งหมด">
     <h2>Our Products</h2>
     <p class="subtitle">สินค้าของเรา</p>
+  </div>
+
+  <div class="product-filter-shell" id="product-filter-shell">
+    <button class="product-filter-toggle" id="product-filter-toggle" type="button" onclick="toggleProductFilters()" aria-expanded="false" aria-controls="product-filter-panel" aria-label="ตัวกรองสินค้า">
+      <span class="product-filter-toggle-icon" aria-hidden="true">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 6h18"></path>
+          <path d="M6 12h12"></path>
+          <path d="M10 18h4"></path>
+        </svg>
+      </span>
+    </button>
+
+    <div class="product-filter-panel-wrap" id="product-filter-panel" aria-hidden="true">
+      <div class="product-filter-panel-inner">
+        <div class="product-filter-bar">
+      <div class="product-filter-header">
+        <div>
+          <p class="product-filter-eyebrow">Curated Filters</p>
+        </div>
+      </div>
+
+      <div class="product-filter-layout">
+        <div class="filter-panel filter-panel-price">
+          <div class="filter-label-row">
+            <span class="filter-title">เรทราคา</span>
+          </div>
+          <div class="price-range-values">
+            <span id="price-min-value">79 บาท</span>
+            <span id="price-max-value">2,000 บาท</span>
+          </div>
+          <div class="dual-range-slider">
+            <div class="dual-range-base"></div>
+            <div class="dual-range-highlight" id="product-price-track"></div>
+            <input id="product-price-min" class="range-input range-min" type="range" min="79" max="2000" step="1" value="79" oninput="updateProductPriceFilter('min', this.value)" />
+            <input id="product-price-max" class="range-input range-max" type="range" min="79" max="2000" step="1" value="2000" oninput="updateProductPriceFilter('max', this.value)" />
+          </div>
+        </div>
+
+        <div class="filter-panel">
+          <div class="filter-label-row">
+            <span class="filter-title">เรียงตาม</span>
+          </div>
+          <div class="filter-pill-row">
+            <button type="button" class="filter-pill active" data-filter-type="all" onclick="setCombinedFilter('all')">ทั้งหมด</button>
+            <button type="button" class="filter-pill" data-filter-type="latest" onclick="setCombinedFilter('latest')">ล่าสุด</button>
+            <button type="button" class="filter-pill" data-filter-type="likes" onclick="setCombinedFilter('likes')">ถูกใจเยอะสุด</button>
+            <button type="button" class="filter-pill" data-filter-type="ready" onclick="setCombinedFilter('ready')">ช่อพร้อมส่ง</button>
+            <button type="button" class="filter-pill" data-filter-type="1d" onclick="setCombinedFilter('1d')">จัดส่งใน 1 วัน</button>
+            <button type="button" class="filter-pill" data-filter-type="2d" onclick="setCombinedFilter('2d')">จัดส่งใน 2 วัน</button>
+            <button type="button" class="filter-pill" data-filter-type="3d" onclick="setCombinedFilter('3d')">จัดส่งใน 3 วัน</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="product-filter-summary">
+        <span id="product-results-count">กำลังโหลดสินค้า...</span>
+        <span id="product-active-filter-text">สินค้าทั้งหมด • 79 บาท - 2,000 บาท • ทุกสถานะ • เรียงตามสินค้าล่าสุด</span>
+      </div>
+    </div>
+      </div>
+    </div>
   </div>
 
   <section class="section-three">

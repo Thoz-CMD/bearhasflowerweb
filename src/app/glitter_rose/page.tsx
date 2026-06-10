@@ -252,6 +252,9 @@ export default function GlitterRose() {
       let deliveryTime = '';
       let additionalNote = '';
       let productCoverImage = '';
+      let isPresetReadyToShip = false;
+      let presetProductId = null;
+      let presetStockQuantity = 0;
 
       const STORAGE_KEY = 'bear_flower_v1';
 
@@ -432,7 +435,7 @@ export default function GlitterRose() {
             <h3>🌹 เลือกจำนวนดอกกุหลาบ</h3>
             <p>กรุณาเลือกจำนวนที่ต้องการ</p>
           </div>
-          
+
           <div class="custom-dropdown" id="qty-dropdown">
             <div class="dropdown-header" onclick="toggleDropdown(event)">
               <span id="dropdown-label">\${selectedQty
@@ -450,6 +453,10 @@ export default function GlitterRose() {
                 </div>
               \`).join('')}
             </div>
+          </div>
+
+          <div id="qty-warning" style="margin-top: 12px; font-size: 0.8rem; color: #e53935; font-weight: 600; display: \${selectedQty === 40 || selectedQty === 50 ? 'block' : 'none'};">
+            * ต้องสั่งล่วงหน้าอย่างน้อย 3 วัน (เนื่องจากดอกไม้มีจำนวน \${selectedQty} ดอก)
           </div>
 
           <div style="width:100%; border-top:1px dashed var(--glass-border); margin: 32px 0 12px;"></div>
@@ -788,8 +795,14 @@ export default function GlitterRose() {
       // Returns the earliest delivery date string based on selected quantity.
       function getMinDeliveryStr() {
         const d = new Date();
-        // If ordering 30 or more roses, require at least 2 days in advance (today + 3 days).
-        const offset = (selectedQty && selectedQty >= 30) ? 3 : 1;
+        // If ordering 40 or more roses, require at least 3 days in advance
+        // If ordering 30-39 roses, require at least 2 days in advance
+        let offset = 1;
+        if (selectedQty && selectedQty >= 40) {
+          offset = 3;
+        } else if (selectedQty && selectedQty >= 30) {
+          offset = 2;
+        }
         d.setDate(d.getDate() + offset);
         const yyyy = d.getFullYear();
         const mm = String(d.getMonth() + 1).padStart(2, '0');
@@ -834,7 +847,7 @@ export default function GlitterRose() {
           <div style="width:100%; margin-top:20px;">
             <div class="form-group">
               <label>ชื่อผู้รับ</label>
-              <input type="text" id="ipt-name" placeholder="ชื่อ-นามสกุล" value="\${customerName}" oninput="updateFormState()" style="font-size: 16px;">
+              <input type="text" id="ipt-name" placeholder="ชื่อเล่นหรือนามแฝง" value="\${customerName}" oninput="updateFormState()" style="font-size: 16px;">
             </div>
             
             <div class="form-group">
@@ -846,7 +859,7 @@ export default function GlitterRose() {
               <label>ที่อยู่จัดส่ง</label>
               <textarea id="ipt-address" placeholder="ชื่อหอ.." oninput="updateFormState()" style="font-size: 16px;">\${customerAddress}</textarea>
               <div class="form-note">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5l10 -10"/></svg> ส่งฟรีบริเวณกำแพงแสน
+              ส่งฟรีบริเวณกำแพงแสน
               </div>
             </div>
             
@@ -855,24 +868,50 @@ export default function GlitterRose() {
               <div style="width:100%;">
                 <input type="text" id="ipt-date" placeholder="เลือกวันที่และเวลาจัดส่ง" value="\${deliveryDate ? deliveryDate + (deliveryTime ? ' ' + deliveryTime : '') : ''}" style="width:100%; background: var(--glass-bg); border: 1px solid var(--glass-border); padding: 12px; border-radius: 12px; color: var(--text-color); font-size: 16px;" readonly>
               </div>
-              <span style="font-size:.75rem; color:var(--text-muted); margin-top:6px; display:block; line-height:1.4;">
-                \${selectedQty >= 30 ? '* ต้องสั่งล่วงหน้าอย่างน้อย 2 วัน (เนื่องจากจำนวน 30 ดอกขึ้นไป)' : '* ต้องสั่งล่วงหน้าอย่างน้อย 1 วัน'}
+              <span id="delivery-warning" style="font-size:.75rem; color:red; margin-top:6px; display:block; line-height:1.4;">
               </span>
             </div>
             
             <div class="form-group">
               <label>รายละเอียดเพิ่มเติม (ถ้ามี)</label>
-              <textarea id="ipt-note" placeholder="เช่น เวลาที่สะดวกรับ, ข้อความฝากเขียนการ์ด..." oninput="updateFormState()" style="font-size: 16px;">\${additionalNote}</textarea>
+              <textarea id="ipt-note" placeholder="เช่น ข้อความฝากเขียนการ์ด..." oninput="updateFormState()" style="font-size: 16px;">\${additionalNote}</textarea>
             </div>
           </div>
         \`;
+
+        // Update delivery warning message
+        const warningEl = document.getElementById('delivery-warning');
+        if (warningEl) {
+          if (!isPresetReadyToShip) {
+            if (selectedQty === 30) {
+              warningEl.textContent = '* ต้องสั่งล่วงหน้าอย่างน้อย 2 วัน (เนื่องจากดอกไม้มีจำนวน 30 ดอก)';
+            } else if (selectedQty === 40) {
+              warningEl.textContent = '* ต้องสั่งล่วงหน้าอย่างน้อย 3 วัน (เนื่องจากดอกไม้มีจำนวน 40 ดอก)';
+            } else if (selectedQty === 50) {
+              warningEl.textContent = '* ต้องสั่งล่วงหน้าอย่างน้อย 3 วัน (เนื่องจากดอกไม้มีจำนวน 50 ดอก)';
+            } else if (selectedQty >= 30) {
+              warningEl.textContent = '* ต้องสั่งล่วงหน้าอย่างน้อย 2 วัน (เนื่องจากดอกไม้มีจำนวน ' + selectedQty + ' ดอก)';
+            } else {
+              warningEl.textContent = '* กรุณาสั่งล่วงหน้าอย่างน้อย 1 วัน';
+            }
+          } else {
+            warningEl.textContent = '';
+          }
+        }
 
         // บังคับใช้ Flatpickr
         setTimeout(() => {
           const dateInput = document.getElementById('ipt-date');
           if (dateInput && typeof window.flatpickr !== 'undefined') {
             const minDate = new Date();
-            const offset = (selectedQty && selectedQty >= 30) ? 3 : 1;
+            // If ordering 40 or more roses, require at least 3 days in advance
+            // If ordering 30-39 roses, require at least 2 days in advance
+            let offset = 1;
+            if (selectedQty && selectedQty >= 40) {
+              offset = 3;
+            } else if (selectedQty && selectedQty >= 30) {
+              offset = 2;
+            }
             minDate.setDate(minDate.getDate() + offset);
             minDate.setHours(0, 0, 0, 0); // รีเซ็ตเวลาเป็น 00:00 เพื่อไม่ให้ Flatpickr ล็อกเวลาตามเวลาปัจจุบันของระบบ
             
@@ -1221,6 +1260,11 @@ export default function GlitterRose() {
         }
 
         // Calculate price and description for NEW item
+        if (isPresetReadyToShip && presetStockQuantity <= 0) {
+          showToast('สินค้าหมดชั่วคราว');
+          return;
+        }
+
         const total = calculateTotalPrice();
         const colorNames = selectedColors.map(id => ROSE_COLORS.find(x => x.id === id).name).join(', ');
         const customItem = {
@@ -1231,6 +1275,9 @@ export default function GlitterRose() {
           qty: 1,
           details: 'สี: ' + colorNames,
           coverImage: productCoverImage,
+          presetId: presetProductId,
+          readyToShip: isPresetReadyToShip,
+          stockQuantity: presetStockQuantity,
           config: {
             selectedQty, selectedColors, selectedLayers,
             selectedPaper, selectedShape, selectedDecorations,
@@ -1284,6 +1331,15 @@ export default function GlitterRose() {
               selectedShape = config.selectedShape || null;
               selectedDecorations = config.selectedDecorations || [];
               productCoverImage = p.coverImage || '';
+              isPresetReadyToShip = Boolean(p.readyToShip);
+              presetProductId = presetId;
+              presetStockQuantity = Number(p.stockQuantity || 0);
+
+              if (isPresetReadyToShip && presetStockQuantity <= 0) {
+                showToast('สินค้าหมดชั่วคราว');
+                setTimeout(() => { window.location.href = '/'; }, 900);
+                return;
+              }
 
               // Calculate extra costs to deduce mathematically precise basePrice
               let extra = 0;

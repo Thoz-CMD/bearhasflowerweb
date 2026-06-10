@@ -415,7 +415,7 @@ export default function GlitterRose() {
             <h3>🌹 เลือกจำนวนดอกกุหลาบ</h3>
             <p>กรุณาเลือกจำนวนที่ต้องการ</p>
           </div>
-          
+
           <div class="custom-dropdown" id="qty-dropdown">
             <div class="dropdown-header" onclick="toggleDropdown(event)">
               <span id="dropdown-label">\${selectedQty
@@ -433,6 +433,10 @@ export default function GlitterRose() {
                 </div>
               \`).join('')}
             </div>
+          </div>
+
+          <div id="qty-warning" style="margin-top: 12px; font-size: 0.8rem; color: #e53935; font-weight: 600; display: \${selectedQty === 40 || selectedQty === 50 ? 'block' : 'none'};">
+            * ต้องสั่งล่วงหน้าอย่างน้อย 3 วัน (เนื่องจากดอกไม้มีจำนวน \${selectedQty} ดอก)
           </div>
 
           <div style="width:100%; border-top:1px dashed var(--glass-border); margin: 32px 0 12px;"></div>
@@ -843,8 +847,16 @@ export default function GlitterRose() {
           const dateInput = document.getElementById('ipt-date');
           if (dateInput && typeof window.flatpickr !== 'undefined') {
             const tmrDate = new Date();
-            tmrDate.setDate(tmrDate.getDate() + 1);
-            
+            // If ordering 40 or more roses, require at least 3 days in advance
+            // If ordering 30-39 roses, require at least 2 days in advance
+            let offset = 1;
+            if (selectedQty && selectedQty >= 40) {
+              offset = 3;
+            } else if (selectedQty && selectedQty >= 30) {
+              offset = 2;
+            }
+            tmrDate.setDate(tmrDate.getDate() + offset);
+
             window.flatpickr('#ipt-date', {
               enableTime: true,
               dateFormat: "Y-m-d H:i",
@@ -863,7 +875,7 @@ export default function GlitterRose() {
                   const d = selectedDates[0];
                   const dStr = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
                   const tStr = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
-                  
+
                   deliveryDate = dStr;
                   deliveryTime = tStr;
                   const el = document.getElementById('ipt-date');

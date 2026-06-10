@@ -3,38 +3,91 @@ import { useEffect, useState } from 'react';
 import { auth, db } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { checkIsAdmin } from '@/lib/admin';
-import { collection, addDoc, serverTimestamp, doc, updateDoc, deleteDoc, getDocs, orderBy, query } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, doc, updateDoc, deleteDoc, getDoc, getDocs, orderBy, query } from 'firebase/firestore';
 
 type ProductStudioPageProps = {
   forceManageMode?: boolean;
+  initialProductType?: ProductStudioType;
 };
 
-export function ProductStudioPage({ forceManageMode = false }: ProductStudioPageProps) {
+type ProductStudioType = 'glitter_rose' | 'velvet_flower';
+
+export function ProductStudioPage({ forceManageMode = false, initialProductType }: ProductStudioPageProps) {
+  const EDIT_KEY = 'bear_flower_edit_product';
+  const EDIT_ID_KEY = 'bear_flower_edit_product_id';
+  const EDIT_TYPE_KEY = 'bear_flower_edit_product_type';
+
+  const detectProductStudioType = (product: Record<string, any> | null): ProductStudioType => {
+    if (!product) return 'glitter_rose';
+
+    const searchableText = [
+      product.category,
+      product.name,
+      product.description,
+      product.badge,
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase();
+
+    if (
+      searchableText.includes('velvet') ||
+      searchableText.includes('ลวด') ||
+      searchableText.includes('กำมะหยี่')
+    ) {
+      return 'velvet_flower';
+    }
+
+    if (product.type === 'velvet_flower' || product.productType === 'velvet_flower') return 'velvet_flower';
+    if (product.type === 'glitter_rose' || product.productType === 'glitter_rose') return 'glitter_rose';
+
+    return 'glitter_rose';
+  };
+
+  const getInitialSelectedType = () => {
+    if (typeof window === 'undefined' || forceManageMode) return null;
+    if (initialProductType) return initialProductType;
+
+    const params = new URLSearchParams(window.location.search);
+    const queryType = params.get('type');
+    const storedType = sessionStorage.getItem(EDIT_TYPE_KEY);
+    const editRaw = sessionStorage.getItem(EDIT_KEY);
+    const isEditQuery = params.get('edit') === 'true';
+    if (!isEditQuery) return null;
+
+    if (queryType === 'velvet_flower' || queryType === 'glitter_rose') return queryType;
+    if (storedType === 'velvet_flower' || storedType === 'glitter_rose') return storedType;
+
+    if (editRaw) {
+      try {
+        const product = JSON.parse(editRaw);
+        return detectProductStudioType(product);
+      } catch (err) {
+        console.error('Failed to detect edit product type', err);
+      }
+    }
+    return 'glitter_rose';
+  };
+
   const [user, setUser] = useState<any>(null);
   const [isAdminUser, setIsAdminUser] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(true);
-  const [selectedType, setSelectedType] = useState<string | null>(null);
+  const [selectedType, setSelectedType] = useState<string | null>(getInitialSelectedType);
   const [viewMode, setViewMode] = useState<'select' | 'form' | 'manage'>(() => {
     if (forceManageMode) return 'manage';
+    if (initialProductType) return 'form';
     if (typeof window === 'undefined') return 'select';
 
     const params = new URLSearchParams(window.location.search);
     const isManageQuery = params.get('manage') === 'true';
     const isEditQuery = params.get('edit') === 'true';
-    const hasEditState = Boolean(
-      sessionStorage.getItem('bear_flower_edit_product') ||
-      sessionStorage.getItem('bear_flower_edit_product_id')
-    );
 
     if (isManageQuery) return 'manage';
-    if (isEditQuery || hasEditState) return 'form';
+    if (isEditQuery) return 'form';
     return 'select';
   });
   const [manageProducts, setManageProducts] = useState<any[]>([]);
   const [manageLoading, setManageLoading] = useState(false);
-
-  const EDIT_KEY = 'bear_flower_edit_product';
-  const EDIT_ID_KEY = 'bear_flower_edit_product_id';
 
   // Auth & Admin check
   useEffect(() => {
@@ -148,19 +201,16 @@ export function ProductStudioPage({ forceManageMode = false }: ProductStudioPage
   }, []);
 
   useEffect(() => {
-    if (typeof window === 'undefined' || isAdminUser !== true) return;
-    const params = new URLSearchParams(window.location.search);
-    const isEditQuery = params.get('edit') === 'true';
-    const editRaw = sessionStorage.getItem(EDIT_KEY);
-    const editId = sessionStorage.getItem(EDIT_ID_KEY);
+    if (typeof window === 'undefined' || forceManageMode || initialProductType) return;
 
-    if (editRaw || editId || isEditQuery) {
-      if (selectedType !== 'glitter_rose' && selectedType !== 'velvet_flower') {
-        setSelectedType('glitter_rose');
-      }
-      setViewMode('form');
-    }
-  }, [isAdminUser, selectedType]);
+    const params = new URLSearchParams(window.location.search);
+    const isEditOrManagePage = params.get('edit') === 'true' || params.get('manage') === 'true';
+    if (isEditOrManagePage) return;
+
+    sessionStorage.removeItem(EDIT_KEY);
+    sessionStorage.removeItem(EDIT_ID_KEY);
+    sessionStorage.removeItem(EDIT_TYPE_KEY);
+  }, [forceManageMode, initialProductType]);
 
   useEffect(() => {
     if (isAdminUser !== true || viewMode !== 'manage') return;
@@ -188,12 +238,48 @@ export function ProductStudioPage({ forceManageMode = false }: ProductStudioPage
     };
   }, [isAdminUser, viewMode]);
 
+  useEffect(() => {
+    if (typeof window === 'undefined' || isAdminUser !== true || viewMode !== 'form') return;
+
+    const params = new URLSearchParams(window.location.search);
+    const editId = sessionStorage.getItem(EDIT_ID_KEY);
+    const hasKnownType = Boolean(
+      params.get('type') ||
+      sessionStorage.getItem(EDIT_TYPE_KEY) ||
+      sessionStorage.getItem(EDIT_KEY)
+    );
+
+    if (!editId || hasKnownType) return;
+
+    let active = true;
+    (async () => {
+      try {
+        const snap = await getDoc(doc(db, 'products', editId));
+        if (!active || !snap.exists()) return;
+
+        const product = { id: snap.id, ...snap.data() };
+        const productType = detectProductStudioType(product);
+        sessionStorage.setItem(EDIT_KEY, JSON.stringify({ ...product, type: productType }));
+        sessionStorage.setItem(EDIT_TYPE_KEY, productType);
+
+        if (selectedType !== productType) {
+          setSelectedType(productType);
+        }
+      } catch (err) {
+        console.error('Failed to reload edit product type', err);
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [isAdminUser, viewMode, selectedType]);
+
   // Main interactive logic is loaded when option is selected
   useEffect(() => {
     if (isAdminUser !== true || (selectedType !== 'glitter_rose' && selectedType !== 'velvet_flower') || viewMode !== 'form') return;
 
     const script = document.createElement('script');
-    const PRODUCT_TYPE = '${selectedType}';
     script.innerHTML = `
       const PRODUCT_TYPE = '${selectedType}';
       const ROSE_PRICES = [
@@ -274,17 +360,74 @@ export function ProductStudioPage({ forceManageMode = false }: ProductStudioPage
       let maxStepReached = 0; 
 
       // Product fields
+      const DELIVERY_BADGE_OPTIONS = [
+        'ส่งใน 1 วัน',
+        'ส่งใน 2 วัน',
+        'ส่งใน 3 วัน',
+      ];
       let productName = '';
       let productDesc = '';
       let productBadge = '';
       let productPrice = '';
       let productCoverImage = ''; // Base64 data URL
+      let productReadyToShip = false;
+      let productStockQuantity = '';
 
       let editingProductId = null;
       const EDIT_KEY = 'bear_flower_edit_product';
       const EDIT_ID_KEY = 'bear_flower_edit_product_id';
+      const EDIT_TYPE_KEY = 'bear_flower_edit_product_type';
 
       const STORAGE_KEY = 'bear_flower_create_prod_' + PRODUCT_TYPE;
+
+      function getReadyToShipBadge() {
+        const stock = parseInt(productStockQuantity, 10);
+        return Number.isFinite(stock) && stock > 0 ? 'พร้อมส่ง ' + stock + ' ชิ้น' : 'พร้อมส่ง';
+      }
+
+      function getResolvedProductBadge() {
+        if (productReadyToShip) return getReadyToShipBadge();
+        return productBadge || DELIVERY_BADGE_OPTIONS[0];
+      }
+
+      function syncBadgeControl() {
+        const badgeEl = document.getElementById('ipt-prod-badge');
+        if (!badgeEl) return;
+        const badgeButtons = document.querySelectorAll('[data-delivery-badge]');
+        const readyPreview = document.getElementById('ready-badge-preview');
+
+        if (productReadyToShip) {
+          const badge = getReadyToShipBadge();
+          badgeEl.value = badge;
+          badgeButtons.forEach(function(btn) {
+            btn.classList.remove('selected');
+            btn.style.opacity = '0.45';
+            btn.style.borderColor = 'var(--glass-border)';
+            btn.style.background = '#fff';
+            btn.style.boxShadow = 'none';
+          });
+          if (readyPreview) readyPreview.textContent = badge;
+          return;
+        }
+
+        badgeEl.value = getResolvedProductBadge();
+        badgeButtons.forEach(function(btn) {
+          const isSelected = btn.dataset.deliveryBadge === badgeEl.value;
+          btn.classList.toggle('selected', isSelected);
+          btn.style.opacity = '1';
+          btn.style.borderColor = isSelected ? 'var(--rose-gold)' : 'var(--glass-border)';
+          btn.style.background = isSelected ? 'rgba(219,138,158,0.13)' : '#fff';
+          btn.style.boxShadow = isSelected ? '0 8px 18px rgba(219,138,158,0.14)' : 'none';
+        });
+        if (readyPreview) readyPreview.textContent = 'พร้อมส่ง';
+      }
+
+      window.selectDeliveryBadge = function(value) {
+        if (productReadyToShip) return;
+        productBadge = value;
+        syncBadgeControl();
+        saveState();
+      };
 
       function calculateTotalPrice() {
         let total = basePrice;
@@ -309,7 +452,8 @@ export function ProductStudioPage({ forceManageMode = false }: ProductStudioPage
         const state = {
           current, maxStepReached, selectedQty, selectedColors, selectedLayers, selectedPaper,
           selectedShape, selectedDecorations, basePrice,
-          productName, productDesc, productBadge, productPrice, productCoverImage
+          productName, productDesc, productBadge, productPrice, productCoverImage,
+          productReadyToShip, productStockQuantity
         };
         localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
       }
@@ -323,11 +467,14 @@ export function ProductStudioPage({ forceManageMode = false }: ProductStudioPage
             if (editingProductId) {
               sessionStorage.setItem(EDIT_ID_KEY, editingProductId);
             }
+            sessionStorage.setItem(EDIT_TYPE_KEY, PRODUCT_TYPE);
             productName = p.name || '';
             productDesc = p.description || '';
-            productBadge = p.badge || '';
+            productBadge = DELIVERY_BADGE_OPTIONS.includes(p.badge) ? p.badge : DELIVERY_BADGE_OPTIONS[0];
             productPrice = p.price !== undefined ? String(p.price) : '';
             productCoverImage = p.coverImage || '';
+            productReadyToShip = Boolean(p.readyToShip);
+            productStockQuantity = p.stockQuantity !== undefined ? String(p.stockQuantity) : '';
 
             const cfg = p.config || {};
             selectedQty = cfg.selectedQty || null;
@@ -364,9 +511,11 @@ export function ProductStudioPage({ forceManageMode = false }: ProductStudioPage
             basePrice = s.basePrice || 0;
             productName = s.productName || '';
             productDesc = s.productDesc || '';
-            productBadge = s.productBadge || '';
+            productBadge = DELIVERY_BADGE_OPTIONS.includes(s.productBadge) ? s.productBadge : DELIVERY_BADGE_OPTIONS[0];
             productPrice = s.productPrice || '';
             productCoverImage = s.productCoverImage || '';
+            productReadyToShip = Boolean(s.productReadyToShip);
+            productStockQuantity = s.productStockQuantity || '';
           } catch (err) { console.error('Failed to parse saved state', err); }
         } else {
           resetForm();
@@ -391,12 +540,15 @@ export function ProductStudioPage({ forceManageMode = false }: ProductStudioPage
         basePrice = 0;
         productName = '';
         productDesc = '';
-        productBadge = '';
+        productBadge = DELIVERY_BADGE_OPTIONS[0];
         productPrice = '';
         productCoverImage = '';
+        productReadyToShip = false;
+        productStockQuantity = '';
         editingProductId = null;
         sessionStorage.removeItem(EDIT_ID_KEY);
         sessionStorage.removeItem(EDIT_KEY);
+        sessionStorage.removeItem(EDIT_TYPE_KEY);
         localStorage.removeItem(STORAGE_KEY);
       }
 
@@ -807,8 +959,47 @@ export function ProductStudioPage({ forceManageMode = false }: ProductStudioPage
         const priceEl = document.getElementById('ipt-prod-price');
         if (priceEl) productPrice = priceEl.value;
 
+        const readyEl = document.getElementById('ipt-ready-to-ship');
+        if (readyEl) productReadyToShip = readyEl.checked;
+
+        const stockEl = document.getElementById('ipt-stock-quantity');
+        if (stockEl) {
+          productStockQuantity = stockEl.value;
+          stockEl.disabled = !productReadyToShip;
+          stockEl.style.opacity = productReadyToShip ? '1' : '0.55';
+        }
+
+        const stockWrap = document.getElementById('ready-stock-wrap');
+        if (stockWrap) {
+          stockWrap.style.display = productReadyToShip ? 'block' : 'none';
+        }
+
+        if (productReadyToShip) {
+          productBadge = getReadyToShipBadge();
+        } else if (!DELIVERY_BADGE_OPTIONS.includes(productBadge)) {
+          productBadge = DELIVERY_BADGE_OPTIONS[0];
+        }
+
+        syncBadgeControl();
+
         saveState();
       };
+
+      function validateReadyToShipStock() {
+        if (!productReadyToShip) return true;
+        const stock = parseInt(productStockQuantity, 10);
+        if (!Number.isFinite(stock) || stock < 1) {
+          showToast('กรุณาระบุจำนวนสินค้าพร้อมส่งอย่างน้อย 1 ชิ้น');
+          const stockEl = document.getElementById('ipt-stock-quantity');
+          if (stockEl) {
+            stockEl.style.borderColor = '#e53935';
+            setTimeout(() => { stockEl.style.borderColor = 'var(--glass-border)'; }, 2000);
+          }
+          return false;
+        }
+        productStockQuantity = String(stock);
+        return true;
+      }
 
       window.useCalculatedPrice = function() {
         const total = calculateTotalPrice();
@@ -913,7 +1104,32 @@ export function ProductStudioPage({ forceManageMode = false }: ProductStudioPage
             
             <div class="form-group" style="margin-top: 15px;">
               <label style="font-weight: 600; color: var(--deep-brown); margin-bottom: 6px; display: block;">ป้ายกำกับสินค้า (Badge)</label>
-              <input type="text" id="ipt-prod-badge" placeholder="เช่น 50 ดอก, ขายดี, แนะนำ, ยอดนิยม" value="\${productBadge}" oninput="updateProductFormState()" style="width: 100%; background: var(--glass-bg); border: 1px solid var(--glass-border); padding: 12px; border-radius: 12px; color: var(--text-color); font-size: 16px;">
+              <input type="hidden" id="ipt-prod-badge" value="\${getResolvedProductBadge()}">
+              <div style="border: 1px solid rgba(219,138,158,0.22); background: linear-gradient(180deg, rgba(255,255,255,0.86), rgba(255,250,251,0.78)); border-radius: 18px; padding: 14px; box-shadow: 0 8px 24px rgba(80,50,57,0.05);">
+                <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px;">
+                  \${DELIVERY_BADGE_OPTIONS.map((option, index) => \`
+                    <button type="button" data-delivery-badge="\${option}" onclick="selectDeliveryBadge('\${option}')" class="badge-choice \${!productReadyToShip && getResolvedProductBadge() === option ? 'selected' : ''}" style="border: 1px solid \${!productReadyToShip && getResolvedProductBadge() === option ? 'var(--rose-gold)' : 'var(--glass-border)'}; background: \${!productReadyToShip && getResolvedProductBadge() === option ? 'rgba(219,138,158,0.13)' : '#fff'}; color: var(--deep-brown); border-radius: 12px; padding: 11px 10px; min-height: 48px; font-size: 0.88rem; font-weight: 700; cursor: \${productReadyToShip ? 'default' : 'pointer'}; box-shadow: \${!productReadyToShip && getResolvedProductBadge() === option ? '0 8px 18px rgba(219,138,158,0.14)' : 'none'}; transition: all 0.18s ease;">
+                      <span style="display: block; color: var(--rose-gold); font-size: 0.72rem; margin-bottom: 3px;">ตัวเลือก \${index + 1}</span>
+                      \${option}
+                    </button>
+                  \`).join('')}
+                </div>
+              </div>
+            </div>
+
+            <div class="form-group" style="margin-top: 10px; padding: 14px; border: 1px solid rgba(219,138,158,0.2); border-radius: 16px; background: rgba(255,255,255,0.72);">
+              <label for="ipt-ready-to-ship" style="display: flex; align-items: center; gap: 10px; font-weight: 700; color: var(--deep-brown); cursor: pointer;">
+                <input type="checkbox" id="ipt-ready-to-ship" \${productReadyToShip ? 'checked' : ''} onchange="updateProductFormState()" style="width: 18px; height: 18px; accent-color: var(--rose-gold);">
+                <span style="display: flex; flex-direction: column; gap: 4px;">
+                  <span>สินค้าพร้อมส่ง</span>
+                  <span id="ready-badge-preview" style="display: inline-flex; width: fit-content; color: #fff; background: var(--rose-gold); border-radius: 999px; padding: 4px 10px; font-size: 0.75rem; font-weight: 700;">\${getResolvedProductBadge()}</span>
+                </span>
+              </label>
+              <p style="margin: 8px 0 0; color: var(--mid-brown); font-size: 0.82rem; line-height: 1.5;">ระบบจะใช้ป้ายพร้อมส่งแทนตัวเลือกด้านบน</p>
+              <div id="ready-stock-wrap" style="display: \${productReadyToShip ? 'block' : 'none'}; margin-top: 12px;">
+                <label style="font-weight: 600; color: var(--deep-brown); margin-bottom: 6px; display: block;">จำนวนพร้อมส่ง</label>
+                <input type="number" id="ipt-stock-quantity" min="1" step="1" placeholder="เช่น 3" value="\${productStockQuantity}" oninput="updateProductFormState()" \${productReadyToShip ? '' : 'disabled'} style="width: 100%; background: #fff; border: 1px solid var(--glass-border); padding: 11px 12px; border-radius: 12px; color: var(--text-color); font-size: 16px; opacity: \${productReadyToShip ? '1' : '0.55'}; box-shadow: inset 0 1px 0 rgba(255,255,255,0.8);">
+              </div>
             </div>
 
             <div class="form-group" style="margin-top: 15px;">
@@ -964,7 +1180,7 @@ export function ProductStudioPage({ forceManageMode = false }: ProductStudioPage
         else if (current === 4) renderStep5();
 
         const isLast = current === steps.length - 1;
-        const isFirst = PRODUCT_TYPE === 'velvet_flower' ? false : current === 0;
+        const isFirst = PRODUCT_TYPE === 'velvet_flower' ? true : current === 0;
 
         if (btnPrev) btnPrev.style.visibility = isFirst ? 'hidden' : 'visible';
         const nextBtnEl = document.getElementById('btn-next-step');
@@ -989,11 +1205,14 @@ export function ProductStudioPage({ forceManageMode = false }: ProductStudioPage
                   el.style.borderColor = '#e53935';
                   setTimeout(() => { el.style.borderColor = 'var(--glass-border)'; }, 2000);
                 }
-              });
-              return;
-            }
-            submitProductToFirestore();
+            });
+            return;
           }
+          if (!validateReadyToShipStock()) {
+            return;
+          }
+          submitProductToFirestore();
+        }
           return;
         }
         if (current === 0) {
@@ -1054,6 +1273,9 @@ export function ProductStudioPage({ forceManageMode = false }: ProductStudioPage
             });
             return;
           }
+          if (!validateReadyToShipStock()) {
+            return;
+          }
         }
 
         if (current < steps.length - 1) {
@@ -1090,9 +1312,12 @@ export function ProductStudioPage({ forceManageMode = false }: ProductStudioPage
             name: productName.trim(),
             description: productDesc.trim() || (PRODUCT_TYPE === 'velvet_flower' ? 'ดอกไม้ลวดกำมะหยี่สั่งทำพิเศษตามแบบ' : 'ช่อกุหลาบกลิตเตอร์สั่งทำพิเศษตามแบบ'),
             price: parseFloat(productPrice),
-            badge: productBadge.trim() || (selectedQty ? selectedQty + ' ดอก' : 'สั่งทำพิเศษ'),
+            badge: getResolvedProductBadge(),
             coverImage: productCoverImage,
             type: PRODUCT_TYPE,
+            readyToShip: productReadyToShip,
+            stockQuantity: productReadyToShip ? parseInt(productStockQuantity, 10) : 0,
+            soldOut: productReadyToShip ? parseInt(productStockQuantity, 10) <= 0 : false,
             config: {
               selectedQty,
               selectedColors,
@@ -1200,7 +1425,8 @@ export function ProductStudioPage({ forceManageMode = false }: ProductStudioPage
       (window as any).updateProductFirebaseHelper = async (productId: string, productData: any) => {
         try {
           await updateDoc(doc(db, 'products', productId), {
-            ...productData
+            ...productData,
+            updatedAt: serverTimestamp()
           });
           return true;
         } catch (e) {
@@ -1244,9 +1470,14 @@ export function ProductStudioPage({ forceManageMode = false }: ProductStudioPage
 
   const handleManageEdit = (product: any) => {
     if (typeof window === 'undefined') return;
-    sessionStorage.setItem(EDIT_KEY, JSON.stringify(product));
+    const productType = detectProductStudioType(product);
+    const productWithType = { ...product, type: productType };
+    sessionStorage.setItem(EDIT_KEY, JSON.stringify(productWithType));
     sessionStorage.setItem(EDIT_ID_KEY, product.id);
-    window.location.assign('/admin/create-product?edit=true');
+    sessionStorage.setItem(EDIT_TYPE_KEY, productType);
+    localStorage.removeItem('bear_flower_create_prod_glitter_rose');
+    localStorage.removeItem('bear_flower_create_prod_velvet_flower');
+    window.location.assign(`/admin/create-product/${productType}?edit=true`);
   };
 
   const handleManageDelete = async (productId: string) => {
@@ -1298,7 +1529,32 @@ export function ProductStudioPage({ forceManageMode = false }: ProductStudioPage
           justify-content: space-between;
           align-items: flex-start;
           gap: 16px;
-          margin-bottom: 24px;
+          margin-bottom: 28px;
+        }
+
+        .admin-page-title-block {
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+        }
+
+        @media (max-width: 767px) {
+          .admin-page-title-block {
+            flex-direction: row;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+          }
+          .admin-page-title {
+            order: 1;
+          }
+          .admin-page-badge {
+            order: 2;
+          }
+          .admin-page-subtitle {
+            order: 3;
+            width: 100%;
+          }
         }
 
         .admin-page-badge {
@@ -1333,6 +1589,11 @@ export function ProductStudioPage({ forceManageMode = false }: ProductStudioPage
 
           .admin-page-header {
             margin-bottom: 18px !important;
+          }
+
+          .page-wrap {
+            width: 100% !important;
+            max-width: 100% !important;
           }
         }
 
@@ -1442,6 +1703,27 @@ export function ProductStudioPage({ forceManageMode = false }: ProductStudioPage
           gap: 16px;
           margin-bottom: 10px;
         }
+
+        @media (max-width: 767px) {
+          .manage-header > div {
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            width: 100%;
+          }
+          .manage-header .admin-page-title {
+            order: 1;
+          }
+          .manage-header .admin-page-badge {
+            order: 2;
+          }
+          .manage-header .admin-page-subtitle {
+            order: 3;
+            width: 100%;
+          }
+        }
         .manage-create-btn {
           border: none;
           background: var(--rose-gold);
@@ -1546,13 +1828,16 @@ export function ProductStudioPage({ forceManageMode = false }: ProductStudioPage
           position: absolute;
           top: 12px;
           right: 12px;
-          background: rgba(255, 255, 255, 0.9);
-          border: 1px solid rgba(219, 138, 158, 0.2);
+          background: #F29F0C;
           padding: 4px 12px;
           border-radius: 999px;
           font-size: 0.72rem;
           font-weight: 600;
-          color: var(--deep-brown);
+          color: #fff;
+        }
+        .manage-badge-ready {
+          background: #17A34A;
+          color: #fff;
         }
         .manage-info {
           padding: 16px 16px 18px;
@@ -1596,11 +1881,11 @@ export function ProductStudioPage({ forceManageMode = false }: ProductStudioPage
 
           {viewMode !== 'manage' ? (
             <div className="admin-page-header">
-              <div>
+              <div className="admin-page-title-block">
                 <span className="admin-page-badge">Product Studio</span>
                 <h1 className="admin-page-title">จัดการสินค้า</h1>
                 <p className="admin-page-subtitle">
-                  สร้างสินค้าใหม่หรือเลือก workflow ที่ต้องการจัดการจากหลังบ้าน
+                  สร้างสินค้าใหม่หรือเลือก workflow ที่ต้องการ
                 </p>
               </div>
             </div>
@@ -1609,21 +1894,11 @@ export function ProductStudioPage({ forceManageMode = false }: ProductStudioPage
           {viewMode === 'manage' ? (
             <div className="manage-screen">
               <div className="manage-header">
-                <div>
+                <div className="admin-page-title-block">
                   <span className="admin-page-badge">Product Studio</span>
                   <h1 className="admin-page-title">จัดเก็บสินค้า</h1>
                   <p className="admin-page-subtitle">รายการสินค้าที่สร้างไว้ทั้งหมด</p>
                 </div>
-                <button
-                  className="manage-create-btn"
-                  onClick={() => {
-                    if (typeof window !== 'undefined') {
-                      window.location.href = '/admin/create-product';
-                    }
-                  }}
-                >
-                  สร้างสินค้าใหม่
-                </button>
               </div>
 
               <div className="manage-count">ทั้งหมด {manageProducts.length} รายการ</div>
@@ -1640,7 +1915,7 @@ export function ProductStudioPage({ forceManageMode = false }: ProductStudioPage
                         ) : (
                           <div className="manage-placeholder">🌹</div>
                         )}
-                        {product.badge ? <span className="manage-badge">{product.badge}</span> : null}
+                        {product.badge ? <span className={`manage-badge ${product.badge.includes('พร้อมส่ง') ? 'manage-badge-ready' : ''}`}>{product.badge}</span> : null}
                       </div>
                       <div className="manage-info">
                         <div className="manage-name">{product.name}</div>
@@ -1668,8 +1943,9 @@ export function ProductStudioPage({ forceManageMode = false }: ProductStudioPage
 
               <div className="options-grid">
                 <div className="option-card" onClick={() => {
-                  setSelectedType('glitter_rose');
-                  setViewMode('form');
+                  if (typeof window !== 'undefined') {
+                    window.location.href = '/admin/create-product/glitter_rose';
+                  }
                 }}>
                   <div className="option-icon">🌹</div>
                   <h3>ช่อดอกกุหลาบกลิตเตอร์</h3>
@@ -1678,8 +1954,9 @@ export function ProductStudioPage({ forceManageMode = false }: ProductStudioPage
                 </div>
 
                 <div className="option-card" onClick={() => {
-                  setSelectedType('velvet_flower');
-                  setViewMode('form');
+                  if (typeof window !== 'undefined') {
+                    window.location.href = '/admin/create-product/velvet_flower';
+                  }
                 }}>
                   <div className="option-icon">🧸</div>
                   <h3>ดอกไม้ลวดกำมะหยี่</h3>
@@ -1692,25 +1969,25 @@ export function ProductStudioPage({ forceManageMode = false }: ProductStudioPage
             /* Screen B: Glitter Rose Form (exactly matching glitter_rose/page.tsx size, styling & design) */
             <div dangerouslySetInnerHTML={{
               __html: `
-          <div class="page-wrap" style="padding-top: 20px;">
+          <div class="page-wrap" style="padding-top: 20px; padding-left: 0; padding-right: 0;">
 
             <!-- Stepper -->
             <div class="stepper-outer">
               <div class="stepper-container" id="stepper">
                 <div class="stepper-line"></div>
-                <div class="step active" data-step="1">
+                <div class="step active" data-step="1" style="${selectedType === 'velvet_flower' ? 'display: none;' : ''}">
                   <div class="step-circle">1</div>
                   <span class="step-label">Rose</span>
                 </div>
-                <div class="step" data-step="2">
+                <div class="step" data-step="2" style="${selectedType === 'velvet_flower' ? 'display: none;' : ''}">
                   <div class="step-circle">2</div>
                   <span class="step-label">Secondary Layer</span>
                 </div>
-                <div class="step" data-step="3">
+                <div class="step" data-step="3" style="${selectedType === 'velvet_flower' ? 'display: none;' : ''}">
                   <div class="step-circle">3</div>
                   <span class="step-label">Paper</span>
                 </div>
-                <div class="step" data-step="4">
+                <div class="step" data-step="4" style="${selectedType === 'velvet_flower' ? 'display: none;' : ''}">
                   <div class="step-circle">4</div>
                   <span class="step-label">Decorations</span>
                 </div>
