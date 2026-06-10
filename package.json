@@ -9,9 +9,9 @@
     "lint": "eslint"
   },
   "dependencies": {
-    "@google-cloud/vision": "^5.3.2",
     "firebase": "^12.13.0",
     "firebase-admin": "^13.10.0",
+    "flatpickr": "^4.6.13",
     "lucide-react": "^1.17.0",
     "next": "16.2.6",
     "promptpay-qr": "^0.5.0",
