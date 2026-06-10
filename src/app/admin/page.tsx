@@ -4971,7 +4971,7 @@ function AdminPageContent() {
                     className="submit-btn"
                     disabled={isSubmittingExpense}
                   >
-                    {isSubmittingExpense ? 'กำลังบันทึกข้อมูล...' : 'บันทึกข้อมูลรายจ่าย'}
+                    {isSubmittingExpense ? 'กำลังบันทึกข้อมูล...' : 'บันทึกข้อมูล'}
                   </button>
                 </form>
               </div>
