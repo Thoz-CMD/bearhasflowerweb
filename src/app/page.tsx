@@ -9,6 +9,17 @@ export default function Home() {
   const [user, setUser] = useState<User | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [showWelcomePopup, setShowWelcomePopup] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const shouldShow = sessionStorage.getItem('show_welcome_popup') === 'true';
+      if (shouldShow) {
+        setShowWelcomePopup(true);
+        sessionStorage.removeItem('show_welcome_popup');
+      }
+    }
+  }, []);
 
   useEffect(() => {
     // Check if we've already authenticated in this session to speed up repeat visits
@@ -482,9 +493,9 @@ export default function Home() {
           card.innerHTML = `
             <div class="product-image-wrap" ${isSoldOut ? '' : `onclick="${productNav}"`} style="cursor:${isSoldOut ? 'default' : 'pointer'}; position:relative; overflow:hidden;">
               ${p.coverImage
-                ? `<img src="${p.coverImage}" alt="${p.name}" class="product-image" style="width:100%; height:100%; object-fit:cover; position:absolute; top:0; left:0; border-radius:inherit;" />`
-                : `<div class="product-placeholder">🌹</div>`
-              }
+              ? `<img src="${p.coverImage}" alt="${p.name}" class="product-image" style="width:100%; height:100%; object-fit:cover; position:absolute; top:0; left:0; border-radius:inherit;" />`
+              : `<div class="product-placeholder">🌹</div>`
+            }
               <span class="${badgeClass}">${badgeText}</span>
               <button class="product-wishlist" aria-label="บันทึก" style="z-index: 10; display: flex; align-items: center; justify-content: center; gap: 4px; padding: 4px 8px; border-radius: 20px; width: auto; height: 30px; ${existsInWishlist ? 'color:#e05c7a; border-color:#e05c7a;' : ''}">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -709,10 +720,10 @@ export default function Home() {
           if ((e.target as HTMLElement).closest('#notif-dropdown')) return;
           const isHidden = notifDropdown.style.display === 'none';
           notifDropdown.style.display = isHidden ? 'block' : 'none';
-          
+
           // close profile dropdown if open
           const profileDropdown = document.getElementById('profile-dropdown');
-          if(profileDropdown) profileDropdown.classList.remove('show');
+          if (profileDropdown) profileDropdown.classList.remove('show');
         };
       }
 
@@ -720,13 +731,13 @@ export default function Home() {
         const notifs = e.detail || [];
         const unreadNotifs = notifs.filter((n: any) => n.status !== 'read');
         const countEl = document.getElementById('notif-count');
-        if(countEl) {
+        if (countEl) {
           countEl.textContent = String(unreadNotifs.length);
           countEl.style.display = unreadNotifs.length > 0 ? 'flex' : 'none';
         }
         const container = document.getElementById('notif-list-container');
-        if(container) {
-          if(notifs.length === 0) {
+        if (container) {
+          if (notifs.length === 0) {
             container.innerHTML = '<div style="padding:20px; text-align:center; color:#a08a8e; font-size:0.9rem;">ไม่มีการแจ้งเตือน</div>';
           } else {
             container.innerHTML = notifs.map((n: any) => {
@@ -756,7 +767,7 @@ export default function Home() {
               if (shouldShowImage) {
                 // Use product cover image if available
                 const imgUrl = n.imageUrl;
-                iconHtml = '<img src="'+imgUrl+'" alt="Product" style="width:100%; height:100%; object-fit:cover;" onerror="this.style.display=\'none\'; this.parentElement.innerHTML=\'🌸\';" />';
+                iconHtml = '<img src="' + imgUrl + '" alt="Product" style="width:100%; height:100%; object-fit:cover;" onerror="this.style.display=\'none\'; this.parentElement.innerHTML=\'🌸\';" />';
               } else if (isCustomOrder) {
                 // Render BasketIcon SVG with colors (matching the BasketIcon component)
                 iconHtml = '<svg height="40" width="40" viewBox="0 0 512 512" style="filter: drop-shadow(0px 4px 6px ' + c1 + '40);">' +
@@ -778,30 +789,30 @@ export default function Home() {
                   '</svg>';
               } else {
                 const imgUrl = '/images/logo-placeholder.png';
-                iconHtml = '<img src="'+imgUrl+'" style="width:100%; height:100%; object-fit:cover;" />';
+                iconHtml = '<img src="' + imgUrl + '" style="width:100%; height:100%; object-fit:cover;" />';
               }
 
               return '<div class="notif-item" onclick="handleNotifClick(&quot;' + n.id + '&quot;)" style="display:flex; gap:12px; padding:16px; border-bottom:1px solid #fdf5f6; cursor:pointer; transition:all 0.2s; align-items:center;' + bgStyle + '" onmouseover="this.style.background=&quot;#fffafb&quot;; this.style.transform=&quot;translateY(-1px)&quot;" onmouseout="this.style.background=&quot;' + hoverOutBg + '&quot;; this.style.transform=&quot;none&quot;">' +
                 '<div style="flex-shrink:0; width:40px; height:40px; border-radius:10px; overflow:hidden; border:1px solid #fdf5f6; position:relative; box-shadow:0 2px 8px rgba(219,138,158,0.1); background:#fff;">' +
-                  iconHtml +
-                  (!isRead ? '<div style="position:absolute; top:0px; right:0px; width:10px; height:10px; background:#e74c3c; border-radius:50%; border:2px solid #fff;"></div>' : '') +
+                iconHtml +
+                (!isRead ? '<div style="position:absolute; top:0px; right:0px; width:10px; height:10px; background:#e74c3c; border-radius:50%; border:2px solid #fff;"></div>' : '') +
                 '</div>' +
                 '<div style="flex-grow:1; display:flex; flex-direction:column; gap:4px; min-width:0;">' +
-                  '<div style="font-weight:700; color:' + titleColor + '; font-size:0.95rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + (n.title || '') + '</div>' +
-                  '<div style="color:' + textColor + '; font-size:0.85rem; line-height:1.4; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;">' + (n.message || '') + '</div>' +
-                  '<div style="color:#a08a8e; font-size:0.75rem; font-weight:500;">' + dateStr + '</div>' +
+                '<div style="font-weight:700; color:' + titleColor + '; font-size:0.95rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + (n.title || '') + '</div>' +
+                '<div style="color:' + textColor + '; font-size:0.85rem; line-height:1.4; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;">' + (n.message || '') + '</div>' +
+                '<div style="color:#a08a8e; font-size:0.75rem; font-weight:500;">' + dateStr + '</div>' +
                 '</div>' +
                 '<div style="flex-shrink:0; color:#db8a9e; opacity:' + (isRead ? '0.4' : '1') + '; display:flex; align-items:center; justify-content:center; width:28px; height:28px; border-radius:50%; background:' + (isRead ? 'transparent' : '#fffafb') + ';">' +
-                  '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">' +
-                    '<path d="M9 18l6-6-6-6"/>' +
-                  '</svg>' +
+                '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">' +
+                '<path d="M9 18l6-6-6-6"/>' +
+                '</svg>' +
                 '</div>' +
-              '</div>';
+                '</div>';
             }).join('');
           }
         }
       };
-      
+
       window.addEventListener('bearhasflower-notifs', handleNotifEvent);
 
       (window as any).handleNotifClick = async (notifId: string) => {
@@ -810,7 +821,7 @@ export default function Home() {
           const { doc, updateDoc } = await import('firebase/firestore');
           await updateDoc(doc(db, 'notifications', notifId), { status: 'read' });
           window.location.href = '/cart?tab=history';
-        } catch(e) {
+        } catch (e) {
           console.error(e);
           window.location.href = '/cart?tab=history';
         }
@@ -844,11 +855,11 @@ export default function Home() {
 
           // Refresh the notification list
           const container = document.getElementById('notif-list-container');
-          if(container) {
+          if (container) {
             container.innerHTML = '<div style="padding:20px; text-align:center; color:#a08a8e; font-size:0.9rem;">ไม่มีการแจ้งเตือน</div>';
           }
           const countEl = document.getElementById('notif-count');
-          if(countEl) {
+          if (countEl) {
             countEl.style.display = 'none';
           }
 
@@ -864,7 +875,7 @@ export default function Home() {
           if (dropdown) {
             dropdown.style.display = 'none';
           }
-        } catch(e) {
+        } catch (e) {
           console.error('Error clearing notifications:', e);
           alert('เกิดข้อผิดพลาดในการล้างประวัติการแจ้งเตือน');
         }
@@ -954,12 +965,12 @@ export default function Home() {
           notifDropdown.style.display = 'none';
         }
       };
-      
+
       if (profileBtn && profileDropdown) {
         profileBtn.onclick = (e) => {
           e.stopPropagation();
           profileDropdown.classList.toggle('show');
-          if(notifDropdown) notifDropdown.style.display = 'none';
+          if (notifDropdown) notifDropdown.style.display = 'none';
         };
       }
       document.addEventListener('click', clickOutsideHandler);
@@ -1401,6 +1412,30 @@ export default function Home() {
     </div>
   </div>
 
+  </div>
+
+  ${showWelcomePopup ? `
+  <!-- Welcome Popup -->
+  <div class="welcome-popup-overlay" id="welcome-popup-overlay">
+    <div class="welcome-popup-content" style="padding: 0; overflow: hidden; width: 95%; max-width: 650px; border-radius: 16px; background: #fff; display: flex; flex-direction: column; align-items: center;">
+      <button class="welcome-close-btn" style="z-index: 10; background: rgba(255,255,255,0.8); box-shadow: 0 2px 10px rgba(0,0,0,0.1);" onclick="document.getElementById('welcome-popup-overlay').style.display='none'" aria-label="ปิด">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+      </button>
+      <div style="width: 100%; position: relative;">
+        <img src="/images/advert/ChatGPT Image 10 มิ.ย. 2569 21_10_52.png" alt="Welcome Discount" style="width: 100%; height: auto; display: block;" />
+        <div style="position: absolute; bottom: 24px; left: 0; right: 0; display: flex; justify-content: center; padding: 0 24px; box-sizing: border-box;">
+          <button class="welcome-claim-btn" onclick="localStorage.setItem('auto_apply_discount', 'FIRST10'); navigator.clipboard.writeText('FIRST10'); document.getElementById('welcome-popup-overlay').style.display='none'; var t=document.createElement('div'); t.className='coupon-toast'; t.innerHTML='รับคูปองสำเร็จ'; document.body.appendChild(t); setTimeout(function(){t.classList.add('show')},10); setTimeout(function(){t.classList.remove('show'); setTimeout(function(){t.remove()},400)},2500);" style="max-width: 320px; width: 100%;">
+            กดรับคูปองส่วนลด
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+  ` : ''}
+
   <style>
     #clear-notif-modal.show {
       display: flex !important;
@@ -1408,6 +1443,115 @@ export default function Home() {
     }
     #clear-notif-modal.show > div {
       transform: scale(1) !important;
+    }
+
+    .welcome-popup-overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.5);
+      backdrop-filter: blur(5px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+      animation: fadeIn 0.3s ease;
+    }
+    .welcome-popup-content {
+      background: #fff;
+      width: 90%;
+      max-width: 400px;
+      border-radius: 24px;
+      padding: 40px 24px 32px 24px;
+      text-align: center;
+      position: relative;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.15);
+      animation: popIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+    .welcome-close-btn {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      background: #fdf5f6;
+      color: #db8a9e;
+      border: none;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .welcome-close-btn:hover {
+      background: #db8a9e;
+      color: #fff;
+    }
+    .welcome-icon {
+      font-size: 3.5rem;
+      margin-bottom: 16px;
+      line-height: 1;
+    }
+    .discount-code-box {
+      background: #fdf5f6;
+      border: 2px dashed #db8a9e;
+      padding: 12px;
+      border-radius: 16px;
+      margin-bottom: 16px;
+    }
+    .code-text {
+      font-size: 1.8rem;
+      font-weight: 800;
+      color: #db8a9e;
+      letter-spacing: 2px;
+    }
+    .discount-desc {
+      font-size: 0.85rem !important;
+      margin-bottom: 24px !important;
+    }
+    .welcome-claim-btn {
+      width: 100%;
+      padding: 16px;
+      background: #FCF4EF;
+      color: #934F35;
+      border: none;
+      border-radius: 50px;
+      font-size: 1.1rem;
+      font-weight: 700;
+      font-family: 'Noto Sans Thai', sans-serif;
+      cursor: pointer;
+      box-shadow: 0 8px 20px rgba(147, 79, 53, 0.15);
+      transition: transform 0.2s;
+    }
+    .welcome-claim-btn:active {
+      transform: translateY(2px);
+    }
+    @keyframes popIn {
+      0% { opacity: 0; transform: scale(0.8); }
+      100% { opacity: 1; transform: scale(1); }
+    }
+    .coupon-toast {
+      position: fixed;
+      bottom: 40px;
+      left: 50%;
+      transform: translateX(-50%) translateY(30px);
+      background: #fff;
+      color: #934F35;
+      font-family: 'Noto Sans Thai', sans-serif;
+      font-size: 0.95rem;
+      font-weight: 700;
+      padding: 14px 28px;
+      border-radius: 50px;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+      z-index: 99999;
+      opacity: 0;
+      transition: opacity 0.35s ease, transform 0.35s ease;
+      pointer-events: none;
+      white-space: nowrap;
+    }
+    .coupon-toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
     }
   </style>
 

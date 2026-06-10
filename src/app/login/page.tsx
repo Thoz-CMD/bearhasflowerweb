@@ -6,7 +6,8 @@ import { checkIsAdmin } from '@/lib/admin';
 import {
   onAuthStateChanged,
   GoogleAuthProvider,
-  signInWithPopup
+  signInWithPopup,
+  getAdditionalUserInfo
 } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
 
@@ -27,7 +28,7 @@ export default function LoginPage() {
 
     // Check if already logged in
     const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user) {
+      if (user && !sessionStorage.getItem('signing_in')) {
         window.location.href = '/';
       }
     });
@@ -42,10 +43,12 @@ export default function LoginPage() {
   const handleGoogleSignIn = async () => {
     setError('');
     setLoading(true);
+    sessionStorage.setItem('signing_in', 'true');
     try {
       const provider = new GoogleAuthProvider();
       const result = await signInWithPopup(auth, provider);
       const user = result.user;
+      const additionalInfo = getAdditionalUserInfo(result);
 
       // Check if user's email is in admin whitelist
       const isAdmin = await checkIsAdmin(user.uid, null, user.email);
@@ -60,11 +63,17 @@ export default function LoginPage() {
         createdAt: new Date().toISOString()
       }, { merge: true });
 
+      if (additionalInfo?.isNewUser) {
+        sessionStorage.setItem('show_welcome_popup', 'true');
+      }
+
+      sessionStorage.removeItem('signing_in');
       // Redirect to home after successful sign-in
       window.location.href = '/';
     } catch (err: any) {
       console.error('Google sign-in error', err);
       setError('การล็อกอินด้วย Google ล้มเหลว โปรดลองอีกครั้ง');
+      sessionStorage.removeItem('signing_in');
     } finally {
       setLoading(false);
     }

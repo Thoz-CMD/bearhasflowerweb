@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { db, auth } from '@/lib/firebase';
-import { collection, addDoc, serverTimestamp, doc, runTransaction } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, doc, runTransaction, getDocs, query, where } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 import generatePayload from 'promptpay-qr';
 import { QRCodeSVG } from 'qrcode.react';
@@ -20,13 +20,61 @@ export default function CheckoutPage() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [showSuccessPopup, setShowSuccessPopup] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
+  const [originalTotal, setOriginalTotal] = useState(0);
+  const [discountCodeInput, setDiscountCodeInput] = useState('');
+  const [appliedDiscountCode, setAppliedDiscountCode] = useState('');
+  const [discountAmount, setDiscountAmount] = useState(0);
+  const [discountError, setDiscountError] = useState('');
+  const [discountSuccess, setDiscountSuccess] = useState('');
+  const [isApplyingDiscount, setIsApplyingDiscount] = useState(false);
+  const [availableDiscounts, setAvailableDiscounts] = useState<{code: string, label: string}[]>([]);
+  const [checkingDiscounts, setCheckingDiscounts] = useState(true);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user) setUserId(user.uid);
+      if (user) {
+        setUserId(user.uid);
+      } else {
+        setCheckingDiscounts(false);
+      }
     });
     return () => unsubscribe();
   }, []);
+
+  useEffect(() => {
+    const fetchAvailableDiscounts = async () => {
+      if (!userId || userId === 'guest') {
+        setCheckingDiscounts(false);
+        return;
+      }
+      setCheckingDiscounts(true);
+      try {
+        const q = query(collection(db, 'orders'), where('userId', '==', userId));
+        const querySnapshot = await getDocs(q);
+        
+        const codes = [];
+        // หากยังไม่เคยสั่งซื้อเลย ให้มีโค้ด FIRST10
+        if (querySnapshot.empty) {
+          codes.push({ code: 'FIRST10', label: 'ส่วนลด 10% สำหรับการสั่งซื้อครั้งแรก' });
+        }
+        setAvailableDiscounts(codes);
+      } catch (err) {
+        console.error('Error fetching discounts:', err);
+      }
+      setCheckingDiscounts(false);
+    };
+    fetchAvailableDiscounts();
+  }, [userId]);
+
+  useEffect(() => {
+    if (!checkingDiscounts && userId && originalTotal > 0 && availableDiscounts.some(d => d.code === 'FIRST10')) {
+      const autoApply = localStorage.getItem('auto_apply_discount');
+      if (autoApply === 'FIRST10' && appliedDiscountCode !== 'FIRST10') {
+        handleToggleDiscount('FIRST10');
+        localStorage.removeItem('auto_apply_discount');
+      }
+    }
+  }, [checkingDiscounts, userId, originalTotal, availableDiscounts, appliedDiscountCode]);
 
   useEffect(() => {
     setIsClient(true);
@@ -39,6 +87,7 @@ export default function CheckoutPage() {
       }
       setCartItems(items);
       const calculatedTotal = items.reduce((acc: number, item: any) => acc + (item.price * (item.qty || 1)), 0);
+      setOriginalTotal(calculatedTotal);
       setTotal(calculatedTotal);
 
       // คำนวณมัดจำ 50%
@@ -52,6 +101,68 @@ export default function CheckoutPage() {
       window.location.href = '/cart';
     }
   }, []);
+
+  const handleToggleDiscount = async (code: string) => {
+    if (isApplyingDiscount) return;
+
+    if (appliedDiscountCode === code) {
+      handleRemoveDiscount();
+      return;
+    }
+
+    setDiscountError('');
+    setDiscountSuccess('');
+    if (!userId || userId === 'guest') {
+      setDiscountError('กรุณาเข้าสู่ระบบเพื่อใช้โค้ดส่วนลด');
+      return;
+    }
+
+    if (code.toUpperCase() !== 'FIRST10') {
+      setDiscountError('โค้ดส่วนลดไม่ถูกต้อง');
+      return;
+    }
+
+    setIsApplyingDiscount(true);
+    try {
+      const q = query(collection(db, 'orders'), where('userId', '==', userId));
+      const querySnapshot = await getDocs(q);
+      
+      if (!querySnapshot.empty) {
+        setDiscountError('โค้ดนี้สำหรับลูกค้าใหม่ที่สั่งซื้อครั้งแรกเท่านั้น');
+      } else {
+        const discount = Math.floor(originalTotal * 0.1);
+        const newTotal = originalTotal - discount;
+        const newDeposit = Math.ceil(newTotal * 0.5);
+        
+        setDiscountAmount(discount);
+        setTotal(newTotal);
+        setDeposit(newDeposit);
+        setAppliedDiscountCode('FIRST10');
+        setDiscountSuccess('ใช้คูปองส่วนลดสำเร็จ');
+        
+        // Update PromptPay QR
+        const qrPayload = generatePayload(PROMPTPAY_ID, { amount: newDeposit });
+        setPayload(qrPayload);
+      }
+    } catch (err) {
+      console.error("Error verifying discount:", err);
+      setDiscountError('เกิดข้อผิดพลาดในการตรวจสอบโค้ดส่วนลด');
+    }
+    setIsApplyingDiscount(false);
+  };
+
+  const handleRemoveDiscount = () => {
+    setDiscountAmount(0);
+    setTotal(originalTotal);
+    const newDeposit = Math.ceil(originalTotal * 0.5);
+    setDeposit(newDeposit);
+    setAppliedDiscountCode('');
+    setDiscountCodeInput('');
+    setDiscountSuccess('');
+    setDiscountError('');
+    const qrPayload = generatePayload(PROMPTPAY_ID, { amount: newDeposit });
+    setPayload(qrPayload);
+  };
 
   const createOrderAndReserveStock = async (item: any, orderData: any) => {
     const productId = item.presetId || item.config?.presetId;
@@ -96,7 +207,15 @@ export default function CheckoutPage() {
     try {
       // Create separate order for each cart item
       for (const item of cartItems) {
-        const itemTotal = item.price * (item.qty || 1);
+        let itemTotal = item.price * (item.qty || 1);
+        const itemOriginalTotal = itemTotal;
+        let itemDiscount = 0;
+        
+        if (appliedDiscountCode) {
+          itemDiscount = Math.floor(itemTotal * 0.1);
+          itemTotal = itemTotal - itemDiscount;
+        }
+
         const itemDeposit = Math.ceil(itemTotal * 0.5);
 
         const orderData = {
@@ -115,6 +234,9 @@ export default function CheckoutPage() {
             isPreset: item.id && !item.id.startsWith('custom_') // true for Our Products, false for custom products
           }],
           total: itemTotal,
+          originalTotal: itemOriginalTotal,
+          discountCode: appliedDiscountCode || null,
+          discountAmount: itemDiscount,
           depositPaid: itemDeposit,
           status: 'pending_verification', // รอตรวจสอบยอดเงิน
           createdAt: serverTimestamp(),
@@ -308,6 +430,149 @@ export default function CheckoutPage() {
           font-weight: 700;
         }
 
+        .discount-section {
+          margin-bottom: 24px;
+        }
+        .coupon-ticket {
+          display: flex;
+          background: #fff;
+          border-radius: 12px;
+          overflow: hidden;
+          position: relative;
+          border: 1px solid rgba(219, 138, 158, 0.3);
+          cursor: pointer;
+          transition: all 0.2s;
+          margin-bottom: 12px;
+          box-shadow: 0 4px 10px rgba(0,0,0,0.02);
+        }
+        .coupon-ticket:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 6px 15px rgba(219, 138, 158, 0.1);
+        }
+        .coupon-ticket.selected {
+          border-color: #db8a9e;
+          background: #fffafb;
+          box-shadow: 0 4px 15px rgba(219, 138, 158, 0.15);
+        }
+        .coupon-ticket.disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
+          filter: grayscale(0.5);
+        }
+        .coupon-ticket.disabled:hover {
+          transform: none;
+          box-shadow: none;
+        }
+        .coupon-left {
+          background: #fdf5f6;
+          padding: 16px;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          width: 90px;
+          border-right: 2px dashed #e0bec6;
+          position: relative;
+          color: #db8a9e;
+        }
+        .coupon-left::before, .coupon-left::after {
+          content: '';
+          position: absolute;
+          right: -8px;
+          width: 16px;
+          height: 16px;
+          background: #fffafb;
+          border-radius: 50%;
+          z-index: 10;
+        }
+        .coupon-left::before { top: -8px; }
+        .coupon-left::after { bottom: -8px; }
+
+        .coupon-icon {
+          margin-bottom: 6px;
+        }
+        .coupon-type {
+          font-size: 0.7rem;
+          font-weight: 700;
+          text-align: center;
+          line-height: 1.2;
+        }
+        .coupon-middle {
+          flex: 1;
+          padding: 16px 12px;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+        }
+        .coupon-badge {
+          background: #db8a9e;
+          color: #fff;
+          font-size: 0.65rem;
+          padding: 2px 6px;
+          border-radius: 4px;
+          font-weight: bold;
+          letter-spacing: 0.5px;
+        }
+        .coupon-title {
+          font-size: 1.2rem;
+          font-weight: 800;
+          color: #db8a9e;
+          margin-bottom: 2px;
+        }
+        .coupon-subtitle {
+          font-size: 0.8rem;
+          color: #5c4738;
+          font-weight: 700;
+          margin-bottom: 4px;
+        }
+        .coupon-desc {
+          font-size: 0.75rem;
+          color: #a08a8e;
+        }
+        .coupon-right {
+          width: 50px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding-right: 12px;
+        }
+        .coupon-checkbox {
+          width: 24px;
+          height: 24px;
+          border-radius: 50%;
+          border: 2px solid #e0bec6;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: transparent;
+          transition: all 0.2s;
+        }
+        .coupon-ticket.selected .coupon-checkbox {
+          background: #db8a9e;
+          border-color: #db8a9e;
+          color: #fff;
+        }
+        .no-coupon-box {
+          background: #fff;
+          border: 1px dashed #e0bec6;
+          border-radius: 12px;
+          padding: 20px;
+          text-align: center;
+          color: #a08a8e;
+          font-size: 0.9rem;
+        }
+        .discount-msg {
+          font-size: 0.85rem;
+          margin-top: 8px;
+          text-align: center;
+        }
+        .discount-msg.error {
+          color: #db3a55;
+        }
+        .discount-msg.success {
+          color: #4caf50;
+        }
+
         .confirm-btn {
           width: 100%;
           padding: 18px;
@@ -426,11 +691,68 @@ export default function CheckoutPage() {
           </div>
         </div>
 
+        <div className="discount-section">
+          {checkingDiscounts ? (
+            <div className="no-coupon-box" style={{ borderStyle: 'solid', borderColor: '#fdf5f6' }}>
+              กำลังตรวจสอบคูปอง...
+            </div>
+          ) : availableDiscounts.length > 0 ? (
+            availableDiscounts.map(d => {
+              const isApplied = appliedDiscountCode === d.code;
+              return (
+                <div 
+                  key={d.code} 
+                  className={`coupon-ticket ${isApplied ? 'selected' : ''} ${isApplyingDiscount ? 'disabled' : ''}`}
+                  onClick={() => handleToggleDiscount(d.code)}
+                >
+                  <div className="coupon-left">
+                    <div className="coupon-icon">
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path>
+                        <line x1="7" y1="7" x2="7.01" y2="7"></line>
+                      </svg>
+                    </div>
+                    <div className="coupon-type">คูปองส่วนลด</div>
+                  </div>
+                  <div className="coupon-middle">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
+                      <span className="coupon-badge">NEW</span>
+                      <span style={{ fontSize: '0.7rem', color: '#a08a8e' }}>จาก Bear has flower</span>
+                    </div>
+                    <div className="coupon-title">ลด 10%</div>
+                    <div className="coupon-subtitle">ไม่มีขั้นต่ำ</div>
+                    <div className="coupon-desc">สำหรับลูกค้าใหม่ สั่งซื้อครั้งแรก</div>
+                  </div>
+                  <div className="coupon-right">
+                    <div className="coupon-checkbox">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="20 6 9 17 4 12"></polyline>
+                      </svg>
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          ) : (
+            <div className="no-coupon-box">
+              ไม่มีคูปองส่วนลดที่สามารถใช้ได้
+            </div>
+          )}
+          {discountError && <div className="discount-msg error">{discountError}</div>}
+          {discountSuccess && <div className="discount-msg success">{discountSuccess}</div>}
+        </div>
+
         <div className="summary-card">
           <div className="summary-row">
             <span>ยอดรวมสินค้า</span>
-            <span>{total.toLocaleString()} บาท</span>
+            <span>{originalTotal.toLocaleString()} บาท</span>
           </div>
+          {discountAmount > 0 && (
+            <div className="summary-row" style={{ color: '#4caf50' }}>
+              <span>ส่วนลดโค้ด FIRST10</span>
+              <span>- {discountAmount.toLocaleString()} บาท</span>
+            </div>
+          )}
           <div className="summary-row row-highlight">
             <span>ยอดมัดจำ (50%)</span>
             <span>{deposit.toLocaleString()} บาท</span>
