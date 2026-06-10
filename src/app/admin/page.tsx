@@ -1076,17 +1076,23 @@ function AdminPageContent() {
   };
 
   const getSalesForYearMonth = (orders: any[], yearMonth: string) => {
-    return orders
+    const orderSales = orders
       .filter(o => o.status !== 'cancelled')
       .filter(o => {
         const orderDate = resolveOrderDate(o.createdAt);
         return orderDate && `${orderDate.getFullYear()}-${String(orderDate.getMonth() + 1).padStart(2, '0')}` === yearMonth;
       })
       .reduce((acc, o) => acc + (o.total || 0), 0);
+    const incomeSales = expenses
+      .filter(e => e.type === 'income')
+      .filter(e => e.date && e.date.substring(0, 7) === yearMonth)
+      .reduce((acc, e) => acc + (e.amount || 0), 0);
+    return orderSales + incomeSales;
   };
 
   const getExpensesForYearMonth = (items: any[], yearMonth: string) => {
     return items
+      .filter((item) => item.type === 'expense')
       .filter((item) => item.date && item.date.substring(0, 7) === yearMonth)
       .reduce((acc, item) => acc + (item.amount || 0), 0);
   };
