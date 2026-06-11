@@ -1,9 +1,10 @@
 'use client';
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { usePresetProduct } from '@/hooks/usePresetProduct';
 import { ToastProvider, useToast } from '@/components/Toast';
 import dynamic from 'next/dynamic';
+import GreetingCardAI from '@/components/GreetingCardAI';
 
 const DateTimePicker = dynamic(() => import('@/components/DateTimePicker'), { ssr: false });
 
@@ -149,23 +150,31 @@ function GlitterRoseContent() {
   const router = useRouter();
   const { showToast } = useToast();
   const { presetProduct, isLoading, error } = usePresetProduct();
+  const presetLoadedRef = useRef(false);
 
-  const [state, setState] = useState<GlitterState>(() => {
-    if (typeof window === 'undefined') return initialState;
+  const [state, setState] = useState<GlitterState>(initialState);
+  const [isHydrated, setIsHydrated] = useState(false);
+
+  // Load saved state after hydration to prevent mismatch
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    setIsHydrated(true);
+    
     const isEditMode = window.location.search.includes('edit=true');
     if (!isEditMode) {
       window.localStorage.removeItem('editing_cart_id');
       window.localStorage.removeItem(STORAGE_KEY);
-      return initialState;
+      return;
     }
     try {
       const saved = window.localStorage.getItem(STORAGE_KEY);
-      if (saved) return { ...initialState, ...JSON.parse(saved) };
+      if (saved) {
+        setState({ ...initialState, ...JSON.parse(saved) });
+      }
     } catch (err) {
       console.error('Failed to parse saved state', err);
     }
-    return initialState;
-  });
+  }, []);
 
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [showReceipt, setShowReceipt] = useState(false);
@@ -204,9 +213,10 @@ function GlitterRoseContent() {
 
   // Load preset product configurations if necessary
   useEffect(() => {
-    if (presetProduct && !isLoading && !window.location.search.includes('edit=true')) {
+    if (presetProduct && !isLoading && !window.location.search.includes('edit=true') && !presetLoadedRef.current) {
       const config = presetProduct.config;
       if (config) {
+        presetLoadedRef.current = true;
         let extra = 0;
         const layerUnitPrice = getLayerExtraPrice(config.selectedQty);
         const layersCount = config.selectedLayers ? config.selectedLayers.length : 0;
@@ -747,7 +757,7 @@ function GlitterRoseContent() {
 
           {/* STEP 5: Address */}
           {state.current === 4 && (
-            <div id="step5-customer">
+            <div id="step5-customer" style={{ width: '100%' }}>
               <div className="qty-header">
                 <h3>📍 ข้อมูลการจัดส่ง</h3>
                 <p>กรอกข้อมูลสำหรับการจัดส่งดอกไม้</p>
@@ -793,6 +803,13 @@ function GlitterRoseContent() {
                 <div className="form-group">
                   <label>รายละเอียดเพิ่มเติม (ถ้ามี)</label>
                   <textarea id="ipt-note" placeholder="เช่น ข้อความฝากเขียนการ์ด..." value={state.additionalNote} onChange={e => updateField('additionalNote', e.target.value)} style={{ fontSize: '16px' }}></textarea>
+                  <div style={{ marginTop: '16px' }}>
+                    <GreetingCardAI onSelect={(text) => {
+                      const currentNote = state.additionalNote.trim();
+                      const newNote = currentNote ? currentNote + '\n\n' + text : text;
+                      updateField('additionalNote', newNote);
+                    }} />
+                  </div>
                 </div>
               </div>
             </div>
@@ -819,7 +836,7 @@ function GlitterRoseContent() {
 
       {/* Receipt Modal */}
       {showReceipt && (
-        <div className="receipt-modal show" id="receipt-modal" style={{ display: 'block' }}>
+        <div className="receipt-modal show" id="receipt-modal">
           <div className="drawer-backdrop" onClick={() => setShowReceipt(false)}></div>
           <div className="receipt-card" id="receipt-card">
             <div className="receipt-header">

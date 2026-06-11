@@ -663,6 +663,8 @@ export default function CheckoutPage() {
           <p>สแกน QR Code เพื่อชำระเงินผ่านแอปธนาคาร<br />ระบบจะระบุจำนวนเงินให้โดยอัตโนมัติ</p>
         </div>
 
+
+
         <div className="payment-card">
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '12px', gap: '4px' }}>
             <span style={{ color: '#113566', fontWeight: 900, fontStyle: 'italic', fontSize: '1.4rem', fontFamily: 'Arial, sans-serif' }}>Prompt</span>

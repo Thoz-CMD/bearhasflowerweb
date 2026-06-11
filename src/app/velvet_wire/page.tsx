@@ -36,14 +36,18 @@ function VelvetWireContent() {
   const { showToast } = useToast();
   const { presetProduct, isLoading, error } = usePresetProduct();
 
-  // Load initial state from localStorage
-  const [state, setState] = useState<VelvetState>(() => {
-    if (typeof window === 'undefined') return initialState;
+  const [state, setState] = useState<VelvetState>(initialState);
+  const [isHydrated, setIsHydrated] = useState(false);
+
+  // Load saved state after hydration to prevent mismatch
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    setIsHydrated(true);
     try {
       const saved = window.localStorage.getItem(STORAGE_KEY);
       if (saved) {
         const s = JSON.parse(saved);
-        return {
+        setState({
           customerName: s.customerName || '',
           customerPhone: s.customerPhone || '',
           customerAddress: s.customerAddress || '',
@@ -51,13 +55,12 @@ function VelvetWireContent() {
           deliveryTime: s.deliveryTime || '',
           additionalNote: s.additionalNote || '',
           productCoverImage: s.productCoverImage || '',
-        };
+        });
       }
     } catch (err) {
       console.error('Failed to parse saved state', err);
     }
-    return initialState;
-  });
+  }, []);
 
   const basePrice = useMemo(() => presetProduct?.price || 0, [presetProduct]);
   const isPresetReadyToShip = useMemo(() => Boolean(presetProduct?.readyToShip), [presetProduct]);

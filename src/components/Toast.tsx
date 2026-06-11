@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useCallback, createContext, useContext } from 'react';
+import { useState, useEffect, useCallback, createContext, useContext, useRef } from 'react';
 
 interface ToastContextType {
   showToast: (message: string, duration?: number) => void;
@@ -14,23 +14,22 @@ export function useToast() {
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [message, setMessage] = useState('');
   const [visible, setVisible] = useState(false);
-  const [timeoutId, setTimeoutId] = useState<NodeJS.Timeout | null>(null);
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const showToast = useCallback((msg: string, duration = 2500) => {
-    if (timeoutId) clearTimeout(timeoutId);
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
     setMessage(msg);
     setVisible(true);
-    const id = setTimeout(() => {
+    timeoutRef.current = setTimeout(() => {
       setVisible(false);
     }, duration);
-    setTimeoutId(id);
-  }, [timeoutId]);
+  }, []);
 
   useEffect(() => {
     return () => {
-      if (timeoutId) clearTimeout(timeoutId);
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
     };
-  }, [timeoutId]);
+  }, []);
 
   return (
     <ToastContext.Provider value={{ showToast }}>
