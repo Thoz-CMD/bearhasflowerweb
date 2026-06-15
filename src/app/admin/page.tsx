@@ -2294,7 +2294,7 @@ function AdminPageContent() {
           display: none !important;
         }
 
-        @media (max-width: 768px) {
+        @media (max-width: 1024px) {
           .desktop-only {
             display: none !important;
           }
@@ -2938,6 +2938,78 @@ function AdminPageContent() {
           }
           .fin-label {
             font-size: 0.74rem !important;
+          }
+        }
+
+        /* iPad (Tablet) specific overrides for stats and split cards */
+        @media (min-width: 768px) and (max-width: 1024px) {
+          /* 1. Main Profit & Loss Summary Cards layout */
+          .stats-grid {
+            grid-template-columns: repeat(3, 1fr) !important;
+            gap: 12px !important;
+            margin-bottom: 24px !important;
+          }
+          .stat-card {
+            padding: 14px 10px !important;
+            gap: 10px !important;
+            border-radius: 16px !important;
+          }
+          .stat-label {
+            font-size: 0.76rem !important;
+          }
+          .stat-value {
+            font-size: 1.35rem !important;
+          }
+          .stat-detail {
+            font-size: 0.72rem !important;
+            line-height: 1.3 !important;
+          }
+          .stat-ring {
+            --size: 60px !important;
+            --thickness: 5px !important;
+          }
+          .stat-ring-label {
+            font-size: 0.74rem !important;
+          }
+
+          /* 2. Salary Allocation Cards layout */
+          .salary-sharing-card {
+            padding: 18px !important;
+            border-radius: 20px !important;
+          }
+          .split-cards-grid {
+            grid-template-columns: repeat(4, 1fr) !important;
+            gap: 10px !important;
+          }
+          .split-card {
+            padding: 12px 10px !important;
+            border-radius: 16px !important;
+            gap: 8px !important;
+          }
+          .card-badge {
+            font-size: 0.68rem !important;
+            padding: 3px 6px !important;
+          }
+          .split-label {
+            font-size: 0.72rem !important;
+          }
+          .split-value {
+            font-size: 1.1rem !important;
+          }
+          .profile-body {
+            gap: 8px !important;
+          }
+          .profile-avatar {
+            width: 36px !important;
+            height: 36px !important;
+            font-size: 1.15rem !important;
+            border-radius: 10px !important;
+          }
+          .profile-role {
+            font-size: 0.68rem !important;
+          }
+          .profile-salary {
+            font-size: 1.1rem !important;
           }
         }
 
@@ -4710,11 +4782,11 @@ function AdminPageContent() {
                   {/* Visual Allocation Bar */}
                   <div className="allocation-bar-wrapper">
                     <div className="allocation-bar">
-                      <div className="bar-segment segment-materials" style={{ width: '40%' }}>
-                        <span>40%</span>
-                      </div>
-                      <div className="bar-segment segment-savings" style={{ width: '30%' }}>
+                      <div className="bar-segment segment-materials" style={{ width: '30%' }}>
                         <span>30%</span>
+                      </div>
+                      <div className="bar-segment segment-savings" style={{ width: '40%' }}>
+                        <span>40%</span>
                       </div>
                       <div className="bar-segment segment-admin1" style={{ width: '15%' }}>
                         <span>15%</span>
@@ -4726,8 +4798,8 @@ function AdminPageContent() {
 
                     {/* Allocation Legend */}
                     <div className="bar-legend">
-                      <span className="legend-item"><span className="legend-dot dot-materials"></span> ทุนซื้อของ (40%)</span>
-                      <span className="legend-item"><span className="legend-dot dot-savings"></span> เงินเก็บร้าน (30%)</span>
+                      <span className="legend-item"><span className="legend-dot dot-materials"></span> ทุนซื้อของ (30%)</span>
+                      <span className="legend-item"><span className="legend-dot dot-savings"></span> เงินเก็บร้าน (40%)</span>
                       <span className="legend-item"><span className="legend-dot dot-admin1"></span> แอดมินคนที่ 1 (15%)</span>
                       <span className="legend-item"><span className="legend-dot dot-admin2"></span> แอดมินคนที่ 2 (15%)</span>
                     </div>
@@ -4738,22 +4810,22 @@ function AdminPageContent() {
                     {/* 1. Purchasing Fund Card */}
                     <div className="split-card fund-card purchasing">
                       <div className="card-header-row">
-                        <span className="card-badge badge-purchasing">📦 ทุนหมุนเวียน 40%</span>
+                        <span className="card-badge badge-purchasing">📦 ทุนหมุนเวียน 30%</span>
                       </div>
                       <div className="card-body">
                         <span className="split-label">หักเก็บสะสมทุนซื้อของ</span>
-                        <span className="split-value">{(monthlyNetProfit * 0.40).toLocaleString('th-TH', { maximumFractionDigits: 2 })} ฿</span>
+                        <span className="split-value">{(monthlyNetProfit * 0.30).toLocaleString('th-TH', { maximumFractionDigits: 2 })} ฿</span>
                       </div>
                     </div>
 
                     {/* 2. Shop Savings Card */}
                     <div className="split-card fund-card savings">
                       <div className="card-header-row">
-                        <span className="card-badge badge-savings">🏦 เงินเก็บร้าน 30%</span>
+                        <span className="card-badge badge-savings">🏦 เงินเก็บร้าน 40%</span>
                       </div>
                       <div className="card-body">
                         <span className="split-label">หักเก็บเป็นเงินเก็บสะสมร้าน</span>
-                        <span className="split-value">{(monthlyNetProfit * 0.30).toLocaleString('th-TH', { maximumFractionDigits: 2 })} ฿</span>
+                        <span className="split-value">{(monthlyNetProfit * 0.40).toLocaleString('th-TH', { maximumFractionDigits: 2 })} ฿</span>
                       </div>
                     </div>
 
