@@ -15,7 +15,15 @@ const getAdminApp = () => {
   const projectId = process.env.FIREBASE_ADMIN_PROJECT_ID;
   const clientEmail = process.env.FIREBASE_ADMIN_CLIENT_EMAIL;
   const rawPrivateKey = process.env.FIREBASE_ADMIN_PRIVATE_KEY;
-  const privateKey = rawPrivateKey?.replace(/\\n/g, '\n');
+  let privateKey = rawPrivateKey ? rawPrivateKey.trim() : undefined;
+  if (privateKey) {
+    if (privateKey.startsWith('"') && privateKey.endsWith('"')) {
+      privateKey = privateKey.substring(1, privateKey.length - 1);
+    } else if (privateKey.startsWith("'") && privateKey.endsWith("'")) {
+      privateKey = privateKey.substring(1, privateKey.length - 1);
+    }
+    privateKey = privateKey.replace(/\\n/g, '\n');
+  }
   const hasAnyExplicitCred = Boolean(projectId || clientEmail || rawPrivateKey);
  
   if (hasAnyExplicitCred) {

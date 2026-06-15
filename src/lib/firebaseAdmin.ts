@@ -1,9 +1,16 @@
 import * as admin from 'firebase-admin';
 
 if (!admin.apps.length) {
-  const privateKey = process.env.FIREBASE_ADMIN_PRIVATE_KEY
-    ? process.env.FIREBASE_ADMIN_PRIVATE_KEY.replace(/\\n/g, '\n')
-    : undefined;
+  const rawKey = process.env.FIREBASE_ADMIN_PRIVATE_KEY;
+  let privateKey = rawKey ? rawKey.trim() : undefined;
+  if (privateKey) {
+    if (privateKey.startsWith('"') && privateKey.endsWith('"')) {
+      privateKey = privateKey.substring(1, privateKey.length - 1);
+    } else if (privateKey.startsWith("'") && privateKey.endsWith("'")) {
+      privateKey = privateKey.substring(1, privateKey.length - 1);
+    }
+    privateKey = privateKey.replace(/\\n/g, '\n');
+  }
 
   admin.initializeApp({
     credential: admin.credential.cert({
