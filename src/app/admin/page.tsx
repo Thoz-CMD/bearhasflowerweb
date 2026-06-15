@@ -4088,6 +4088,36 @@ function AdminPageContent() {
               font-size: 1.1rem !important;
             }
           }
+
+          /* Mobile-only overrides for the main dashboard overview grid (2 columns, hide detail text) */
+          @media (max-width: 768px) {
+            .main-stats-grid {
+              grid-template-columns: 1fr 1fr !important;
+              gap: 10px !important;
+              margin-bottom: 20px !important;
+            }
+            .main-stats-grid .stat-card {
+              padding: 12px 10px !important;
+              gap: 8px !important;
+              border-radius: 14px !important;
+            }
+            .main-stats-grid .stat-label {
+              font-size: 0.68rem !important;
+            }
+            .main-stats-grid .stat-value {
+              font-size: 1.1rem !important;
+            }
+            .main-stats-grid .stat-detail {
+              display: none !important;
+            }
+            .main-stats-grid .stat-ring {
+              --size: 48px !important;
+              --thickness: 5px !important;
+            }
+            .main-stats-grid .stat-ring-label {
+              font-size: 0.7rem !important;
+            }
+          }
       `}</style>
 
       <div className="dashboard-container">
@@ -4123,7 +4153,7 @@ function AdminPageContent() {
 
         {adminViewMode === 'manager' && (
           <>
-            <div className="stats-grid">
+            <div className="stats-grid main-stats-grid">
               {overviewCards.map((card) => (
                 <div key={card.key} className={`stat-card ${card.cardClass}`}>
                   <div className="stat-info">
