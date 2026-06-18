@@ -144,7 +144,7 @@ export default function AdminSidebar() {
         </div>
       </aside>
 
-      <nav className={styles.mobileBottomNav} aria-label="Admin mobile navigation">
+      <nav className={`${styles.mobileBottomNav} ${searchParams.get('edit') === 'true' ? styles.mobileBottomNavHidden : ''}`} aria-label="Admin mobile navigation">
         {mobileNavItems.map((item) => {
           const Icon = item.icon;
           const active = item.isActive(pathname, params);

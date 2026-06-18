@@ -176,6 +176,10 @@
   display: none;
 }
 
+.mobileBottomNavHidden {
+  display: none !important;
+}
+
 .mobileNavLink {
   text-decoration: none;
 }
