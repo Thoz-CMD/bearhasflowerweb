@@ -30,6 +30,35 @@ export default function DateTimePicker({
 }: DateTimePickerProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const fpRef = useRef<flatpickr.Instance | null>(null);
+  const overlayRef = useRef<HTMLDivElement | null>(null);
+
+  // Helper: show/hide overlay
+  const showOverlay = () => {
+    if (!overlayRef.current) {
+      const overlay = document.createElement('div');
+      overlay.id = 'fp-overlay';
+      overlay.style.cssText = `
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.4);
+        backdrop-filter: blur(3px);
+        z-index: 9998;
+        animation: fpFadeIn 0.2s ease-out;
+      `;
+      overlay.addEventListener('click', () => {
+        fpRef.current?.close();
+      });
+      document.body.appendChild(overlay);
+      overlayRef.current = overlay;
+    }
+  };
+
+  const hideOverlay = () => {
+    if (overlayRef.current) {
+      overlayRef.current.remove();
+      overlayRef.current = null;
+    }
+  };
 
   useEffect(() => {
     if (!inputRef.current) return;
@@ -49,10 +78,10 @@ export default function DateTimePicker({
       disableMobile: true,
       defaultDate: value || undefined,
       onOpen() {
-        document.body.classList.add('flatpickr-modal-open');
+        showOverlay();
       },
       onClose() {
-        document.body.classList.remove('flatpickr-modal-open');
+        hideOverlay();
       },
       onChange(selectedDates, _dateStr, instance) {
         if (selectedDates.length > 0) {
@@ -92,6 +121,7 @@ export default function DateTimePicker({
     });
 
     return () => {
+      hideOverlay();
       fpRef.current?.destroy();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -129,17 +159,30 @@ function getTomorrowStr(): string {
  */
 function FlatpickrThemeStyles() {
   return (
-    <style jsx global>{`
+    <style>{`
       .flatpickr-calendar {
-        background: rgba(255, 255, 255, 0.95) !important;
-        backdrop-filter: blur(10px) !important;
+        background: rgba(255, 255, 255, 0.98) !important;
         border: 1px solid var(--glass-border) !important;
         border-radius: 16px !important;
-        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08) !important;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25) !important;
         font-family: inherit !important;
         padding: 10px !important;
         box-sizing: content-box !important;
         width: 315px !important;
+        position: fixed !important;
+        top: 50% !important;
+        left: 50% !important;
+        transform: translate(-50%, -50%) !important;
+        z-index: 9999 !important;
+        margin: 0 !important;
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 0.2s ease-out, visibility 0.2s ease-out !important;
+      }
+      .flatpickr-calendar.open {
+        opacity: 1 !important;
+        visibility: visible !important;
+        animation: fpModalFadeIn 0.2s ease-out !important;
       }
       .flatpickr-days {
         width: 315px !important;
@@ -183,9 +226,6 @@ function FlatpickrThemeStyles() {
       .flatpickr-current-month .flatpickr-monthDropdown-months:hover {
         background: var(--soft-peach) !important;
       }
-      .flatpickr-current-month .flatpickr-monthDropdown-months::-ms-expand {
-        display: none !important;
-      }
       .flatpickr-current-month .numInputWrapper span {
         display: none !important;
       }
@@ -206,35 +246,6 @@ function FlatpickrThemeStyles() {
       .flatpickr-time .flatpickr-am-pm:focus {
         background: var(--soft-peach) !important;
       }
-      /* Modal style for centered display */
-      body.flatpickr-modal-open::after {
-        content: '';
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: rgba(0, 0, 0, 0.4);
-        backdrop-filter: blur(3px);
-        z-index: 9998;
-        animation: fpFadeIn 0.2s ease-out;
-      }
-      .flatpickr-calendar {
-        position: fixed !important;
-        top: 50% !important;
-        left: 50% !important;
-        transform: translate(-50%, -50%) !important;
-        z-index: 9999 !important;
-        margin: 0 !important;
-        transition: none !important;
-        opacity: 0;
-        visibility: hidden;
-      }
-      .flatpickr-calendar.open {
-        opacity: 1 !important;
-        visibility: visible !important;
-        animation: fpModalFadeIn 0.2s ease-out !important;
-      }
       @keyframes fpModalFadeIn {
         from {
           opacity: 0;
@@ -246,12 +257,8 @@ function FlatpickrThemeStyles() {
         }
       }
       @keyframes fpFadeIn {
-        from {
-          opacity: 0;
-        }
-        to {
-          opacity: 1;
-        }
+        from { opacity: 0; }
+        to { opacity: 1; }
       }
     `}</style>
   );
