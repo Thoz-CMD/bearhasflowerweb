@@ -45,26 +45,69 @@ const ROSE_SHAPES_MAP: Record<string, string> = {
 };
 const ROSE_DECORATIONS_MAP: Record<string, string> = {
   ribbon: 'โบว์คาดช่อ', butterfly: 'ผีเสื้อ', blank_card: 'การ์ดเปล่า',
-  stick: 'ก้านเสียบ', fairy_light: 'ไฟประดับ', crown: 'มงกุฎ',
-  ribbon_jfy_clear: 'โบว์คาดช่อ JUST FOR YOU สีขาวโปร่ง',
-  ribbon_jfy_solid: 'โบว์คาดช่อ Just For You สีขาวทึบ',
-  ribbon_hbd_clear: 'โบว์คาดช่อ HAPPY BIRTHDAY สีดำโปร่ง'
+  message_card: 'การ์ดข้อความ', stick: 'ก้านเสียบ', white_pearl: 'มุกขาว', fairy_light: 'ไฟประดับ', crown: 'มงกุฎ',
+  ribbon_jfy_clear: 'โบว์คาดช่อ JUST FOR YOU โปร่ง',
+  ribbon_jfy_solid: 'โบว์คาดช่อ JUST FOR YOU ทึบ'
+};
+const RIBBON_JFY_CLEAR_VARIANTS_MAP: Record<string, string> = {
+  white_clear: 'โบว์คาดช่อ JUST FOR YOU สีขาวโปร่ง',
+  black_clear: 'โบว์คาดช่อ JUST FOR YOU สีดำโปร่ง',
+  red_clear: 'โบว์คาดช่อ JUST FOR YOU สีแดงโปร่ง',
+  pink_clear: 'โบว์คาดช่อ JUST FOR YOU สีชมพูโปร่ง',
+};
+const RIBBON_JFY_SOLID_VARIANTS_MAP: Record<string, string> = {
+  white_solid: 'โบว์คาดช่อ JUST FOR YOU สีขาวทึบ',
+  black_solid: 'โบว์คาดช่อ JUST FOR YOU สีดำทึบ',
+  red_solid: 'โบว์คาดช่อ JUST FOR YOU สีแดงทึบ',
+};
+const MESSAGE_CARD_VARIANTS_MAP: Record<string, string> = {
+  valentine_1: "Happy Valentine's day 1",
+  valentine_2: "Happy Valentine's day 2",
+  valentine_3: "Happy Valentine's day 3",
+  anniversary_1: 'Happy Anniversary 1',
+  anniversary_2: 'Happy Anniversary 2',
+  birthday: 'Happy Birthday',
+  congratulation: 'CONGRATULATION',
+};
+
+const getDecorationLabel = (id: string, config: any) => {
+  const name = ROSE_DECORATIONS_MAP[id] || id;
+  if (id === 'ribbon_jfy_clear') {
+    const variant = RIBBON_JFY_CLEAR_VARIANTS_MAP[config?.selectedRibbonJfyClearVariant] || '';
+    return variant ? `${name} (${variant})` : name;
+  }
+  if (id === 'ribbon_jfy_solid') {
+    const variant = RIBBON_JFY_SOLID_VARIANTS_MAP[config?.selectedRibbonJfySolidVariant] || '';
+    return variant ? `${name} (${variant})` : name;
+  }
+  if (id === 'message_card') {
+    const variant = MESSAGE_CARD_VARIANTS_MAP[config?.selectedMessageCardVariant] || '';
+    return variant ? `${name} (${variant})` : name;
+  }
+  return name;
 };
 
 const renderDesktopConfig = (item: any) => {
   if (item.type !== 'glitter_rose' || !item.config) return null;
   const config = item.config;
+  const orderDate = item.orderDate;
 
   const colors = (config.selectedColors || []).map((id: string) => ROSE_COLORS_MAP[id] || id).join(', ');
   const layers = (config.selectedLayers || []).map((id: string) => ROSE_LAYERS_MAP[id] || id).join(', ');
-  const decorations = (config.selectedDecorations || []).map((id: string) => ROSE_DECORATIONS_MAP[id] || id).join(', ');
+  const decorations = (config.selectedDecorations || []).map((id: string) => getDecorationLabel(id, config)).join(', ');
   const paper = ROSE_PAPERS_MAP[config.selectedPaper] || config.selectedPaper;
   const shape = ROSE_SHAPES_MAP[config.selectedShape] || config.selectedShape;
 
   return (
     <div className="desktop-config-details" onClick={(e) => e.stopPropagation()}>
+      {orderDate && (
+        <div>
+          <div className="config-group-title">วันที่สั่งซื้อ</div>
+          <ul className="config-item-list"><li>{orderDate}</li></ul>
+        </div>
+      )}
       <div>
-        <div className="config-group-title">🌹 ช่อดอกกุหลาบ</div>
+        <div className="config-group-title">ช่อดอกกุหลาบ</div>
         <ul className="config-item-list">
           <li>จำนวน: {config.selectedQty || 0} ดอก</li>
           {colors && <li>สี: {colors}</li>}
@@ -72,7 +115,7 @@ const renderDesktopConfig = (item: any) => {
       </div>
       {(layers || paper || shape) && (
         <div>
-          <div className="config-group-title">📜 องค์ประกอบการห่อ</div>
+          <div className="config-group-title">องค์ประกอบการห่อ</div>
           <ul className="config-item-list">
             {layers && <li>รองช่อ: {layers}</li>}
             {paper && <li>กระดาษห่อ: {paper}</li>}
@@ -80,17 +123,15 @@ const renderDesktopConfig = (item: any) => {
           </ul>
         </div>
       )}
-      {decorations && (
-        <div>
-          <div className="config-group-title">✨ ของตกแต่งเพิ่มเติม</div>
-          <ul className="config-item-list">
-            <li>{decorations}</li>
-          </ul>
-        </div>
-      )}
+      <div>
+        <div className="config-group-title">ของตกแต่งเพิ่มเติม</div>
+        <ul className="config-item-list">
+          {decorations ? <li>{decorations}</li> : <li>ไม่มีของตกแต่ง</li>}
+        </ul>
+      </div>
       {(config.customerName || config.deliveryDate) && (
         <div>
-          <div className="config-group-title">📍 ข้อมูลการจัดส่ง</div>
+          <div className="config-group-title">ข้อมูลการจัดส่ง</div>
           <ul className="config-item-list">
             {config.customerName && <li>ผู้รับ: {config.customerName} ({config.customerPhone || 'ไม่ระบุเบอร์'})</li>}
             {config.customerAddress && <li>ที่อยู่: {config.customerAddress}</li>}
@@ -186,7 +227,7 @@ export default function CartPage() {
     }
     const savedCart = localStorage.getItem(STORAGE_CART);
     if (savedCart) {
-      setCartItems(JSON.parse(savedCart));
+      setCartItems(JSON.parse(savedCart).reverse());
     }
     setIsLoaded(true);
 
@@ -203,11 +244,20 @@ export default function CartPage() {
           );
 
           unsubscribe = onSnapshot(q, (snapshot) => {
-            const fetchedOrders = snapshot.docs.map(doc => ({
-              id: doc.id,
-              ...doc.data(),
-              date: doc.data().createdAt?.toDate().toLocaleString('th-TH') || 'กำลังประมวลผล...'
-            }));
+            const fetchedOrders = snapshot.docs.map(doc => {
+              const dateObj = doc.data().createdAt?.toDate();
+              let dateStr = 'กำลังประมวลผล...';
+              if (dateObj) {
+                const date = dateObj.toLocaleDateString('th-TH');
+                const time = dateObj.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+                dateStr = `${date} ${time}`;
+              }
+              return {
+                id: doc.id,
+                ...doc.data(),
+                date: dateStr
+              };
+            });
             setOrders(fetchedOrders);
             setIsFirebaseEnabled(true);
           }, (error) => {
@@ -253,7 +303,13 @@ export default function CartPage() {
     if (item.type === 'glitter_rose' && item.config) {
       localStorage.setItem('bear_flower_v1', JSON.stringify(item.config));
       localStorage.setItem('editing_cart_id', item.id);
-      window.location.href = '/glitter_rose?edit=true';
+      const presetId = item.config?.presetId || item.presetId;
+      window.location.href = presetId ? `/glitter_rose?edit=true&preset=${presetId}` : '/glitter_rose?edit=true';
+    } else if (item.type === 'velvet_flower' && item.config) {
+      localStorage.setItem('bear_flower_velvet_v1', JSON.stringify(item.config));
+      localStorage.setItem('editing_cart_id', item.id);
+      const presetId = item.config?.presetId || item.presetId;
+      window.location.href = presetId ? `/velvet_wire?edit=true&preset=${presetId}` : '/velvet_wire?edit=true';
     }
   };
 
@@ -279,9 +335,9 @@ export default function CartPage() {
 
   const getStatusLabel = (status: string) => {
     switch (status) {
-      case 'pending_verification': return { text: 'รอดำเนินการ (รอตรวจสอบมัดจำ)', color: '#757575', bg: '#f5f5f5' };
+      case 'pending_verification': return { text: 'รอดำเนินการ', color: '#757575', bg: '#f5f5f5' };
       case 'preparing': return { text: 'กำลังจัดช่อดอกไม้', color: '#ff9800', bg: '#fff3e0' };
-      case 'shipping': return { text: 'จัดดอกไม้เสร็จแล้ว กรุณาชำระเงินอีกครึ่งนึงเพื่อดำเนินการจัดส่ง', color: '#2196f3', bg: '#e3f2fd' };
+      case 'shipping': return { text: 'จัดดอกไม้เสร็จแล้ว', color: '#2196f3', bg: '#e3f2fd' };
       case 'pending_final_verification': return { text: 'กำลังตรวจสอบยอดเงินส่วนที่เหลือ', color: '#e67e22', bg: '#fdf6ee' };
       case 'delivering': return { text: 'กำลังจัดส่ง', color: '#9c27b0', bg: '#f3e5f5' };
       case 'completed': return { text: 'เสร็จสิ้น', color: '#4caf50', bg: '#e8f5e9' };
@@ -350,12 +406,12 @@ export default function CartPage() {
         .content-scroll {
           flex: 1;
           overflow-y: auto;
-          padding: 0 20px 120px 20px;
+          padding: 0 20px 170px 20px;
         }
 
         @media (min-width: 1024px) {
           .content-scroll {
-            padding: 0 40px 120px 40px;
+            padding: 0 40px 170px 40px;
           }
         }
 
@@ -411,6 +467,15 @@ export default function CartPage() {
         .item-info { flex: 1; display: flex; flex-direction: column; }
         .item-name { font-weight: 600; font-size: 0.95rem; color: #5c4738; }
         .edit-badge { font-size: .6rem; color: #db8a9e; background: #fdf5f6; padding: 2px 6px; border-radius: 6px; margin-top: 4px; display: inline-block; }
+
+        @media (max-width: 767px) {
+          .cart-item .item-name {
+            padding-right: 0 !important;
+          }
+          .cart-item[data-status="shipping"] .status-badge {
+            display: none !important;
+          }
+        }
         .item-price { color: #db8a9e; font-weight: 700; font-size: 1.25rem; margin-top: 4px; }
         .item-details { font-size: .75rem; color: #a08a8e; margin-top: 4px; }
 
@@ -471,17 +536,23 @@ export default function CartPage() {
           }
 
           .desktop-config-details {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            display: flex;
+            flex-wrap: nowrap;
             gap: 16px;
             background: #fffcfd;
             padding: 16px;
             border-radius: 12px;
             margin-top: 12px;
+            overflow-x: auto;
             border: 1px dashed rgba(219, 138, 158, 0.25);
             font-size: 0.85rem;
             color: #5c4738;
             text-align: left;
+          }
+
+          .desktop-config-details > div {
+            flex: 1;
+            min-width: 0;
           }
 
           .config-group-title {
@@ -663,7 +734,7 @@ export default function CartPage() {
                         <div className="item-info">
                           <div className="item-name">
                             {item.name}
-                            {item.type === 'glitter_rose' && <span className="edit-badge">แก้ไขช่อนี้</span>}
+                            {(item.type === 'glitter_rose' || item.type === 'velvet_flower') && <span className="edit-badge">แก้ไขรายการนี้</span>}
                           </div>
                           {item.details && <div className="item-details">{item.details}</div>}
                           {renderDesktopConfig(item)}
@@ -726,27 +797,17 @@ export default function CartPage() {
                       const mobileLayers = cfg ? (cfg.selectedLayers || []).map((id: string) => ROSE_LAYERS_MAP[id] || id).join(', ') : '';
                       const mobilePaper = cfg ? (ROSE_PAPERS_MAP[cfg.selectedPaper] || cfg.selectedPaper || '') : '';
                       const mobileShape = cfg ? (ROSE_SHAPES_MAP[cfg.selectedShape] || cfg.selectedShape || '') : '';
-                      const mobileDecorations = cfg ? (cfg.selectedDecorations || []).map((id: string) => ROSE_DECORATIONS_MAP[id] || id).join(', ') : '';
+                      const mobileDecorations = cfg ? (cfg.selectedDecorations || []).map((id: string) => getDecorationLabel(id, cfg)).join(', ') : '';
 
                       return (
                         <div
                           key={cardKey}
                           className="cart-item"
                           data-type={isGlitterRose ? 'glitter_rose' : 'other'}
+                          data-status={order.status}
                           style={{ cursor: cfg ? 'pointer' : 'default', position: 'relative' }}
                           onClick={() => cfg && toggleExpand(cardKey)}
                         >
-                          {/* Order date at top-right */}
-                          {order.date && (
-                            <div style={{
-                              position: 'absolute', top: '14px', right: '16px',
-                              fontSize: '.72rem', color: '#a08a8e', fontWeight: 500,
-                              background: '#fdf5f6', padding: '3px 8px', borderRadius: '20px',
-                              whiteSpace: 'nowrap'
-                            }}>
-                              {order.date}
-                            </div>
-                          )}
                           <div className="item-img-placeholder">
                             {shouldShowCoverImage ? (
                               <img src={item.coverImage} alt={item.name} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />
@@ -755,7 +816,7 @@ export default function CartPage() {
                             )}
                           </div>
                           <div className="item-info">
-                            <div className="item-name" style={{ paddingRight: order.date ? '120px' : '0' }}>
+                            <div className="item-name">
                               {item.name}
                               {isGlitterRose && <span className="edit-badge">Glitter Rose</span>}
                             </div>
@@ -778,13 +839,19 @@ export default function CartPage() {
                               </span>
                             )}
                             {/* Desktop config grid (hidden on mobile) */}
-                            {item.config && renderDesktopConfig({ type: 'glitter_rose', config: item.config })}
+                            {item.config && renderDesktopConfig({ type: 'glitter_rose', config: item.config, orderDate: order.date })}
                             {/* Mobile expand panel */}
                             {cfg && (
                               <div className={`mobile-expand-panel${isExpanded ? ' open' : ''}`}>
                                 <div className="mobile-detail-grid">
+                                  {order.date && (
+                                    <div>
+                                      <div className="mobile-detail-group-title">วันที่สั่งซื้อ</div>
+                                      <ul className="mobile-detail-list"><li>{order.date}</li></ul>
+                                    </div>
+                                  )}
                                   <div>
-                                    <div className="mobile-detail-group-title">🌹 ช่อดอกกุหลาบ</div>
+                                    <div className="mobile-detail-group-title">ช่อดอกกุหลาบ</div>
                                     <ul className="mobile-detail-list">
                                       <li>จำนวน: {cfg.selectedQty || 0} ดอก</li>
                                       {mobileColors && <li>สี: {mobileColors}</li>}
@@ -792,7 +859,7 @@ export default function CartPage() {
                                   </div>
                                   {(mobileLayers || mobilePaper || mobileShape) && (
                                     <div>
-                                      <div className="mobile-detail-group-title">📜 องค์ประกอบการห่อ</div>
+                                      <div className="mobile-detail-group-title">องค์ประกอบการห่อ</div>
                                       <ul className="mobile-detail-list">
                                         {mobileLayers && <li>รองช่อ: {mobileLayers}</li>}
                                         {mobilePaper && <li>กระดาษห่อ: {mobilePaper}</li>}
@@ -800,15 +867,13 @@ export default function CartPage() {
                                       </ul>
                                     </div>
                                   )}
-                                  {mobileDecorations && (
-                                    <div>
-                                      <div className="mobile-detail-group-title">✨ ของตกแต่ง</div>
-                                      <ul className="mobile-detail-list"><li>{mobileDecorations}</li></ul>
-                                    </div>
-                                  )}
+                                  <div>
+                                    <div className="mobile-detail-group-title">ของตกแต่ง</div>
+                                    <ul className="mobile-detail-list"><li>{mobileDecorations || 'ไม่มีของตกแต่ง'}</li></ul>
+                                  </div>
                                   {(cfg.customerName || cfg.deliveryDate) && (
                                     <div>
-                                      <div className="mobile-detail-group-title">📍 การจัดส่ง</div>
+                                      <div className="mobile-detail-group-title">การจัดส่ง</div>
                                       <ul className="mobile-detail-list">
                                         {cfg.customerName && <li>ผู้รับ: {cfg.customerName} ({cfg.customerPhone || 'ไม่ระบุเบอร์'})</li>}
                                         {cfg.customerAddress && <li>ที่อยู่: {cfg.customerAddress}</li>}

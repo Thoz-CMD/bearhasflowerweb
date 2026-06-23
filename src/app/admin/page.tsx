@@ -925,6 +925,14 @@ function AdminPageContent() {
     return new Date(createdAt);
   };
 
+  const getOrderRevenue = (order: any) => {
+    if (!order || order.status === 'cancelled') return 0;
+    if (order.status === 'delivering' || order.status === 'completed') {
+      return order.total || 0;
+    }
+    return order.depositPaid !== undefined ? (order.depositPaid || 0) : Math.round((order.total || 0) / 2);
+  };
+
   const formatOrderDate = (createdAt: any) => {
     const d = resolveOrderDate(createdAt);
     if (!d) return '-';
@@ -1056,7 +1064,7 @@ function AdminPageContent() {
   // Statistics calculations
   const totalSales = orders
     .filter(o => o.status !== 'cancelled')
-    .reduce((acc, o) => acc + (o.total || 0), 0) +
+    .reduce((acc, o) => acc + getOrderRevenue(o), 0) +
     expenses
     .filter(e => e.type === 'income')
     .reduce((acc, e) => acc + (e.amount || 0), 0);
@@ -1072,7 +1080,7 @@ function AdminPageContent() {
         const orderDate = resolveOrderDate(o.createdAt);
         return orderDate && orderDate.getFullYear() === year && orderDate.getMonth() === month;
       })
-      .reduce((acc, o) => acc + (o.total || 0), 0);
+      .reduce((acc, o) => acc + getOrderRevenue(o), 0);
   };
 
   const getSalesForYearMonth = (orders: any[], yearMonth: string) => {
@@ -1082,7 +1090,7 @@ function AdminPageContent() {
         const orderDate = resolveOrderDate(o.createdAt);
         return orderDate && `${orderDate.getFullYear()}-${String(orderDate.getMonth() + 1).padStart(2, '0')}` === yearMonth;
       })
-      .reduce((acc, o) => acc + (o.total || 0), 0);
+      .reduce((acc, o) => acc + getOrderRevenue(o), 0);
     const incomeSales = expenses
       .filter(e => e.type === 'income')
       .filter(e => e.date && e.date.substring(0, 7) === yearMonth)
@@ -1124,12 +1132,19 @@ function AdminPageContent() {
   const previousMonth = currentMonth === 0 ? 11 : currentMonth - 1;
   const previousYear = currentMonth === 0 ? currentYear - 1 : currentYear;
 
-  const currentMonthSales = getSalesForMonth(orders, currentYear, currentMonth);
-  const previousMonthSales = getSalesForMonth(orders, previousYear, previousMonth);
+  const currentMonthStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}`;
+  const previousMonthStr = `${previousYear}-${String(previousMonth + 1).padStart(2, '0')}`;
 
-  const salesGrowthPct = previousMonthSales === 0
-    ? (currentMonthSales > 0 ? 100 : 0)
-    : ((currentMonthSales - previousMonthSales) / previousMonthSales) * 100;
+  const currentMonthSalesFull = getSalesForYearMonth(orders, currentMonthStr);
+  const currentMonthExpensesFull = getExpensesForYearMonth(expenses, currentMonthStr);
+  const currentMonthNetProfit = currentMonthSalesFull - currentMonthExpensesFull;
+
+  const previousMonthSalesFull = getSalesForYearMonth(orders, previousMonthStr);
+  const previousMonthExpensesFull = getExpensesForYearMonth(expenses, previousMonthStr);
+  const previousMonthNetProfit = previousMonthSalesFull - previousMonthExpensesFull;
+
+  const netProfitGrowth = getGrowthMetrics(currentMonthNetProfit, previousMonthNetProfit);
+  const previousMonthLabel = previousMonthStr ? formatMonthThai(previousMonthStr) : 'เดือนที่แล้ว';
 
   const totalExpenses = expenses
     .filter(e => e.type === 'expense')
@@ -1157,23 +1172,23 @@ function AdminPageContent() {
   } as const;
   const overviewCards = [
     {
-      key: 'sales',
-      label: 'ยอดขายทั้งหมด',
-      value: `${totalSales.toLocaleString()} ฿`,
-      detail: `${orders.length} รายการทั้งหมด`,
-      accent: '#ff5f87',
+      key: 'net-profit',
+      label: 'กำไรสุทธิประจำเดือน',
+      value: `${currentMonthNetProfit.toLocaleString()} ฿`,
+      detail: `${netProfitGrowth.detailLabel} ${netProfitGrowth.formattedPct}% จาก${previousMonthLabel}`,
+      accent: 'rgb(245, 159, 58)',
       cardClass: 'metric-sales',
-      progressPct: Math.round(Math.abs(salesGrowthPct)),
-      ringLabelPct: Math.round(Math.abs(salesGrowthPct)),
-      ringPrefix: '+',
-      detailPrefix: '↗',
+      progressPct: netProfitGrowth.progressPct,
+      ringLabelPct: netProfitGrowth.ringLabelPct,
+      ringPrefix: netProfitGrowth.ringPrefix,
+      detailPrefix: netProfitGrowth.detailPrefix,
     },
     {
       key: 'pending',
       label: 'รอตรวจสอบเงิน',
       value: `${pendingCount} รายการ`,
       detail: `${Math.round((pendingCount / safeOrderCount) * 100)}% จากทั้งหมด`,
-      accent: '#f59f3a',
+      accent: '#FACE17',
       cardClass: 'metric-pending',
       progressPct: toPercent(pendingCount),
       ringLabelPct: toPercent(pendingCount),
@@ -1250,7 +1265,7 @@ function AdminPageContent() {
   // Calculate monthly stats
   const monthlySales = monthlyOrders
     .filter(o => o.status !== 'cancelled')
-    .reduce((acc, o) => acc + (o.total || 0), 0) +
+    .reduce((acc, o) => acc + getOrderRevenue(o), 0) +
     monthlyExpenses
     .filter(e => e.type === 'income')
     .reduce((acc, e) => acc + (e.amount || 0), 0);
@@ -1273,41 +1288,43 @@ function AdminPageContent() {
   const previousMonthLabelFinance = previousMonthFinance ? formatMonthThai(previousMonthFinance) : 'เดือนที่แล้ว';
   const financeCards = [
     {
+      key: 'finance-net-profit',
+      label: 'กำไรสุทธิประจำเดือน',
+      value: `${monthlyNetProfit.toLocaleString()} ฿`,
+      detail: `${netProfitFinanceGrowth.detailLabel} ${netProfitFinanceGrowth.formattedPct}% จาก${previousMonthLabelFinance}`,
+      accent: 'rgb(245, 159, 58)',
+      cardClass: 'metric-completed',
+      progressPct: netProfitFinanceGrowth.progressPct,
+      ringLabelPct: netProfitFinanceGrowth.ringLabelPct,
+      ringPrefix: netProfitFinanceGrowth.ringPrefix,
+      detailPrefix: netProfitFinanceGrowth.detailPrefix,
+      valueColor: '#1a1a1a',
+    },
+    {
       key: 'finance-sales',
       label: 'รายรับประจำเดือน',
       value: `${monthlySales.toLocaleString()} ฿`,
       detail: `${salesFinanceGrowth.detailLabel} ${salesFinanceGrowth.formattedPct}% จาก${previousMonthLabelFinance}`,
-      accent: '#ff5f87',
+      accent: 'rgb(53, 199, 112)',
       cardClass: 'metric-sales',
       progressPct: salesFinanceGrowth.progressPct,
       ringLabelPct: salesFinanceGrowth.ringLabelPct,
       ringPrefix: salesFinanceGrowth.ringPrefix,
       detailPrefix: salesFinanceGrowth.detailPrefix,
+      valueColor: '#1a1a1a',
     },
     {
       key: 'finance-expenses',
       label: 'รายจ่ายจัดซื้อประจำเดือน',
       value: `${monthlyExpensesTotal.toLocaleString()} ฿`,
       detail: `${expensesFinanceGrowth.detailLabel} ${expensesFinanceGrowth.formattedPct}% จาก${previousMonthLabelFinance}`,
-      accent: '#f59f3a',
+      accent: 'rgb(255, 95, 135)',
       cardClass: 'metric-pending',
       progressPct: expensesFinanceGrowth.progressPct,
       ringLabelPct: expensesFinanceGrowth.ringLabelPct,
       ringPrefix: expensesFinanceGrowth.ringPrefix,
       detailPrefix: expensesFinanceGrowth.detailPrefix,
-    },
-    {
-      key: 'finance-net-profit',
-      label: 'กำไรสุทธิประจำเดือน',
-      value: `${monthlyNetProfit.toLocaleString()} ฿`,
-      detail: `${netProfitFinanceGrowth.detailLabel} ${netProfitFinanceGrowth.formattedPct}% จาก${previousMonthLabelFinance}`,
-      accent: monthlyNetProfit >= 0 ? '#35c770' : '#e74c3c',
-      cardClass: monthlyNetProfit >= 0 ? 'metric-completed' : 'metric-preparing',
-      progressPct: netProfitFinanceGrowth.progressPct,
-      ringLabelPct: netProfitFinanceGrowth.ringLabelPct,
-      ringPrefix: netProfitFinanceGrowth.ringPrefix,
-      detailPrefix: netProfitFinanceGrowth.detailPrefix,
-      valueColor: monthlyNetProfit >= 0 ? '#27ae60' : '#e74c3c',
+      valueColor: '#1a1a1a',
     },
   ];
 
@@ -1330,7 +1347,7 @@ function AdminPageContent() {
       return {
         id: o.id,
         title: `รายรับสินค้า (ออเดอร์ ${customerDisplayName})`,
-        amount: o.total || 0,
+        amount: getOrderRevenue(o),
         type: 'revenue',
         category: 'sales',
         date: orderDate

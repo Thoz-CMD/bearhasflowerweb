@@ -10,15 +10,40 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'LINE_CHANNEL_ACCESS_TOKEN is not configured' }, { status: 500 });
     }
 
+    const isDeposit = paymentType === 'deposit';
     const isFinal = paymentType === 'final';
-    const amountToPay = isFinal ? orderData.total - orderData.depositPaid : orderData.depositPaid;
-    const alertTitle = isFinal ? "แจ้งชำระเงินส่วนที่เหลือ!" : "มีออเดอร์ใหม่!";
-    const labelToPay = isFinal ? "ยอดชำระส่วนที่เหลือ" : "มัดจำที่ต้องชำระ";
-    const headerBgColor = isFinal ? "#00B900" : "#E91E8C"; // Green for LINE / final, Pink for new order
-    const headerTextColor = isFinal ? "#E6F8E6" : "#FFD6E7";
+
+    let amountToPay: number;
+    let alertTitle: string;
+    let labelToPay: string;
+    let headerBgColor: string;
+    let headerTextColor: string;
+
+    if (isDeposit) {
+      amountToPay = orderData.depositPaid || 0;
+      alertTitle = '🌸 ออเดอร์ใหม่! (มัดจำ)';
+      labelToPay = 'ยอดมัดจำที่ชำระ (50%)';
+      headerBgColor = '#E91E8C';
+      headerTextColor = '#FFD6E7';
+    } else {
+      amountToPay = (orderData.total || 0) - (orderData.depositPaid || 0);
+      alertTitle = '💳 แจ้งชำระส่วนที่เหลือ!';
+      labelToPay = 'ยอดชำระส่วนที่เหลือ';
+      headerBgColor = '#00B900';
+      headerTextColor = '#E6F8E6';
+    }
+
+    // Extract customer info from config (glitter_rose or velvet_wire custom orders)
+    const firstItem = orderData.items?.[0];
+    const config = firstItem?.config || {};
+    const customerName = config.customerName || orderData.customerName || '';
+    const customerPhone = config.customerPhone || orderData.customerPhone || '';
+    const customerAddress = config.customerAddress || orderData.customerAddress || '';
+    const deliveryDate = config.deliveryDate || orderData.deliveryDate || '';
+    const deliveryTime = config.deliveryTime || orderData.deliveryTime || '';
 
     // Format items for Flex Message body
-    const itemBoxes = orderData.items.map((item: any) => {
+    const itemBoxes = (orderData.items || []).map((item: any) => {
       const detailText = item.details
         ? item.details.replace(/<br\s*\/?>/gi, ' ').replace(/<[^>]*>?/gm, '').trim()
         : '';
@@ -87,9 +112,189 @@ export async function POST(req: Request) {
 
     const adminUrl = process.env.NEXT_PUBLIC_ADMIN_URL || "https://bearhasflower.vercel.app/admin";
 
+    // Build customer info rows
+    const customerInfoContents: any[] = [];
+
+    if (customerName) {
+      customerInfoContents.push({
+        type: "box",
+        layout: "horizontal",
+        margin: "sm",
+        contents: [
+          { type: "text", text: "👤 ชื่อผู้รับ", size: "xs", color: "#880E4F", flex: 2 },
+          { type: "text", text: customerName, size: "xs", color: "#5c4738", flex: 3, wrap: true, align: "end" }
+        ]
+      });
+    }
+
+    if (customerPhone) {
+      customerInfoContents.push({
+        type: "box",
+        layout: "horizontal",
+        margin: "sm",
+        contents: [
+          { type: "text", text: "📞 เบอร์โทร", size: "xs", color: "#880E4F", flex: 2 },
+          { type: "text", text: customerPhone, size: "xs", color: "#5c4738", flex: 3, align: "end" }
+        ]
+      });
+    }
+
+    if (deliveryDate) {
+      const deliveryDisplay = deliveryTime ? `${deliveryDate} เวลา ${deliveryTime} น.` : deliveryDate;
+      customerInfoContents.push({
+        type: "box",
+        layout: "horizontal",
+        margin: "sm",
+        contents: [
+          { type: "text", text: "📅 วันรับสินค้า", size: "xs", color: "#880E4F", flex: 2 },
+          { type: "text", text: deliveryDisplay, size: "xs", color: "#5c4738", flex: 3, wrap: true, align: "end" }
+        ]
+      });
+    }
+
+    if (customerAddress) {
+      customerInfoContents.push({
+        type: "box",
+        layout: "horizontal",
+        margin: "sm",
+        contents: [
+          { type: "text", text: "📍 ที่อยู่", size: "xs", color: "#880E4F", flex: 2 },
+          { type: "text", text: customerAddress, size: "xs", color: "#5c4738", flex: 3, wrap: true, align: "end" }
+        ]
+      });
+    }
+
+    if (orderData.discountCode) {
+      customerInfoContents.push({
+        type: "box",
+        layout: "horizontal",
+        margin: "sm",
+        contents: [
+          { type: "text", text: "🏷️ โค้ดส่วนลด", size: "xs", color: "#880E4F", flex: 2 },
+          { type: "text", text: `${orderData.discountCode} (-฿${(orderData.discountAmount || 0).toLocaleString()})`, size: "xs", color: "#4caf50", flex: 3, align: "end", weight: "bold" }
+        ]
+      });
+    }
+
+    // Order ID box
+    const orderIdBox = orderData.id ? [{
+      type: "box",
+      layout: "horizontal",
+      margin: "sm",
+      contents: [
+        { type: "text", text: "🔖 Order ID", size: "xs", color: "#AD7B8E", flex: 2 },
+        { type: "text", text: orderData.id, size: "xs", color: "#AD7B8E", flex: 3, align: "end", wrap: true }
+      ]
+    }] : [];
+
+    const bodyContents: any[] = [
+      {
+        type: "text",
+        text: timeStr,
+        size: "xs",
+        color: "#AD7B8E"
+      },
+      {
+        type: "separator",
+        margin: "md",
+        color: "#F8BBD9"
+      },
+      {
+        type: "text",
+        text: "รายการสินค้า",
+        size: "sm",
+        weight: "bold",
+        color: "#880E4F",
+        margin: "md"
+      },
+      ...itemBoxes,
+      {
+        type: "separator",
+        margin: "lg",
+        color: "#F8BBD9"
+      },
+      {
+        type: "box",
+        layout: "horizontal",
+        margin: "lg",
+        contents: [
+          {
+            type: "text",
+            text: "ยอดรวม",
+            size: "sm",
+            weight: "bold",
+            color: "#880E4F",
+            flex: 1
+          },
+          {
+            type: "text",
+            text: `฿${(orderData.total || 0).toLocaleString()}`,
+            size: "md",
+            weight: "bold",
+            color: "#E91E8C",
+            align: "end"
+          }
+        ]
+      },
+      {
+        type: "box",
+        layout: "horizontal",
+        margin: "sm",
+        paddingAll: "10px",
+        backgroundColor: isDeposit ? "#FCE4EC" : "#E8F5E9",
+        contents: [
+          {
+            type: "text",
+            text: labelToPay,
+            size: "sm",
+            color: isDeposit ? "#880E4F" : "#2E7D32",
+            flex: 1
+          },
+          {
+            type: "text",
+            text: `฿${amountToPay.toLocaleString()}`,
+            size: "sm",
+            weight: "bold",
+            color: isDeposit ? "#C2185B" : "#388E3C",
+            align: "end"
+          }
+        ]
+      }
+    ];
+
+    // Add customer info section if available
+    if (customerInfoContents.length > 0) {
+      bodyContents.push({
+        type: "separator",
+        margin: "lg",
+        color: "#F8BBD9"
+      });
+      bodyContents.push({
+        type: "text",
+        text: "ข้อมูลลูกค้า",
+        size: "sm",
+        weight: "bold",
+        color: "#880E4F",
+        margin: "md"
+      });
+      bodyContents.push({
+        type: "box",
+        layout: "vertical",
+        margin: "sm",
+        paddingAll: "12px",
+        backgroundColor: "#FFF0F5",
+        contents: customerInfoContents
+      });
+    }
+
+    // Add order ID at the bottom
+    if (orderIdBox.length > 0) {
+      bodyContents.push(...orderIdBox);
+    }
+
     const flexMessage = {
       type: "flex",
-      altText: `${alertTitle} ยอด ฿${orderData.total.toLocaleString()}`,
+      altText: `${alertTitle} ยอด ฿${(orderData.total || 0).toLocaleString()} ${customerName ? `| ${customerName}` : ''}`,
       contents: {
         type: "bubble",
         size: "kilo",
@@ -121,80 +326,7 @@ export async function POST(req: Request) {
           paddingAll: "16px",
           backgroundColor: "#FFF5F9",
           spacing: "sm",
-          contents: [
-            {
-              type: "text",
-              text: timeStr,
-              size: "xs",
-              color: "#AD7B8E"
-            },
-            {
-              type: "separator",
-              margin: "md",
-              color: "#F8BBD9"
-            },
-            {
-              type: "text",
-              text: "รายการสินค้า",
-              size: "sm",
-              weight: "bold",
-              color: "#880E4F",
-              margin: "md"
-            },
-            ...itemBoxes,
-            {
-              type: "separator",
-              margin: "lg",
-              color: "#F8BBD9"
-            },
-            {
-              type: "box",
-              layout: "horizontal",
-              margin: "lg",
-              contents: [
-                {
-                  type: "text",
-                  text: "ยอดรวม",
-                  size: "sm",
-                  weight: "bold",
-                  color: "#880E4F",
-                  flex: 1
-                },
-                {
-                  type: "text",
-                  text: `฿${orderData.total.toLocaleString()}`,
-                  size: "md",
-                  weight: "bold",
-                  color: "#E91E8C",
-                  align: "end"
-                }
-              ]
-            },
-            {
-              type: "box",
-              layout: "horizontal",
-              margin: "sm",
-              paddingAll: "10px",
-              backgroundColor: "#FCE4EC",
-              contents: [
-                {
-                  type: "text",
-                  text: labelToPay,
-                  size: "sm",
-                  color: "#880E4F",
-                  flex: 1
-                },
-                {
-                  type: "text",
-                  text: `฿${amountToPay.toLocaleString()}`,
-                  size: "sm",
-                  weight: "bold",
-                  color: "#C2185B",
-                  align: "end"
-                }
-              ]
-            }
-          ]
+          contents: bodyContents
         },
         footer: {
           type: "box",

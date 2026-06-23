@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { db, auth } from '@/lib/firebase';
+import { db, auth, storage } from '@/lib/firebase';
 import { collection, addDoc, serverTimestamp, doc, runTransaction, getDocs, query, where } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { onAuthStateChanged } from 'firebase/auth';
 import generatePayload from 'promptpay-qr';
 import { QRCodeSVG } from 'qrcode.react';
@@ -19,6 +20,7 @@ export default function CheckoutPage() {
   const [payload, setPayload] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [showSuccessPopup, setShowSuccessPopup] = useState(false);
+  const [showSlipErrorPopup, setShowSlipErrorPopup] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
   const [originalTotal, setOriginalTotal] = useState(0);
   const [discountCodeInput, setDiscountCodeInput] = useState('');
@@ -29,6 +31,9 @@ export default function CheckoutPage() {
   const [isApplyingDiscount, setIsApplyingDiscount] = useState(false);
   const [availableDiscounts, setAvailableDiscounts] = useState<{code: string, label: string}[]>([]);
   const [checkingDiscounts, setCheckingDiscounts] = useState(true);
+  const [slipFile, setSlipFile] = useState<File | null>(null);
+  const [slipPreview, setSlipPreview] = useState<string | null>(null);
+  const [uploadingSlip, setUploadingSlip] = useState(false);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -164,13 +169,52 @@ export default function CheckoutPage() {
     setPayload(qrPayload);
   };
 
-  const createOrderAndReserveStock = async (item: any, orderData: any) => {
+  const handleSlipUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.match(/image\/(jpeg|png|jpg)/)) {
+      alert('กรุณาอัปโหลดไฟล์รูปภาพ (JPEG, PNG) เท่านั้น');
+      return;
+    }
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      alert('ขนาดไฟล์ต้องไม่เกิน 5MB');
+      return;
+    }
+
+    setSlipFile(file);
+    setSlipPreview(URL.createObjectURL(file));
+  };
+
+  const uploadSlipToStorage = async (): Promise<string | null> => {
+    if (!slipFile) return null;
+
+    setUploadingSlip(true);
+    try {
+      const fileName = `slips/${Date.now()}_${slipFile.name}`;
+      const storageRef = ref(storage, fileName);
+      await uploadBytes(storageRef, slipFile);
+      const downloadURL = await getDownloadURL(storageRef);
+      return downloadURL;
+    } catch (error) {
+      console.error('Error uploading slip:', error);
+      alert('เกิดข้อผิดพลาดในการอัปโหลดสลิป กรุณาลองใหม่');
+      return null;
+    } finally {
+      setUploadingSlip(false);
+    }
+  };
+
+  const createOrderAndReserveStock = async (item: any, orderData: any): Promise<string> => {
     const productId = item.presetId || item.config?.presetId;
     const shouldTrackStock = Boolean(item.readyToShip && productId);
 
     if (!shouldTrackStock) {
-      await addDoc(collection(db, "orders"), orderData);
-      return;
+      const docRef = await addDoc(collection(db, "orders"), orderData);
+      return docRef.id;
     }
 
     const orderRef = doc(collection(db, "orders"));
@@ -198,13 +242,29 @@ export default function CheckoutPage() {
       });
       transaction.set(orderRef, orderData);
     });
+
+    return orderRef.id;
   };
 
   const handleConfirmPayment = async () => {
     if (cartItems.length === 0 || isProcessing) return;
+    
+    // Require slip upload
+    if (!slipFile) {
+      setShowSlipErrorPopup(true);
+      return;
+    }
+
     setIsProcessing(true);
 
     try {
+      // Upload slip first
+      const slipUrl = await uploadSlipToStorage();
+      if (!slipUrl) {
+        setIsProcessing(false);
+        return;
+      }
+
       // Create separate order for each cart item
       for (const item of cartItems) {
         let itemTotal = item.price * (item.qty || 1);
@@ -238,19 +298,23 @@ export default function CheckoutPage() {
           discountCode: appliedDiscountCode || null,
           discountAmount: itemDiscount,
           depositPaid: itemDeposit,
+          paymentSlipUrl: slipUrl,
           status: 'pending_verification', // รอตรวจสอบยอดเงิน
           createdAt: serverTimestamp(),
           userId: userId || 'guest',
         };
 
-        await createOrderAndReserveStock(item, orderData);
+        const newOrderId = await createOrderAndReserveStock(item, orderData);
 
-        // Trigger LINE Notify for each order
+        // Trigger LINE Notify for each order (deposit / first payment)
         try {
           await fetch('/api/line-notify', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ orderData })
+            body: JSON.stringify({
+              orderData: { ...orderData, id: newOrderId },
+              paymentType: 'deposit'
+            })
           });
         } catch (err) {
           console.error("Failed to notify LINE:", err);
@@ -573,6 +637,80 @@ export default function CheckoutPage() {
           color: #4caf50;
         }
 
+        .slip-upload-section {
+          background: #fff;
+          border-radius: 20px;
+          padding: 24px;
+          margin-bottom: 24px;
+          box-shadow: 0 4px 15px rgba(0,0,0,0.03);
+          border: 1px solid rgba(219, 138, 158, 0.1);
+        }
+        .slip-upload-label {
+          font-size: 0.95rem;
+          font-weight: 700;
+          color: #db8a9e;
+          margin-bottom: 12px;
+          display: flex;
+          align-items: center;
+          gap: 6px;
+        }
+        .slip-upload-box {
+          border: 2px dashed #e0bec6;
+          border-radius: 16px;
+          padding: 24px;
+          text-align: center;
+          cursor: pointer;
+          transition: all 0.3s;
+          position: relative;
+        }
+        .slip-upload-box:hover {
+          border-color: #db8a9e;
+          background: #fdf5f6;
+        }
+        .slip-upload-box.has-file {
+          border-style: solid;
+          border-color: #4caf50;
+          background: #f0fdf4;
+        }
+        .slip-upload-icon {
+          font-size: 2.5rem;
+          margin-bottom: 8px;
+        }
+        .slip-upload-text {
+          font-size: 0.9rem;
+          color: #a08a8e;
+          margin-bottom: 4px;
+        }
+        .slip-upload-subtext {
+          font-size: 0.75rem;
+          color: #ccc;
+        }
+        .slip-preview {
+          margin-top: 16px;
+          border-radius: 12px;
+          overflow: hidden;
+          max-width: 100%;
+        }
+        .slip-preview img {
+          width: 100%;
+          height: auto;
+          display: block;
+        }
+        .slip-remove-btn {
+          margin-top: 12px;
+          padding: 8px 16px;
+          background: #db3a55;
+          color: #fff;
+          border: none;
+          border-radius: 20px;
+          font-size: 0.85rem;
+          cursor: pointer;
+          font-weight: 600;
+        }
+        .slip-remove-btn:hover {
+          background: #c9304a;
+        }
+
         .confirm-btn {
           width: 100%;
           padding: 18px;
@@ -765,12 +903,53 @@ export default function CheckoutPage() {
           </div>
         </div>
 
+        <div className="slip-upload-section">
+          <div className="slip-upload-label">
+            <span style={{ fontSize: '1.2rem' }}>📷</span> อัปโหลดสลิปการโอนเงิน
+          </div>
+          <input
+            type="file"
+            id="slip-upload"
+            accept="image/jpeg,image/png,image/jpg"
+            onChange={handleSlipUpload}
+            style={{ display: 'none' }}
+          />
+          <div
+            className={`slip-upload-box ${slipFile ? 'has-file' : ''}`}
+            onClick={() => document.getElementById('slip-upload')?.click()}
+          >
+            {slipPreview ? (
+              <>
+                <div className="slip-preview">
+                  <img src={slipPreview} alt="Slip preview" />
+                </div>
+                <button
+                  className="slip-remove-btn"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSlipFile(null);
+                    setSlipPreview(null);
+                  }}
+                >
+                  ลบรูป
+                </button>
+              </>
+            ) : (
+              <>
+                <div className="slip-upload-icon">📤</div>
+                <div className="slip-upload-text">คลิกเพื่ออัปโหลดสลิป</div>
+                <div className="slip-upload-subtext">รองรับไฟล์ JPEG, PNG (สูงสุด 5MB)</div>
+              </>
+            )}
+          </div>
+        </div>
+
         <button
           className="confirm-btn"
           onClick={handleConfirmPayment}
           disabled={isProcessing}
         >
-          {isProcessing ? 'กำลังดำเนินการ...' : 'ฉันได้สแกนชำระเงินแล้ว'}
+          {isProcessing ? 'กำลังดำเนินการ...' : 'ชำระเงินแล้ว'}
         </button>
         <p style={{ textAlign: 'center', fontSize: '0.75rem', color: '#a08a8e', marginTop: '16px' }}>
           หลังจากกดปุ่ม ทางร้านจะตรวจสอบยอดเงินและอัปเดตสถานะให้เร็วที่สุดค่ะ
@@ -793,6 +972,28 @@ export default function CheckoutPage() {
             </p>
             <button className="modal-btn" onClick={() => window.location.href = '/cart?tab=history'}>
               ดูประวัติการสั่งซื้อ
+            </button>
+          </div>
+        </div>
+      )}
+
+      {showSlipErrorPopup && (
+        <div className="modal-overlay">
+          <div className="modal-content">
+            <div className="modal-icon" style={{ background: '#fef3c7', color: '#f59e0b' }}>
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="8" x2="12" y2="12"></line>
+                <line x1="12" y1="16" x2="12.01" y2="16"></line>
+              </svg>
+            </div>
+            <h2 className="modal-title">กรุณาอัปโหลดสลิป</h2>
+            <p className="modal-desc">
+              คุณยังไม่ได้อัปโหลดสลิปการโอนเงิน<br />
+              กรุณาอัปโหลดสลิปก่อนกดยืนยันค่ะ
+            </p>
+            <button className="modal-btn" onClick={() => setShowSlipErrorPopup(false)}>
+              ตกลง
             </button>
           </div>
         </div>

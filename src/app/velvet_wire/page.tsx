@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { usePresetProduct } from '@/hooks/usePresetProduct';
 import { ToastProvider, useToast } from '@/components/Toast';
+import GreetingCardAI from '@/components/GreetingCardAI';
 import dynamic from 'next/dynamic';
 
 // Dynamic import DateTimePicker เพื่อหลีกเลี่ยง SSR issues กับ flatpickr
@@ -151,8 +152,9 @@ function VelvetWireContent() {
       return;
     }
 
+    const editingId = typeof window !== 'undefined' ? window.localStorage.getItem('editing_cart_id') : null;
     const customItem = {
-      id: 'vw_' + Date.now(),
+      id: editingId || 'vw_' + Date.now(),
       type: 'velvet_flower',
       name: presetProduct.name,
       price: basePrice,
@@ -175,13 +177,29 @@ function VelvetWireContent() {
 
     try {
       const cart = JSON.parse(localStorage.getItem(CART_KEY) || '[]');
-      cart.push(customItem);
+      if (editingId) {
+        // Update existing item
+        const index = cart.findIndex((item: any) => item.id === editingId);
+        if (index !== -1) {
+          cart[index] = customItem;
+        }
+      } else {
+        // Add new item
+        cart.push(customItem);
+      }
       localStorage.setItem(CART_KEY, JSON.stringify(cart));
     } catch (e) {
-      localStorage.setItem(CART_KEY, JSON.stringify([customItem]));
+      if (editingId) {
+        localStorage.setItem(CART_KEY, JSON.stringify([customItem]));
+      } else {
+        localStorage.setItem(CART_KEY, JSON.stringify([customItem]));
+      }
     }
 
     localStorage.removeItem(STORAGE_KEY);
+    if (editingId) {
+      localStorage.removeItem('editing_cart_id');
+    }
     sessionStorage.setItem('order_success_toast', '1');
     router.push('/cart');
   }, [presetProduct, state, basePrice, isPresetReadyToShip, showToast, router]);
@@ -353,7 +371,7 @@ function VelvetWireContent() {
             </div>
 
             <div className="form-group">
-              <label>หมายเหตุ (เพิ่มเติม)</label>
+              <label>รายละเอียดเพิ่มเติม (ถ้ามี)</label>
               <textarea
                 id="ipt-note"
                 placeholder="เช่น ขอการ์ดวันเกิด เขียนว่า..."
@@ -361,6 +379,7 @@ function VelvetWireContent() {
                 onChange={e => updateField('additionalNote', e.target.value)}
                 style={{ fontSize: '16px' }}
               />
+              <GreetingCardAI onSelect={(text) => updateField('additionalNote', text)} />
             </div>
           </div>
         </div>

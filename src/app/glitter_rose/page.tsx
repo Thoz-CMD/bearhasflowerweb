@@ -33,12 +33,12 @@ const ROSE_COLORS = [
 ];
 
 const ROSE_LAYERS = [
-  { id: 'ramy_white', name: 'รามี่ขาว', img: '/images/Glitter Rose/รามี่ขาว.jpg' },
+  { id: 'ramy_white', name: 'รามี่ขาว', img: '/images/Glitter Rose/รามี่ขาว.png' },
   { id: 'pearl_net_white', name: 'ตาข่ายมุกขาว', img: '/images/Glitter Rose/ตาข่ายขอบมุกขาว.jpg' },
-  { id: 'sa_paper_white', name: 'กระดาษสาขาว', img: '/images/Glitter Rose/กระดาษสาขาว.jpg' },
-  { id: 'ramy_black', name: 'รามี่ดำ', img: '/images/Glitter Rose/รามี่ดำ.jpg' },
+  { id: 'sa_paper_white', name: 'กระดาษสาขาว', img: '/images/Glitter Rose/กระดาษสาขาว.png' },
+  { id: 'ramy_black', name: 'รามี่ดำ', img: '/images/Glitter Rose/รามี่ดำ.png' },
   { id: 'pearl_net_black', name: 'ตาข่ายมุกดำ', img: '/images/Glitter Rose/ตาข่ายขอบมุกดำ.jpg' },
-  { id: 'sa_paper_black', name: 'กระดาษสาดำ', img: '/images/Glitter Rose/กระดาษสาดำ.jpg' },
+  { id: 'sa_paper_black', name: 'กระดาษสาดำ', img: '/images/Glitter Rose/กระดาษสาดำ.png' },
 ];
 
 const ROSE_PAPERS = [
@@ -65,14 +65,38 @@ const ROSE_SHAPES: ShapeOption[] = [
 ];
 
 const ROSE_DECORATIONS = [
-  { id: 'ribbon_jfy_clear', name: 'โบว์คาดช่อ JUST FOR YOU สีขาวโปร่ง', price: 15, img: '/images/Glitter Rose/โบว์คาดช่อ JUST FOR YOU สีขาวโปร่ง.jpg' },
-  { id: 'ribbon_jfy_solid', name: 'โบว์คาดช่อ Just For You สีขาวทึบ', price: 15, img: '/images/Glitter Rose/โบว์คาดช่อ Just For You สีขาวทึบ.jpg' },
-  { id: 'ribbon_hbd_clear', name: 'โบว์คาดช่อ HAPPY BIRTHDAY สีดำโปร่ง', price: 15, img: '/images/Glitter Rose/โบว์คาดช่อ HAPPY BIRTHDAY สีดำโปร่ง.png' },
+  { id: 'ribbon_jfy_clear', name: 'โบว์คาดช่อ JUST FOR YOU โปร่ง', price: 15, img: '/images/Glitter Rose/โบว์คาดช่อ JUST FOR YOU โปร่ง.webp' },
+  { id: 'ribbon_jfy_solid', name: 'โบว์คาดช่อ JUST FOR YOU ทึบ', price: 15, img: '/images/Glitter Rose/โบว์คาดช่อ JUST FOR YOU ทึบ.png' },
   { id: 'butterfly', name: 'ผีเสื้อ', price: 0, img: '/images/Glitter Rose/ผีเสื้อ.jpg' },
   { id: 'blank_card', name: 'การ์ดเปล่า', price: 0, img: '/images/Glitter Rose/การ์ดเปล่า.png' },
+  { id: 'message_card', name: 'การ์ดข้อความ', price: 5, img: '/images/Glitter Rose/การ์ดข้อความ.png' },
   { id: 'stick', name: 'ก้านเสียบ', price: 5, img: '/images/Glitter Rose/ก้านเสียบ.png' },
+  { id: 'white_pearl', name: 'มุกขาว', price: 5, img: '/images/Glitter Rose/มุกขาว.jpg' },
   { id: 'fairy_light', name: 'ไฟ', price: 15, img: '/images/Glitter Rose/ไฟ.jpg' },
   { id: 'crown', name: 'มงกุฎ', price: 15, img: '/images/Glitter Rose/มงกุฏ.jpg' },
+];
+
+const RIBBON_JFY_CLEAR_VARIANTS = [
+  { id: 'white_clear', label: 'โบว์คาดช่อ JUST FOR YOU สีขาวโปร่ง' },
+  { id: 'black_clear', label: 'โบว์คาดช่อ JUST FOR YOU สีดำโปร่ง' },
+  { id: 'red_clear', label: 'โบว์คาดช่อ JUST FOR YOU สีแดงโปร่ง' },
+  { id: 'pink_clear', label: 'โบว์คาดช่อ JUST FOR YOU สีชมพูโปร่ง' },
+];
+
+const RIBBON_JFY_SOLID_VARIANTS = [
+  { id: 'white_solid', label: 'โบว์คาดช่อ JUST FOR YOU สีขาวทึบ' },
+  { id: 'black_solid', label: 'โบว์คาดช่อ JUST FOR YOU สีดำทึบ' },
+  { id: 'red_solid', label: 'โบว์คาดช่อ JUST FOR YOU สีแดงทึบ' },
+];
+
+const MESSAGE_CARD_VARIANTS = [
+  { id: 'valentine_1', label: "Happy Valentine's day 1" },
+  { id: 'valentine_2', label: "Happy Valentine's day 2" },
+  { id: 'valentine_3', label: "Happy Valentine's day 3" },
+  { id: 'anniversary_1', label: 'Happy Anniversary 1' },
+  { id: 'anniversary_2', label: 'Happy Anniversary 2' },
+  { id: 'birthday', label: 'Happy Birthday' },
+  { id: 'congratulation', label: 'CONGRATULATION' },
 ];
 
 const STEPS = [
@@ -119,6 +143,9 @@ interface GlitterState {
   selectedPaper: string | null;
   selectedShape: string | null;
   selectedDecorations: string[];
+  selectedRibbonJfyClearVariant: string | null;
+  selectedRibbonJfySolidVariant: string | null;
+  selectedMessageCardVariant: string | null;
   basePrice: number;
   customerName: string;
   customerPhone: string;
@@ -137,6 +164,9 @@ const initialState: GlitterState = {
   selectedPaper: null,
   selectedShape: null,
   selectedDecorations: [],
+  selectedRibbonJfyClearVariant: null,
+  selectedRibbonJfySolidVariant: null,
+  selectedMessageCardVariant: null,
   basePrice: 0,
   customerName: '',
   customerPhone: '',
@@ -177,6 +207,7 @@ function GlitterRoseContent() {
   }, []);
 
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [openDecorationDropdown, setOpenDecorationDropdown] = useState<string | null>(null);
   const [showReceipt, setShowReceipt] = useState(false);
 
   // Sync state to localStorage (and auto-update cart if editing)
@@ -240,6 +271,9 @@ function GlitterRoseContent() {
           selectedPaper: config.selectedPaper || null,
           selectedShape: config.selectedShape || null,
           selectedDecorations: config.selectedDecorations || [],
+          selectedRibbonJfyClearVariant: config.selectedRibbonJfyClearVariant || null,
+          selectedRibbonJfySolidVariant: config.selectedRibbonJfySolidVariant || null,
+          selectedMessageCardVariant: config.selectedMessageCardVariant || null,
           basePrice: calculatedBasePrice,
           current: 4,
           maxStepReached: 4,
@@ -321,9 +355,101 @@ function GlitterRoseContent() {
   const toggleArraySelection = (field: 'selectedColors' | 'selectedLayers' | 'selectedDecorations', id: string) => {
     setState(prev => {
       const arr = prev[field];
-      return { ...prev, [field]: arr.includes(id) ? arr.filter(x => x !== id) : [...arr, id] };
+      const isSelected = arr.includes(id);
+      const nextState = { ...prev, [field]: isSelected ? arr.filter(x => x !== id) : [...arr, id] };
+      if (field === 'selectedDecorations' && id === 'ribbon_jfy_clear') {
+        nextState.selectedRibbonJfyClearVariant = isSelected ? null : (prev.selectedRibbonJfyClearVariant || RIBBON_JFY_CLEAR_VARIANTS[0].id);
+        setOpenDecorationDropdown(isSelected ? null : 'ribbon_jfy_clear');
+      }
+      if (field === 'selectedDecorations' && id === 'ribbon_jfy_solid') {
+        nextState.selectedRibbonJfySolidVariant = isSelected ? null : (prev.selectedRibbonJfySolidVariant || RIBBON_JFY_SOLID_VARIANTS[0].id);
+        setOpenDecorationDropdown(isSelected ? null : 'ribbon_jfy_solid');
+      }
+      if (field === 'selectedDecorations' && id === 'message_card') {
+        nextState.selectedMessageCardVariant = isSelected ? null : (prev.selectedMessageCardVariant || MESSAGE_CARD_VARIANTS[0].id);
+        setOpenDecorationDropdown(isSelected ? null : 'message_card');
+      }
+      return nextState;
     });
   };
+
+  const selectRibbonJfyClearVariant = (variantId: string) => {
+    setState(prev => ({
+      ...prev,
+      selectedDecorations: prev.selectedDecorations.includes('ribbon_jfy_clear')
+        ? prev.selectedDecorations
+        : [...prev.selectedDecorations, 'ribbon_jfy_clear'],
+      selectedRibbonJfyClearVariant: variantId,
+    }));
+    setOpenDecorationDropdown(null);
+  };
+
+  const toggleRibbonJfyClearDropdown = () => {
+    setState(prev => ({
+      ...prev,
+      selectedDecorations: prev.selectedDecorations.includes('ribbon_jfy_clear')
+        ? prev.selectedDecorations
+        : [...prev.selectedDecorations, 'ribbon_jfy_clear'],
+      selectedRibbonJfyClearVariant: prev.selectedRibbonJfyClearVariant || RIBBON_JFY_CLEAR_VARIANTS[0].id,
+    }));
+    setOpenDecorationDropdown(prev => prev === 'ribbon_jfy_clear' ? null : 'ribbon_jfy_clear');
+  };
+
+  const getRibbonJfyClearVariantLabel = (variantId: string | null) => (
+    RIBBON_JFY_CLEAR_VARIANTS.find(item => item.id === variantId)?.label || 'เลือกสีโบว์โปร่ง'
+  );
+
+  const selectRibbonJfySolidVariant = (variantId: string) => {
+    setState(prev => ({
+      ...prev,
+      selectedDecorations: prev.selectedDecorations.includes('ribbon_jfy_solid')
+        ? prev.selectedDecorations
+        : [...prev.selectedDecorations, 'ribbon_jfy_solid'],
+      selectedRibbonJfySolidVariant: variantId,
+    }));
+    setOpenDecorationDropdown(null);
+  };
+
+  const toggleRibbonJfySolidDropdown = () => {
+    setState(prev => ({
+      ...prev,
+      selectedDecorations: prev.selectedDecorations.includes('ribbon_jfy_solid')
+        ? prev.selectedDecorations
+        : [...prev.selectedDecorations, 'ribbon_jfy_solid'],
+      selectedRibbonJfySolidVariant: prev.selectedRibbonJfySolidVariant || RIBBON_JFY_SOLID_VARIANTS[0].id,
+    }));
+    setOpenDecorationDropdown(prev => prev === 'ribbon_jfy_solid' ? null : 'ribbon_jfy_solid');
+  };
+
+  const getRibbonJfySolidVariantLabel = (variantId: string | null) => (
+    RIBBON_JFY_SOLID_VARIANTS.find(item => item.id === variantId)?.label || 'เลือกสีโบว์ทึบ'
+  );
+
+  const selectMessageCardVariant = (variantId: string) => {
+    setState(prev => ({
+      ...prev,
+      selectedDecorations: prev.selectedDecorations.includes('message_card')
+        ? prev.selectedDecorations
+        : [...prev.selectedDecorations, 'message_card'],
+      selectedMessageCardVariant: variantId,
+    }));
+    setOpenDecorationDropdown(null);
+  };
+
+  const toggleMessageCardDropdown = () => {
+    setState(prev => ({
+      ...prev,
+      selectedDecorations: prev.selectedDecorations.includes('message_card')
+        ? prev.selectedDecorations
+        : [...prev.selectedDecorations, 'message_card'],
+      selectedMessageCardVariant: prev.selectedMessageCardVariant || MESSAGE_CARD_VARIANTS[0].id,
+    }));
+    setOpenDecorationDropdown(prev => prev === 'message_card' ? null : 'message_card');
+  };
+
+  const getMessageCardVariantLabel = (variantId: string | null) => (
+    MESSAGE_CARD_VARIANTS.find(item => item.id === variantId)?.label || 'เลือกแบบการ์ดข้อความ'
+  );
 
   const selectPaper = (id: string) => {
     updateField('selectedPaper', id);
@@ -471,7 +597,19 @@ function GlitterRoseContent() {
       items.push({ icon: '📜', label });
     }
     if (state.selectedDecorations.length > 0) {
-      const names = state.selectedDecorations.map(id => ROSE_DECORATIONS.find(c => c.id === id)?.name).join(', ');
+      const names = state.selectedDecorations.map(id => {
+        const name = ROSE_DECORATIONS.find(c => c.id === id)?.name;
+        if (id === 'ribbon_jfy_clear') {
+          return `${name} (${getRibbonJfyClearVariantLabel(state.selectedRibbonJfyClearVariant)})`;
+        }
+        if (id === 'ribbon_jfy_solid') {
+          return `${name} (${getRibbonJfySolidVariantLabel(state.selectedRibbonJfySolidVariant)})`;
+        }
+        if (id === 'message_card') {
+          return `${name} (${getMessageCardVariantLabel(state.selectedMessageCardVariant)})`;
+        }
+        return name;
+      }).join(', ');
       const totalExtra = state.selectedDecorations.reduce((acc, id) => {
         const item = ROSE_DECORATIONS.find(c => c.id === id);
         return acc + (item ? item.price : 0);
@@ -716,13 +854,41 @@ function GlitterRoseContent() {
                     {freeDecors.map(c => (
                       <div 
                         key={c.id} 
-                        className={`color-card ${state.selectedDecorations.includes(c.id) ? 'selected' : ''}`} 
+                        className={`color-card decor-card ${state.selectedDecorations.includes(c.id) ? 'selected' : ''} ${openDecorationDropdown === c.id ? 'dropdown-active' : ''}`}
                         onClick={() => toggleArraySelection('selectedDecorations', c.id)}
                       >
                         <div className="color-swatch" style={{ overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--warm-white)', border: '1px solid var(--glass-border)' }}>
                           {c.img && <img src={c.img} alt={c.name} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />}
                         </div>
-                        <span className="color-name" style={{ textTransform: 'none', fontSize: '.8rem', marginBottom: '4px' }}>{c.name}</span>
+                        {c.id === 'message_card' ? (
+                          <div className={`ribbon-variant-dropdown ${openDecorationDropdown === c.id ? 'open' : ''}`} onClick={(e) => e.stopPropagation()}>
+                            <button
+                              type="button"
+                              className="color-name ribbon-variant-trigger"
+                              onClick={toggleMessageCardDropdown}
+                              aria-expanded={openDecorationDropdown === c.id}
+                            >
+                              <span>{state.selectedDecorations.includes(c.id) ? getMessageCardVariantLabel(state.selectedMessageCardVariant) : c.name}</span>
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="m6 9 6 6 6-6" />
+                              </svg>
+                            </button>
+                            <div className="ribbon-variant-menu">
+                              {MESSAGE_CARD_VARIANTS.map(option => (
+                                <button
+                                  key={option.id}
+                                  type="button"
+                                  className={`color-name ribbon-variant-option ${state.selectedMessageCardVariant === option.id ? 'selected' : ''}`}
+                                  onClick={() => selectMessageCardVariant(option.id)}
+                                >
+                                  {option.label}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        ) : (
+                          <span className="color-name" style={{ textTransform: 'none', fontSize: '.8rem', marginBottom: '4px' }}>{c.name}</span>
+                        )}
                         <span style={{ fontSize: '.7rem', fontWeight: 700, color: '#4caf50', background: '#e8f5e9', padding: '2px 10px', borderRadius: '12px', letterSpacing: '.02em' }}>ฟรี</span>
                       </div>
                     ))}
@@ -739,13 +905,51 @@ function GlitterRoseContent() {
                     {paidDecors.map(c => (
                       <div 
                         key={c.id} 
-                        className={`color-card ${state.selectedDecorations.includes(c.id) ? 'selected' : ''}`} 
+                        className={`color-card decor-card ${state.selectedDecorations.includes(c.id) ? 'selected' : ''} ${openDecorationDropdown === c.id ? 'dropdown-active' : ''}`}
                         onClick={() => toggleArraySelection('selectedDecorations', c.id)}
                       >
                         <div className="color-swatch" style={{ overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--warm-white)', border: '1px solid var(--glass-border)' }}>
                           {c.img && <img src={c.img} alt={c.name} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />}
                         </div>
-                        <span className="color-name" style={{ textTransform: 'none', fontSize: '.8rem', marginBottom: '4px' }}>{c.name}</span>
+                        {(c.id === 'ribbon_jfy_clear' || c.id === 'ribbon_jfy_solid') ? (
+                          <div className={`ribbon-variant-dropdown ${openDecorationDropdown === c.id ? 'open' : ''}`} onClick={(e) => e.stopPropagation()}>
+                            <button
+                              type="button"
+                              className="color-name ribbon-variant-trigger"
+                              onClick={c.id === 'ribbon_jfy_clear' ? toggleRibbonJfyClearDropdown : toggleRibbonJfySolidDropdown}
+                              aria-expanded={openDecorationDropdown === c.id}
+                            >
+                              <span>{state.selectedDecorations.includes(c.id) ? (
+                                c.id === 'ribbon_jfy_clear'
+                                  ? getRibbonJfyClearVariantLabel(state.selectedRibbonJfyClearVariant)
+                                  : getRibbonJfySolidVariantLabel(state.selectedRibbonJfySolidVariant)
+                              ) : c.name}</span>
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="m6 9 6 6 6-6" />
+                              </svg>
+                            </button>
+                            <div className="ribbon-variant-menu">
+                              {(c.id === 'ribbon_jfy_clear' ? RIBBON_JFY_CLEAR_VARIANTS : RIBBON_JFY_SOLID_VARIANTS).map(option => (
+                                <button
+                                  key={option.id}
+                                  type="button"
+                                  className={`color-name ribbon-variant-option ${
+                                    (c.id === 'ribbon_jfy_clear'
+                                      ? state.selectedRibbonJfyClearVariant
+                                      : state.selectedRibbonJfySolidVariant) === option.id ? 'selected' : ''
+                                  }`}
+                                  onClick={() => c.id === 'ribbon_jfy_clear'
+                                    ? selectRibbonJfyClearVariant(option.id)
+                                    : selectRibbonJfySolidVariant(option.id)}
+                                >
+                                  {option.label}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        ) : (
+                          <span className="color-name" style={{ textTransform: 'none', fontSize: '.8rem', marginBottom: '4px' }}>{c.name}</span>
+                        )}
                         <span style={{ fontSize: '.7rem', fontWeight: 700, color: 'var(--rose-gold)', background: 'rgba(201,149,107,0.1)', padding: '2px 10px', borderRadius: '12px', letterSpacing: '.02em' }}>+{c.price} ฿</span>
                       </div>
                     ))}
@@ -891,7 +1095,19 @@ function GlitterRoseContent() {
               </span>
             </div>
             <div className="r-row" style={{ color: 'var(--text-muted)' }}>
-              <span>{state.selectedDecorations.length > 0 ? state.selectedDecorations.map(id => ROSE_DECORATIONS.find(x => x.id === id)?.name).join(', ') : '-'}</span><span></span>
+              <span>{state.selectedDecorations.length > 0 ? state.selectedDecorations.map(id => {
+                const name = ROSE_DECORATIONS.find(x => x.id === id)?.name;
+                if (id === 'ribbon_jfy_clear') {
+                  return `${name} (${getRibbonJfyClearVariantLabel(state.selectedRibbonJfyClearVariant)})`;
+                }
+                if (id === 'ribbon_jfy_solid') {
+                  return `${name} (${getRibbonJfySolidVariantLabel(state.selectedRibbonJfySolidVariant)})`;
+                }
+                if (id === 'message_card') {
+                  return `${name} (${getMessageCardVariantLabel(state.selectedMessageCardVariant)})`;
+                }
+                return name;
+              }).join(', ') : '-'}</span><span></span>
             </div>
 
             <div className="r-row total">
