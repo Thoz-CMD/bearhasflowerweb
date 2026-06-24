@@ -20,11 +20,25 @@ const ROSE_PAPERS_MAP: Record<string, string> = {
   black_solid: 'ดำทึบ', black_gold: 'ดำขอบทอง', pink: 'ชมพู'
 };
 const ROSE_SHAPES_MAP: Record<string, string> = {
-  triangle: 'สามเหลี่ยม', rectangle: 'สี่เหลี่ยม', open_front: 'เปิดหน้า'
+  triangle: 'สามเหลี่ยม', rectangle: 'สี่เหลี่ยม', open_front: 'เปิดหน้า',
+  bouquet_triangle: 'ช่อฟูสามเหลี่ยม', bouquet_rectangle: 'ช่อฟูสี่เหลี่ยม'
 };
 const ROSE_DECORATIONS_MAP: Record<string, string> = {
   ribbon: 'โบว์คาดช่อ', butterfly: 'ผีเสื้อ', blank_card: 'การ์ดเปล่า',
-  stick: 'ก้านเสียบ', fairy_light: 'ไฟประดับ', crown: 'มงกุฎ'
+  stick: 'ก้านเสียบ', fairy_light: 'ไฟประดับ', crown: 'มงกุฎ',
+  ribbon_jfy_clear: 'โบว์คาดช่อ JUST FOR YOU โปร่ง', ribbon_jfy_solid: 'โบว์คาดช่อ JUST FOR YOU ทึบ'
+};
+const RIBBON_JFY_CLEAR_VARIANTS_MAP: Record<string, string> = {
+  white_clear: 'โบว์คาดช่อ JUST FOR YOU สีขาวโปร่ง',
+  black_clear: 'โบว์คาดช่อ JUST FOR YOU สีดำโปร่ง',
+  red_clear: 'โบว์คาดช่อ JUST FOR YOU สีแดงโปร่ง',
+  pink_clear: 'โบว์คาดช่อ JUST FOR YOU สีชมพูโปร่ง',
+};
+const RIBBON_JFY_SOLID_VARIANTS_MAP: Record<string, string> = {
+  white_solid: 'โบว์คาดช่อ JUST FOR YOU สีขาวทึบ',
+  black_solid: 'โบว์คาดช่อ JUST FOR YOU สีดำทึบ',
+  red_solid: 'โบว์คาดช่อ JUST FOR YOU สีแดงทึบ',
+  pink_solid: 'โบว์คาดช่อ JUST FOR YOU สีชมพูทึบ',
 };
 // Categories are stored for reporting, but not shown in the UI.
 
@@ -39,6 +53,61 @@ const getRoseColorHex = (colorId: string) => {
     purple: '#CE93D8'
   };
   return colors[colorId] || '#F48FB1';
+};
+
+const getDecorationLabel = (id: string, config: any) => {
+  if (id === 'ribbon_jfy_clear' || id === 'ribbon_jfy_solid') {
+    const variant = config?.selectedRibbonJfyVariant || '';
+    const map = id === 'ribbon_jfy_clear' ? RIBBON_JFY_CLEAR_VARIANTS_MAP : RIBBON_JFY_SOLID_VARIANTS_MAP;
+    return map[variant] || ROSE_DECORATIONS_MAP[id] || id;
+  }
+  if (id === 'message_card') {
+    const variant = config?.selectedMessageCardVariant || '';
+    return variant ? `${ROSE_DECORATIONS_MAP[id] || id} (${variant})` : ROSE_DECORATIONS_MAP[id] || id;
+  }
+  return ROSE_DECORATIONS_MAP[id] || id;
+};
+
+const renderProductDetails = (item: any) => {
+  if (!item.config) return null;
+  const config = item.config;
+
+  const colors = (config.selectedColors || []).map((id: string) => ROSE_COLORS_MAP[id] || id).join(', ');
+  const layers = (config.selectedLayers || []).map((id: string) => ROSE_LAYERS_MAP[id] || id).join(', ');
+  const decorations = (config.selectedDecorations || []).map((id: string) => getDecorationLabel(id, config)).join(', ');
+  const paper = ROSE_PAPERS_MAP[config.selectedPaper] || config.selectedPaper;
+  const shape = ROSE_SHAPES_MAP[config.selectedShape] || config.selectedShape;
+  const customerAddress = config.customerAddress || '';
+
+  return (
+    <div className="detail-kv-list" style={{ display: 'flex', flexWrap: 'wrap', gap: '12px' }}>
+      <div className="detail-kv-row" style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+        <span className="detail-kv-label">ช่อดอกกุหลาบ:</span>
+        <span className="detail-kv-value">จำนวน {config.selectedQty || 0} ดอก</span>
+        {colors && <span className="detail-kv-value">สี {colors}</span>}
+      </div>
+      {(layers || paper || shape) && (
+        <div className="detail-kv-row" style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+          <span className="detail-kv-label">องค์ประกอบการห่อ:</span>
+          {layers && <span className="detail-kv-value">รองช่อ {layers}</span>}
+          {paper && <span className="detail-kv-value">กระดาษห่อ {paper}</span>}
+          {shape && <span className="detail-kv-value">รูปทรง {shape}</span>}
+        </div>
+      )}
+      {decorations && (
+        <div className="detail-kv-row" style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+          <span className="detail-kv-label">ของตกแต่งเพิ่มเติม:</span>
+          <span className="detail-kv-value">{decorations}</span>
+        </div>
+      )}
+      {customerAddress && (
+        <div className="detail-kv-row" style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+          <span className="detail-kv-label">ที่อยู่:</span>
+          <span className="detail-kv-value">{customerAddress}</span>
+        </div>
+      )}
+    </div>
+  );
 };
 
 const BasketIcon = ({ colors = [], size = 46 }: { colors: string[], size?: number }) => {
@@ -4329,46 +4398,13 @@ function AdminPageContent() {
                         {/* Expanded details */}
                         <div className={`order-details-drawer ${isExpanded ? 'open' : ''}`} onClick={(e) => e.stopPropagation()}>
                           <div className="detail-grid">
-                            {/* 1. Customer & Delivery Address */}
+                            {/* 1. Product Details */}
                             <div className="detail-card">
                               <div className="detail-card-header">
-                                <h4>รายละเอียดการจัดส่ง</h4>
-                                <span className="detail-card-chip">Delivery</span>
+                                <h4>รายละเอียดสินค้า</h4>
+                                <span className="detail-card-chip">Product</span>
                               </div>
-                              {hasCustomDelivery ? (
-                                <>
-                                  <div className="detail-kv-list">
-                                    <div className="detail-kv-row">
-                                      <span className="detail-kv-label">ผู้รับ</span>
-                                      <span className="detail-kv-value">{customerName}</span>
-                                    </div>
-                                    <div className="detail-kv-row">
-                                      <span className="detail-kv-label">เบอร์โทร</span>
-                                      <span className="detail-kv-value">{customerPhone}</span>
-                                    </div>
-                                    <div className="detail-kv-row">
-                                      <span className="detail-kv-label">วันที่ส่ง</span>
-                                      <span className="detail-kv-value">{deliveryDate}</span>
-                                    </div>
-                                    <div className="detail-kv-row">
-                                      <span className="detail-kv-label">เวลา</span>
-                                      <span className="detail-kv-value">{deliveryTime}</span>
-                                    </div>
-                                    <div className="detail-kv-row">
-                                      <span className="detail-kv-label">ที่อยู่</span>
-                                      <span className="detail-kv-value">{customerAddress}</span>
-                                    </div>
-                                  </div>
-                                  {additionalNote ? (
-                                    <div className="detail-note-box">
-                                      <span className="detail-note-label">โน้ตเพิ่มเติม</span>
-                                      <div className="detail-note-text">{additionalNote}</div>
-                                    </div>
-                                  ) : null}
-                                </>
-                              ) : (
-                                <div className="detail-empty-text">ไม่มีข้อมูลจัดส่งแบบปรับแต่ง กรุณาติดต่อลูกค้าตามประวัติคำสั่งซื้อ</div>
-                              )}
+                              {renderProductDetails(customItem)}
                             </div>
 
                             {/* 2. Status Action Control Panel */}
@@ -4390,7 +4426,7 @@ function AdminPageContent() {
                                     style={{ background: '#2ecc71' }}
                                     onClick={() => updateOrderStatus(order.id, 'preparing')}
                                   >
-                                    ยืนยันยอดเงินสำเร็จ (เริ่มทำช่อดอกไม้)
+                                    ยืนยันยอดเงินสำเร็จ
                                   </button>
                                 )}
 
@@ -4456,7 +4492,7 @@ function AdminPageContent() {
                                       disabled={isUploadingImage}
                                       onClick={() => updateOrderStatus(order.id, 'shipping')}
                                     >
-                                      {isUploadingImage ? 'กำลังอัปโหลดรูปภาพและบันทึก...' : 'ดอกไม้จัดเสร็จแล้ว (ส่งงาน)'}
+                                      {isUploadingImage ? 'กำลังอัปโหลดรูปภาพและบันทึก...' : 'ดอกไม้จัดเสร็จแล้ว'}
                                     </button>
                                   </>
                                 )}
@@ -4467,7 +4503,7 @@ function AdminPageContent() {
                                     style={{ background: '#27ae60' }}
                                     onClick={() => updateOrderStatus(order.id, 'delivering')}
                                   >
-                                    ลูกค้าชำระเงินครบแล้ว (เริ่มนำจัดส่ง)
+                                    ลูกค้าชำระเงินครบแล้ว
                                   </button>
                                 )}
 
@@ -4487,7 +4523,7 @@ function AdminPageContent() {
                                     style={{ background: '#27ae60' }}
                                     onClick={() => updateOrderStatus(order.id, 'completed')}
                                   >
-                                    จัดส่งสำเร็จเรียบร้อย (ปิดออเดอร์)
+                                    จัดส่งสำเร็จเรียบร้อย
                                   </button>
                                 )}
 
@@ -4534,7 +4570,7 @@ function AdminPageContent() {
                                         }
                                       }}
                                     >
-                                      ลบข้อมูลถาวร (ลบออกจากดาต้าเบส)
+                                      ลบข้อมูลถาวร
                                     </button>
                                   </>
                                 )}

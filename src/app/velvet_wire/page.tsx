@@ -12,6 +12,16 @@ const DateTimePicker = dynamic(() => import('@/components/DateTimePicker'), { ss
 const STORAGE_KEY = 'bear_flower_velvet_v1';
 const CART_KEY = 'bear_flower_cart';
 
+const MESSAGE_CARD_VARIANTS = [
+  { id: 'valentine_1', label: "Happy Valentine's day 1" },
+  { id: 'valentine_2', label: "Happy Valentine's day 2" },
+  { id: 'valentine_3', label: "Happy Valentine's day 3" },
+  { id: 'anniversary_1', label: 'Happy Anniversary 1' },
+  { id: 'anniversary_2', label: 'Happy Anniversary 2' },
+  { id: 'birthday', label: 'Happy Birthday' },
+  { id: 'congratulation', label: 'CONGRATULATION' },
+];
+
 interface VelvetState {
   customerName: string;
   customerPhone: string;
@@ -20,6 +30,9 @@ interface VelvetState {
   deliveryTime: string;
   additionalNote: string;
   productCoverImage: string;
+  selectedCard: string | null;
+  selectedMessageCardVariant: string | null;
+  selectedStick: boolean;
 }
 
 const initialState: VelvetState = {
@@ -30,6 +43,9 @@ const initialState: VelvetState = {
   deliveryTime: '',
   additionalNote: '',
   productCoverImage: '',
+  selectedCard: null,
+  selectedMessageCardVariant: null,
+  selectedStick: false,
 };
 
 function VelvetWireContent() {
@@ -39,6 +55,7 @@ function VelvetWireContent() {
 
   const [state, setState] = useState<VelvetState>(initialState);
   const [isHydrated, setIsHydrated] = useState(false);
+  const [openDecorationDropdown, setOpenDecorationDropdown] = useState<string | null>(null);
 
   // Load saved state after hydration to prevent mismatch
   useEffect(() => {
@@ -56,6 +73,9 @@ function VelvetWireContent() {
           deliveryTime: s.deliveryTime || '',
           additionalNote: s.additionalNote || '',
           productCoverImage: s.productCoverImage || '',
+          selectedCard: s.selectedCard || null,
+          selectedMessageCardVariant: s.selectedMessageCardVariant || null,
+          selectedStick: s.selectedStick || false,
         });
       }
     } catch (err) {
@@ -65,6 +85,17 @@ function VelvetWireContent() {
 
   const basePrice = useMemo(() => presetProduct?.price || 0, [presetProduct]);
   const isPresetReadyToShip = useMemo(() => Boolean(presetProduct?.readyToShip), [presetProduct]);
+
+  const totalPrice = useMemo(() => {
+    let total = basePrice;
+    if (state.selectedCard === 'message_card') {
+      total += 5;
+    }
+    if (state.selectedStick) {
+      total += 5;
+    }
+    return total;
+  }, [basePrice, state.selectedCard, state.selectedStick]);
 
   // Save state to localStorage whenever it changes
   useEffect(() => {
@@ -126,6 +157,47 @@ function VelvetWireContent() {
     setState(prev => ({ ...prev, deliveryDate: dateStr, deliveryTime: timeStr }));
   }, []);
 
+  const handleCardSelect = useCallback((cardId: string) => {
+    setState(prev => {
+      if (prev.selectedCard === cardId) {
+        // Deselect
+        setOpenDecorationDropdown(null);
+        return { ...prev, selectedCard: null, selectedMessageCardVariant: null };
+      }
+      // Select
+      if (cardId === 'message_card') {
+        setOpenDecorationDropdown('message_card');
+        return { ...prev, selectedCard: cardId, selectedMessageCardVariant: prev.selectedMessageCardVariant || MESSAGE_CARD_VARIANTS[0].id };
+      }
+      return { ...prev, selectedCard: cardId };
+    });
+  }, []);
+
+  const handleStickSelect = useCallback(() => {
+    setState(prev => ({ ...prev, selectedStick: !prev.selectedStick }));
+  }, []);
+
+  const handleMessageCardVariantSelect = useCallback((variantId: string) => {
+    setOpenDecorationDropdown(null);
+    setState(prev => ({ ...prev, selectedMessageCardVariant: variantId, selectedCard: 'message_card' }));
+  }, []);
+
+  const toggleMessageCardDropdown = useCallback(() => {
+    setOpenDecorationDropdown(prev => prev === 'message_card' ? null : 'message_card');
+    setState(prev => {
+      if (!prev.selectedCard) {
+        return { ...prev, selectedCard: 'message_card', selectedMessageCardVariant: MESSAGE_CARD_VARIANTS[0].id };
+      }
+      return prev;
+    });
+  }, []);
+
+  const getMessageCardVariantLabel = useCallback((variantId: string | null) => {
+    if (!variantId) return 'เลือกแบบการ์ดข้อความ';
+    const variant = MESSAGE_CARD_VARIANTS.find(v => v.id === variantId);
+    return variant ? variant.label : 'เลือกแบบการ์ดข้อความ';
+  }, []);
+
   const finishOrder = useCallback(() => {
     if (!presetProduct) {
       showToast('ไม่พบข้อมูลสินค้า');
@@ -157,7 +229,7 @@ function VelvetWireContent() {
       id: editingId || 'vw_' + Date.now(),
       type: 'velvet_flower',
       name: presetProduct.name,
-      price: basePrice,
+      price: totalPrice,
       qty: 1,
       details: presetProduct.description || 'ดอกไม้ลวดกำมะหยี่',
       coverImage: presetProduct.coverImage,
@@ -172,6 +244,9 @@ function VelvetWireContent() {
         deliveryTime: state.deliveryTime,
         additionalNote: state.additionalNote,
         presetId: presetProduct.id,
+        selectedCard: state.selectedCard,
+        selectedMessageCardVariant: state.selectedMessageCardVariant,
+        selectedStick: state.selectedStick,
       },
     };
 
@@ -279,7 +354,7 @@ function VelvetWireContent() {
           <div className="bar-step-info">
             ราคา:{' '}
             <strong id="desktop-price-val" style={{ color: 'var(--rose-gold)', fontSize: '1.4rem' }}>
-              {basePrice.toLocaleString()}
+              {totalPrice.toLocaleString()}
             </strong>{' '}
             บาท
           </div>
@@ -371,6 +446,68 @@ function VelvetWireContent() {
             </div>
 
             <div className="form-group">
+              <label>เลือกการ์ด (ถ้ามี)</label>
+              <div className="color-grid" style={{ marginTop: '10px' }}>
+                <div
+                  className={`color-card decor-card ${state.selectedCard === 'blank_card' ? 'selected' : ''}`}
+                  onClick={() => handleCardSelect('blank_card')}
+                >
+                  <div className="color-swatch" style={{ overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--warm-white)', border: '1px solid var(--glass-border)' }}>
+                    <img src="/images/Glitter Rose/การ์ดเปล่า.png" alt="การ์ดเปล่า" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />
+                  </div>
+                  <span className="color-name" style={{ textTransform: 'none', fontSize: '.8rem', marginBottom: '4px' }}>การ์ดเปล่า</span>
+                  <span style={{ fontSize: '.7rem', fontWeight: 700, color: '#4caf50', background: '#e8f5e9', padding: '2px 10px', borderRadius: '12px', letterSpacing: '.02em' }}>ฟรี</span>
+                </div>
+
+                <div
+                  className={`color-card decor-card ${state.selectedCard === 'message_card' ? 'selected' : ''} ${openDecorationDropdown === 'message_card' ? 'dropdown-active' : ''}`}
+                  onClick={() => handleCardSelect('message_card')}
+                >
+                  <div className="color-swatch" style={{ overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--warm-white)', border: '1px solid var(--glass-border)' }}>
+                    <img src="/images/Glitter Rose/การ์ดข้อความ.png" alt="การ์ดข้อความ" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />
+                  </div>
+                  <div className={`ribbon-variant-dropdown ${openDecorationDropdown === 'message_card' ? 'open' : ''}`} onClick={(e) => e.stopPropagation()}>
+                    <button
+                      type="button"
+                      className="color-name ribbon-variant-trigger"
+                      onClick={toggleMessageCardDropdown}
+                      aria-expanded={openDecorationDropdown === 'message_card'}
+                    >
+                      <span>{state.selectedCard === 'message_card' ? getMessageCardVariantLabel(state.selectedMessageCardVariant) : 'การ์ดข้อความ'}</span>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="m6 9 6 6 6-6" />
+                      </svg>
+                    </button>
+                    <div className="ribbon-variant-menu">
+                      {MESSAGE_CARD_VARIANTS.map(option => (
+                        <button
+                          key={option.id}
+                          type="button"
+                          className={`color-name ribbon-variant-option ${state.selectedMessageCardVariant === option.id ? 'selected' : ''}`}
+                          onClick={() => handleMessageCardVariantSelect(option.id)}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <span style={{ fontSize: '.7rem', fontWeight: 700, color: 'var(--rose-gold)', background: 'rgba(201,149,107,0.1)', padding: '2px 10px', borderRadius: '12px', letterSpacing: '.02em' }}>+5 ฿</span>
+                </div>
+
+                <div
+                  className={`color-card decor-card ${state.selectedStick ? 'selected' : ''}`}
+                  onClick={handleStickSelect}
+                >
+                  <div className="color-swatch" style={{ overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--warm-white)', border: '1px solid var(--glass-border)' }}>
+                    <img src="/images/Glitter Rose/ก้านเสียบ.png" alt="ก้านเสียบ" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />
+                  </div>
+                  <span className="color-name" style={{ textTransform: 'none', fontSize: '.8rem', marginBottom: '4px' }}>ก้านเสียบ</span>
+                  <span style={{ fontSize: '.7rem', fontWeight: 700, color: 'var(--rose-gold)', background: 'rgba(201,149,107,0.1)', padding: '2px 10px', borderRadius: '12px', letterSpacing: '.02em' }}>+5 ฿</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="form-group">
               <label>รายละเอียดเพิ่มเติม (ถ้ามี)</label>
               <textarea
                 id="ipt-note"
@@ -388,25 +525,12 @@ function VelvetWireContent() {
       {/* Sticky Bottom Bar (Mobile) */}
       <div className="sticky-bottom" id="sticky-bottom">
         <div className="sticky-price">
-          <span id="sticky-price-val">{basePrice.toLocaleString()}</span>
+          <span id="sticky-price-val">{totalPrice.toLocaleString()}</span>
           <small>บาท</small>
         </div>
         <div className="sticky-btn-row">
           <button className="sticky-next" onClick={finishOrder} style={{ width: '100%' }}>
             เพิ่มลงตะกร้า
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              style={{ marginLeft: '8px' }}
-            >
-              <path d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
-            </svg>
           </button>
         </div>
       </div>

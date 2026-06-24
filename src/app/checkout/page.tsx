@@ -265,12 +265,12 @@ export default function CheckoutPage() {
         return;
       }
 
-      // Create separate order for each cart item
-      for (const item of cartItems) {
+      // Create separate order for each cart item in parallel
+      const orderPromises = cartItems.map(async (item) => {
         let itemTotal = item.price * (item.qty || 1);
         const itemOriginalTotal = itemTotal;
         let itemDiscount = 0;
-        
+
         if (appliedDiscountCode) {
           itemDiscount = Math.floor(itemTotal * 0.1);
           itemTotal = itemTotal - itemDiscount;
@@ -305,21 +305,22 @@ export default function CheckoutPage() {
         };
 
         const newOrderId = await createOrderAndReserveStock(item, orderData);
+        return { orderData, orderId: newOrderId };
+      });
 
-        // Trigger LINE Notify for each order (deposit / first payment)
-        try {
-          await fetch('/api/line-notify', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              orderData: { ...orderData, id: newOrderId },
-              paymentType: 'deposit'
-            })
-          });
-        } catch (err) {
-          console.error("Failed to notify LINE:", err);
-        }
-      }
+      const orderResults = await Promise.all(orderPromises);
+
+      // Trigger LINE Notify for all orders in parallel (fire and forget)
+      orderResults.forEach(({ orderData, orderId }) => {
+        fetch('/api/line-notify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            orderData: { ...orderData, id: orderId },
+            paymentType: 'deposit'
+          })
+        }).catch(err => console.error("Failed to notify LINE:", err));
+      });
 
       localStorage.removeItem(STORAGE_CART);
       setShowSuccessPopup(true);

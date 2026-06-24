@@ -335,9 +335,33 @@ export function ProductStudioPage({ forceManageMode = false, initialProductType 
         { id: 'ribbon_jfy_solid', name: 'โบว์คาดช่อ JUST FOR YOU ทึบ', price: 15, img: '/images/Glitter Rose/โบว์คาดช่อ JUST FOR YOU ทึบ.png' },
         { id: 'butterfly', name: 'ผีเสื้อ', price: 0, img: '/images/Glitter Rose/ผีเสื้อ.jpg' },
         { id: 'blank_card', name: 'การ์ดเปล่า', price: 0, img: '/images/Glitter Rose/การ์ดเปล่า.png' },
+        { id: 'message_card', name: 'การ์ดข้อความ', price: 5, img: '/images/Glitter Rose/การ์ดข้อความ.png' },
         { id: 'stick', name: 'ก้านเสียบ', price: 5, img: '/images/Glitter Rose/ก้านเสียบ.png' },
         { id: 'fairy_light', name: 'ไฟ', price: 15, img: '/images/Glitter Rose/ไฟ.jpg' },
         { id: 'crown', name: 'มงกุฎ', price: 15, img: '/images/Glitter Rose/มงกุฏ.jpg' },
+      ];
+
+      const MESSAGE_CARD_VARIANTS = [
+        { id: 'valentine_1', label: "Happy Valentine's day 1" },
+        { id: 'valentine_2', label: "Happy Valentine's day 2" },
+        { id: 'valentine_3', label: "Happy Valentine's day 3" },
+        { id: 'anniversary_1', label: 'Happy Anniversary 1' },
+        { id: 'anniversary_2', label: 'Happy Anniversary 2' },
+        { id: 'birthday', label: 'Happy Birthday' },
+        { id: 'congratulation', label: 'CONGRATULATION' },
+      ];
+
+      const RIBBON_JFY_CLEAR_VARIANTS = [
+        { id: 'white_clear', label: 'โบว์คาดช่อ JUST FOR YOU สีขาวโปร่ง' },
+        { id: 'black_clear', label: 'โบว์คาดช่อ JUST FOR YOU สีดำโปร่ง' },
+        { id: 'red_clear', label: 'โบว์คาดช่อ JUST FOR YOU สีแดงโปร่ง' },
+        { id: 'pink_clear', label: 'โบว์คาดช่อ JUST FOR YOU สีชมพูโปร่ง' },
+      ];
+
+      const RIBBON_JFY_SOLID_VARIANTS = [
+        { id: 'white_solid', label: 'โบว์คาดช่อ JUST FOR YOU สีขาวทึบ' },
+        { id: 'black_solid', label: 'โบว์คาดช่อ JUST FOR YOU สีดำทึบ' },
+        { id: 'red_solid', label: 'โบว์คาดช่อ JUST FOR YOU สีแดงทึบ' },
       ];
 
       const steps = [
@@ -349,13 +373,16 @@ export function ProductStudioPage({ forceManageMode = false, initialProductType 
       ];
 
       let current = 0;
-      let selectedQty = null;  
-      let selectedColors = [];   
-      let selectedLayers = [];   
-      let selectedPaper = null; 
-      let selectedShape = null; 
-      let selectedDecorations = []; 
-      let basePrice = 0;     
+      let selectedQty = null;
+      let selectedColors = [];
+      let selectedLayers = [];
+      let selectedPaper = null;
+      let selectedShape = null;
+      let selectedDecorations = [];
+      let selectedRibbonJfyClearVariant = null;
+      let selectedRibbonJfySolidVariant = null;
+      let selectedMessageCardVariant = null;
+      let basePrice = 0;
       let maxStepReached = 0; 
 
       // Product fields
@@ -450,7 +477,7 @@ export function ProductStudioPage({ forceManageMode = false, initialProductType 
       function saveState() {
         const state = {
           current, maxStepReached, selectedQty, selectedColors, selectedLayers, selectedPaper,
-          selectedShape, selectedDecorations, basePrice,
+          selectedShape, selectedDecorations, selectedRibbonJfyClearVariant, selectedRibbonJfySolidVariant, selectedMessageCardVariant, basePrice,
           productName, productDesc, productBadge, productPrice, productCoverImage,
           productReadyToShip, productStockQuantity
         };
@@ -482,6 +509,9 @@ export function ProductStudioPage({ forceManageMode = false, initialProductType 
             selectedPaper = cfg.selectedPaper || null;
             selectedShape = cfg.selectedShape || null;
             selectedDecorations = cfg.selectedDecorations || [];
+            selectedRibbonJfyClearVariant = cfg.selectedRibbonJfyClearVariant || null;
+            selectedRibbonJfySolidVariant = cfg.selectedRibbonJfySolidVariant || null;
+            selectedMessageCardVariant = cfg.selectedMessageCardVariant || null;
             basePrice = cfg.basePrice || 0;
             current = PRODUCT_TYPE === 'velvet_flower' ? 4 : 0;
             maxStepReached = PRODUCT_TYPE === 'velvet_flower' ? 4 : 4;
@@ -507,6 +537,9 @@ export function ProductStudioPage({ forceManageMode = false, initialProductType 
             selectedPaper = s.selectedPaper || null;
             selectedShape = s.selectedShape || null;
             selectedDecorations = s.selectedDecorations || [];
+            selectedRibbonJfyClearVariant = s.selectedRibbonJfyClearVariant || null;
+            selectedRibbonJfySolidVariant = s.selectedRibbonJfySolidVariant || null;
+            selectedMessageCardVariant = s.selectedMessageCardVariant || null;
             basePrice = s.basePrice || 0;
             productName = s.productName || '';
             productDesc = s.productDesc || '';
@@ -536,6 +569,9 @@ export function ProductStudioPage({ forceManageMode = false, initialProductType 
         selectedPaper = null;
         selectedShape = null;
         selectedDecorations = [];
+        selectedRibbonJfyClearVariant = null;
+        selectedRibbonJfySolidVariant = null;
+        selectedMessageCardVariant = null;
         basePrice = 0;
         productName = '';
         productDesc = '';
@@ -743,15 +779,15 @@ export function ProductStudioPage({ forceManageMode = false, initialProductType 
             <h3>✨ เลือกการตกแต่ง</h3>
             <p>เพิ่มความสวยงามให้ช่อดอกไม้ของคุณ (เลือกได้หลายแบบ หรือไม่รับก็ได้)</p>
           </div>
-          
+
           <div style="margin-top:20px; text-align:left; width:100%;">
             <div style="font-size:.9rem; font-weight:600; color:var(--deep-brown); margin-bottom:12px; display:flex; align-items:center; gap:6px;">
               หอุปกรณ์ตกแต่งฟรี
             </div>
             <div class="color-grid" id="decor-free-grid">
               \${freeDecors.map(c => \`
-                <div class="color-card\${selectedDecorations.includes(c.id) ? ' selected' : ''}" 
-                    data-id="\${c.id}" 
+                <div class="color-card\${selectedDecorations.includes(c.id) ? ' selected' : ''}"
+                    data-id="\${c.id}"
                     onclick="selectDecoration('\${c.id}')">
                   <div class="color-swatch" style="overflow:hidden; display:flex; align-items:center; justify-content:center; background:var(--warm-white); border:1px solid var(--glass-border);">
                     \${c.img ? \`<img src="\${c.img}" alt="\${c.name}" style="width:100%; height:100%; object-fit:cover; border-radius:inherit;" />\` : ''}
@@ -771,13 +807,43 @@ export function ProductStudioPage({ forceManageMode = false, initialProductType 
             </div>
             <div class="color-grid" id="decor-paid-grid">
               \${paidDecors.map(c => \`
-                <div class="color-card\${selectedDecorations.includes(c.id) ? ' selected' : ''}" 
-                    data-id="\${c.id}" 
+                <div class="color-card\${selectedDecorations.includes(c.id) ? ' selected' : ''}"
+                    data-id="\${c.id}"
                     onclick="selectDecoration('\${c.id}')">
                   <div class="color-swatch" style="overflow:hidden; display:flex; align-items:center; justify-content:center; background:var(--warm-white); border:1px solid var(--glass-border);">
                     \${c.img ? \`<img src="\${c.img}" alt="\${c.name}" style="width:100%; height:100%; object-fit:cover; border-radius:inherit;" />\` : ''}
                   </div>
-                  <span class="color-name" style="text-transform:none; font-size:.8rem; margin-bottom:4px;">\${c.name}</span>
+                  \${c.id === 'ribbon_jfy_clear' || c.id === 'ribbon_jfy_solid' || c.id === 'message_card' ? \`
+                    <div class="ribbon-variant-dropdown\${selectedDecorations.includes(c.id) ? ' open' : ''}" onclick="event.stopPropagation(); \${c.id === 'ribbon_jfy_clear' ? 'toggleRibbonJfyClearDropdown()' : c.id === 'ribbon_jfy_solid' ? 'toggleRibbonJfySolidDropdown()' : 'toggleMessageCardDropdown()'}">
+                      <button type="button" class="color-name ribbon-variant-trigger" aria-expanded="\${selectedDecorations.includes(c.id)}">
+                        <span>\${selectedDecorations.includes(c.id) ? (
+                          c.id === 'ribbon_jfy_clear'
+                            ? getRibbonJfyClearVariantLabel()
+                            : c.id === 'ribbon_jfy_solid'
+                            ? getRibbonJfySolidVariantLabel()
+                            : getMessageCardVariantLabel()
+                        ) : c.name}</span>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                          <path d="m6 9 6 6 6-6" />
+                        </svg>
+                      </button>
+                      <div class="ribbon-variant-menu">
+                        \${(c.id === 'ribbon_jfy_clear' ? RIBBON_JFY_CLEAR_VARIANTS : c.id === 'ribbon_jfy_solid' ? RIBBON_JFY_SOLID_VARIANTS : MESSAGE_CARD_VARIANTS).map(option => \`
+                          <button type="button" class="color-name ribbon-variant-option\${(
+                            c.id === 'ribbon_jfy_clear'
+                              ? selectedRibbonJfyClearVariant
+                              : c.id === 'ribbon_jfy_solid'
+                              ? selectedRibbonJfySolidVariant
+                              : selectedMessageCardVariant
+                          ) === option.id ? ' selected' : ''}" onclick="event.stopPropagation(); \${c.id === 'ribbon_jfy_clear' ? 'selectRibbonJfyClearVariant' : c.id === 'ribbon_jfy_solid' ? 'selectRibbonJfySolidVariant' : 'selectMessageCardVariant'}('\${option.id}')">
+                            \${option.label}
+                          </button>
+                        \`).join('')}
+                      </div>
+                    </div>
+                  \` : \`
+                    <span class="color-name" style="text-transform:none; font-size:.8rem; margin-bottom:4px;">\${c.name}</span>
+                  \`}
                   <span style="font-size:.7rem; font-weight:700; color:var(--rose-gold); background:rgba(201,149,107,0.1); padding:2px 10px; border-radius:12px; letter-spacing:.02em;">+\${c.price} ฿</span>
                 </div>
               \`).join('')}
@@ -933,8 +999,26 @@ export function ProductStudioPage({ forceManageMode = false, initialProductType 
       window.selectDecoration = function(id) {
         if (selectedDecorations.includes(id)) {
           selectedDecorations = selectedDecorations.filter(x => x !== id);
+          if (id === 'message_card') {
+            selectedMessageCardVariant = null;
+          }
+          if (id === 'ribbon_jfy_clear') {
+            selectedRibbonJfyClearVariant = null;
+          }
+          if (id === 'ribbon_jfy_solid') {
+            selectedRibbonJfySolidVariant = null;
+          }
         } else {
           selectedDecorations.push(id);
+          if (id === 'message_card' && !selectedMessageCardVariant) {
+            selectedMessageCardVariant = MESSAGE_CARD_VARIANTS[0].id;
+          }
+          if (id === 'ribbon_jfy_clear' && !selectedRibbonJfyClearVariant) {
+            selectedRibbonJfyClearVariant = RIBBON_JFY_CLEAR_VARIANTS[0].id;
+          }
+          if (id === 'ribbon_jfy_solid' && !selectedRibbonJfySolidVariant) {
+            selectedRibbonJfySolidVariant = RIBBON_JFY_SOLID_VARIANTS[0].id;
+          }
         }
         updateTotalPrice();
         updateStep4Summary();
@@ -943,6 +1027,75 @@ export function ProductStudioPage({ forceManageMode = false, initialProductType 
           card.classList.toggle('selected', isSelected);
         });
         saveState();
+      }
+
+      window.toggleRibbonJfyClearDropdown = function() {
+        if (!selectedDecorations.includes('ribbon_jfy_clear')) {
+          selectedDecorations.push('ribbon_jfy_clear');
+          selectedRibbonJfyClearVariant = selectedRibbonJfyClearVariant || RIBBON_JFY_CLEAR_VARIANTS[0].id;
+        }
+        renderStep4();
+        saveState();
+      }
+
+      window.toggleRibbonJfySolidDropdown = function() {
+        if (!selectedDecorations.includes('ribbon_jfy_solid')) {
+          selectedDecorations.push('ribbon_jfy_solid');
+          selectedRibbonJfySolidVariant = selectedRibbonJfySolidVariant || RIBBON_JFY_SOLID_VARIANTS[0].id;
+        }
+        renderStep4();
+        saveState();
+      }
+
+      window.selectRibbonJfyClearVariant = function(variantId) {
+        selectedRibbonJfyClearVariant = variantId;
+        if (!selectedDecorations.includes('ribbon_jfy_clear')) {
+          selectedDecorations.push('ribbon_jfy_clear');
+        }
+        renderStep4();
+        saveState();
+      }
+
+      window.selectRibbonJfySolidVariant = function(variantId) {
+        selectedRibbonJfySolidVariant = variantId;
+        if (!selectedDecorations.includes('ribbon_jfy_solid')) {
+          selectedDecorations.push('ribbon_jfy_solid');
+        }
+        renderStep4();
+        saveState();
+      }
+
+      window.getRibbonJfyClearVariantLabel = function() {
+        const variant = RIBBON_JFY_CLEAR_VARIANTS.find(v => v.id === selectedRibbonJfyClearVariant);
+        return variant ? variant.label : 'เลือกสีโบว์โปร่ง';
+      }
+
+      window.getRibbonJfySolidVariantLabel = function() {
+        const variant = RIBBON_JFY_SOLID_VARIANTS.find(v => v.id === selectedRibbonJfySolidVariant);
+        return variant ? variant.label : 'เลือกสีโบว์ทึบ';
+      }
+
+      window.toggleMessageCardDropdown = function() {
+        if (!selectedDecorations.includes('message_card')) {
+          selectedDecorations.push('message_card');
+          selectedMessageCardVariant = selectedMessageCardVariant || MESSAGE_CARD_VARIANTS[0].id;
+        }
+        renderStep4();
+        saveState();
+      }
+
+      window.selectMessageCardVariant = function(variantId) {
+        selectedMessageCardVariant = variantId;
+        if (!selectedDecorations.includes('message_card')) {
+          selectedDecorations.push('message_card');
+        }
+        renderStep4();
+        saveState();
+      }
+
+      window.getMessageCardVariantLabel = function() {
+        const variant = MESSAGE_CARD_VARIANTS.find(v => v.id === selectedMessageCardVariant);
+        return variant ? variant.label : 'เลือกแบบการ์ดข้อความ';
       }
 
       window.updateProductFormState = function() {
@@ -1988,7 +2141,7 @@ export function ProductStudioPage({ forceManageMode = false, initialProductType 
                 </div>
                 <div class="step" data-step="4" style="${selectedType === 'velvet_flower' ? 'display: none;' : ''}">
                   <div class="step-circle">4</div>
-                  <span class="step-label">Decorations</span>
+                  <span class="step-label step-label-no-wrap">Decorations</span>
                 </div>
                 <div class="step" data-step="5">
                   <div class="step-circle">5</div>

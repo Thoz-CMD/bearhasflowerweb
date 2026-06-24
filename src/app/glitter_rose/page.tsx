@@ -278,10 +278,6 @@ function GlitterRoseContent() {
           current: 4,
           maxStepReached: 4,
         }));
-
-        setTimeout(() => {
-          document.getElementById('step5-customer')?.scrollIntoView({ behavior: 'smooth' });
-        }, 100);
       }
     }
   }, [presetProduct, isLoading]);
@@ -664,7 +660,7 @@ function GlitterRoseContent() {
                 }}
               >
                 <div className="step-circle">{i + 1}</div>
-                <span className="step-label">{step.name}</span>
+                <span className={`step-label ${step.name === 'Decorations' ? 'step-label-no-wrap' : ''}`}>{step.name}</span>
               </div>
             ))}
           </div>
@@ -852,43 +848,15 @@ function GlitterRoseContent() {
                   </div>
                   <div className="color-grid" id="decor-free-grid">
                     {freeDecors.map(c => (
-                      <div 
-                        key={c.id} 
+                      <div
+                        key={c.id}
                         className={`color-card decor-card ${state.selectedDecorations.includes(c.id) ? 'selected' : ''} ${openDecorationDropdown === c.id ? 'dropdown-active' : ''}`}
                         onClick={() => toggleArraySelection('selectedDecorations', c.id)}
                       >
                         <div className="color-swatch" style={{ overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--warm-white)', border: '1px solid var(--glass-border)' }}>
                           {c.img && <img src={c.img} alt={c.name} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />}
                         </div>
-                        {c.id === 'message_card' ? (
-                          <div className={`ribbon-variant-dropdown ${openDecorationDropdown === c.id ? 'open' : ''}`} onClick={(e) => e.stopPropagation()}>
-                            <button
-                              type="button"
-                              className="color-name ribbon-variant-trigger"
-                              onClick={toggleMessageCardDropdown}
-                              aria-expanded={openDecorationDropdown === c.id}
-                            >
-                              <span>{state.selectedDecorations.includes(c.id) ? getMessageCardVariantLabel(state.selectedMessageCardVariant) : c.name}</span>
-                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="m6 9 6 6 6-6" />
-                              </svg>
-                            </button>
-                            <div className="ribbon-variant-menu">
-                              {MESSAGE_CARD_VARIANTS.map(option => (
-                                <button
-                                  key={option.id}
-                                  type="button"
-                                  className={`color-name ribbon-variant-option ${state.selectedMessageCardVariant === option.id ? 'selected' : ''}`}
-                                  onClick={() => selectMessageCardVariant(option.id)}
-                                >
-                                  {option.label}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        ) : (
-                          <span className="color-name" style={{ textTransform: 'none', fontSize: '.8rem', marginBottom: '4px' }}>{c.name}</span>
-                        )}
+                        <span className="color-name" style={{ textTransform: 'none', fontSize: '.8rem', marginBottom: '4px' }}>{c.name}</span>
                         <span style={{ fontSize: '.7rem', fontWeight: 700, color: '#4caf50', background: '#e8f5e9', padding: '2px 10px', borderRadius: '12px', letterSpacing: '.02em' }}>ฟรี</span>
                       </div>
                     ))}
@@ -903,44 +871,50 @@ function GlitterRoseContent() {
                   </div>
                   <div className="color-grid" id="decor-paid-grid">
                     {paidDecors.map(c => (
-                      <div 
-                        key={c.id} 
+                      <div
+                        key={c.id}
                         className={`color-card decor-card ${state.selectedDecorations.includes(c.id) ? 'selected' : ''} ${openDecorationDropdown === c.id ? 'dropdown-active' : ''}`}
                         onClick={() => toggleArraySelection('selectedDecorations', c.id)}
                       >
                         <div className="color-swatch" style={{ overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--warm-white)', border: '1px solid var(--glass-border)' }}>
                           {c.img && <img src={c.img} alt={c.name} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />}
                         </div>
-                        {(c.id === 'ribbon_jfy_clear' || c.id === 'ribbon_jfy_solid') ? (
+                        {(c.id === 'ribbon_jfy_clear' || c.id === 'ribbon_jfy_solid' || c.id === 'message_card') ? (
                           <div className={`ribbon-variant-dropdown ${openDecorationDropdown === c.id ? 'open' : ''}`} onClick={(e) => e.stopPropagation()}>
                             <button
                               type="button"
                               className="color-name ribbon-variant-trigger"
-                              onClick={c.id === 'ribbon_jfy_clear' ? toggleRibbonJfyClearDropdown : toggleRibbonJfySolidDropdown}
+                              onClick={c.id === 'ribbon_jfy_clear' ? toggleRibbonJfyClearDropdown : c.id === 'ribbon_jfy_solid' ? toggleRibbonJfySolidDropdown : toggleMessageCardDropdown}
                               aria-expanded={openDecorationDropdown === c.id}
                             >
                               <span>{state.selectedDecorations.includes(c.id) ? (
                                 c.id === 'ribbon_jfy_clear'
                                   ? getRibbonJfyClearVariantLabel(state.selectedRibbonJfyClearVariant)
-                                  : getRibbonJfySolidVariantLabel(state.selectedRibbonJfySolidVariant)
+                                  : c.id === 'ribbon_jfy_solid'
+                                  ? getRibbonJfySolidVariantLabel(state.selectedRibbonJfySolidVariant)
+                                  : getMessageCardVariantLabel(state.selectedMessageCardVariant)
                               ) : c.name}</span>
                               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                                 <path d="m6 9 6 6 6-6" />
                               </svg>
                             </button>
                             <div className="ribbon-variant-menu">
-                              {(c.id === 'ribbon_jfy_clear' ? RIBBON_JFY_CLEAR_VARIANTS : RIBBON_JFY_SOLID_VARIANTS).map(option => (
+                              {(c.id === 'ribbon_jfy_clear' ? RIBBON_JFY_CLEAR_VARIANTS : c.id === 'ribbon_jfy_solid' ? RIBBON_JFY_SOLID_VARIANTS : MESSAGE_CARD_VARIANTS).map(option => (
                                 <button
                                   key={option.id}
                                   type="button"
                                   className={`color-name ribbon-variant-option ${
                                     (c.id === 'ribbon_jfy_clear'
                                       ? state.selectedRibbonJfyClearVariant
-                                      : state.selectedRibbonJfySolidVariant) === option.id ? 'selected' : ''
+                                      : c.id === 'ribbon_jfy_solid'
+                                      ? state.selectedRibbonJfySolidVariant
+                                      : state.selectedMessageCardVariant) === option.id ? 'selected' : ''
                                   }`}
                                   onClick={() => c.id === 'ribbon_jfy_clear'
                                     ? selectRibbonJfyClearVariant(option.id)
-                                    : selectRibbonJfySolidVariant(option.id)}
+                                    : c.id === 'ribbon_jfy_solid'
+                                    ? selectRibbonJfySolidVariant(option.id)
+                                    : selectMessageCardVariant(option.id)}
                                 >
                                   {option.label}
                                 </button>
@@ -1031,9 +1005,6 @@ function GlitterRoseContent() {
           <button className="sticky-prev" style={{ visibility: state.current === 0 ? 'hidden' : 'visible' }} onClick={prevStep}>←</button>
           <button className="sticky-next" onClick={nextStep}>
             {state.current === STEPS.length - 1 ? 'สั่งซื้อ' : 'ถัดไป'}
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M5 12h14M12 5l7 7-7 7" />
-            </svg>
           </button>
         </div>
       </div>

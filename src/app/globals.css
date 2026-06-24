@@ -2288,6 +2288,13 @@ body::before {
   word-wrap: break-word;
 }
 
+.step-label-no-wrap {
+  white-space: nowrap !important;
+  word-wrap: normal !important;
+  word-break: normal !important;
+  max-width: none !important;
+}
+
 .step.active .step-label {
   color: var(--rose-gold);
   font-weight: 600;
