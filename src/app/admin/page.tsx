@@ -4868,23 +4868,23 @@ function AdminPageContent() {
                       <div className="bar-segment segment-materials" style={{ width: '30%' }}>
                         <span>30%</span>
                       </div>
-                      <div className="bar-segment segment-savings" style={{ width: '40%' }}>
-                        <span>40%</span>
+                      <div className="bar-segment segment-savings" style={{ width: '50%' }}>
+                        <span>50%</span>
                       </div>
-                      <div className="bar-segment segment-admin1" style={{ width: '15%' }}>
-                        <span>15%</span>
+                      <div className="bar-segment segment-admin1" style={{ width: '10%' }}>
+                        <span>10%</span>
                       </div>
-                      <div className="bar-segment segment-admin2" style={{ width: '15%' }}>
-                        <span>15%</span>
+                      <div className="bar-segment segment-admin2" style={{ width: '10%' }}>
+                        <span>10%</span>
                       </div>
                     </div>
 
                     {/* Allocation Legend */}
                     <div className="bar-legend">
                       <span className="legend-item"><span className="legend-dot dot-materials"></span> ทุนซื้อของ (30%)</span>
-                      <span className="legend-item"><span className="legend-dot dot-savings"></span> เงินเก็บร้าน (40%)</span>
-                      <span className="legend-item"><span className="legend-dot dot-admin1"></span> แอดมินคนที่ 1 (15%)</span>
-                      <span className="legend-item"><span className="legend-dot dot-admin2"></span> แอดมินคนที่ 2 (15%)</span>
+                      <span className="legend-item"><span className="legend-dot dot-savings"></span> เงินเก็บร้าน (50%)</span>
+                      <span className="legend-item"><span className="legend-dot dot-admin1"></span> แอดมินคนที่ 1 (10%)</span>
+                      <span className="legend-item"><span className="legend-dot dot-admin2"></span> แอดมินคนที่ 2 (10%)</span>
                     </div>
                   </div>
 
@@ -4904,24 +4904,24 @@ function AdminPageContent() {
                     {/* 2. Shop Savings Card */}
                     <div className="split-card fund-card savings">
                       <div className="card-header-row">
-                        <span className="card-badge badge-savings">🏦 เงินเก็บร้าน 40%</span>
+                        <span className="card-badge badge-savings">🏦 เงินเก็บร้าน 50%</span>
                       </div>
                       <div className="card-body">
                         <span className="split-label">หักเก็บเป็นเงินเก็บสะสมร้าน</span>
-                        <span className="split-value">{(monthlyNetProfit * 0.40).toLocaleString('th-TH', { maximumFractionDigits: 2 })} ฿</span>
+                        <span className="split-value">{(monthlyNetProfit * 0.50).toLocaleString('th-TH', { maximumFractionDigits: 2 })} ฿</span>
                       </div>
                     </div>
 
                     {/* 3. Admin 1 Salary Card */}
                     <div className="split-card profile-card admin1">
                       <div className="card-header-row">
-                        <span className="card-badge badge-admin1">👥 แอดมินคนที่ 1 (15%)</span>
+                        <span className="card-badge badge-admin1">👥 แอดมินคนที่ 1 (10%)</span>
                       </div>
                       <div className="profile-body">
                         <div className="profile-avatar">👨‍💻</div>
                         <div className="profile-info">
                           <span className="profile-role">ผู้ดูแลระบบหลัก</span>
-                          <span className="profile-salary">{(monthlyNetProfit * 0.15).toLocaleString('th-TH', { maximumFractionDigits: 2 })} ฿</span>
+                          <span className="profile-salary">{(monthlyNetProfit * 0.10).toLocaleString('th-TH', { maximumFractionDigits: 2 })} ฿</span>
                         </div>
                       </div>
                     </div>
@@ -4929,13 +4929,13 @@ function AdminPageContent() {
                     {/* 4. Admin 2 Salary Card */}
                     <div className="split-card profile-card admin2">
                       <div className="card-header-row">
-                        <span className="card-badge badge-admin2">👥 แอดมินคนที่ 2 (15%)</span>
+                        <span className="card-badge badge-admin2">👥 แอดมินคนที่ 2 (10%)</span>
                       </div>
                       <div className="profile-body">
                         <div className="profile-avatar">👩‍💻</div>
                         <div className="profile-info">
                           <span className="profile-role">ผู้ร่วมดูแลระบบ</span>
-                          <span className="profile-salary">{(monthlyNetProfit * 0.15).toLocaleString('th-TH', { maximumFractionDigits: 2 })} ฿</span>
+                          <span className="profile-salary">{(monthlyNetProfit * 0.10).toLocaleString('th-TH', { maximumFractionDigits: 2 })} ฿</span>
                         </div>
                       </div>
                     </div>

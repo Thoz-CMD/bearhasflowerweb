@@ -25,6 +25,11 @@ const italiana = Italiana({
 export const metadata: Metadata = {
   title: "Bear has flower",
   description: "ร้านดอกไม้ Bear has flower ออกแบบช่อดอกไม้ กุหลาบกลิตเตอร์ ดอกไม้ลวดกำมะหยี่",
+  icons: {
+    icon: [{ url: "/images/logo/logo.png", type: "image/png" }],
+    shortcut: ["/images/logo/logo.png"],
+    apple: [{ url: "/images/logo/logo.png", type: "image/png" }],
+  },
 };
 
 export default function RootLayout({
