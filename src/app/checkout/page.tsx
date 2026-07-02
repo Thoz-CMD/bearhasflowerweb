@@ -1,9 +1,8 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { db, auth, storage } from '@/lib/firebase';
+import { db, auth } from '@/lib/firebase';
 import { collection, addDoc, serverTimestamp, doc, runTransaction, getDocs, query, where } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { onAuthStateChanged } from 'firebase/auth';
 import generatePayload from 'promptpay-qr';
 import { QRCodeSVG } from 'qrcode.react';
@@ -194,11 +193,29 @@ export default function CheckoutPage() {
 
     setUploadingSlip(true);
     try {
-      const fileName = `slips/${Date.now()}_${slipFile.name}`;
-      const storageRef = ref(storage, fileName);
-      await uploadBytes(storageRef, slipFile);
-      const downloadURL = await getDownloadURL(storageRef);
-      return downloadURL;
+      const base64File = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(slipFile);
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = error => reject(error);
+      });
+
+      const safeFileName = slipFile.name.replace(/[^\w.-]+/g, '_');
+      const res = await fetch('/api/upload-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          base64File,
+          path: `slips/${Date.now()}_${safeFileName}`,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Upload failed');
+      }
+
+      return data.url;
     } catch (error) {
       console.error('Error uploading slip:', error);
       alert('เกิดข้อผิดพลาดในการอัปโหลดสลิป กรุณาลองใหม่');
