@@ -884,7 +884,14 @@ function AdminPageContent() {
       }
 
       const orderRef = doc(db, 'orders', orderId);
-      const updateData: any = { status: newStatus };
+      const statusTimestamp = serverTimestamp ? serverTimestamp() : new Date().toISOString();
+      const updateData: any = {
+        status: newStatus,
+        statusUpdatedAt: statusTimestamp,
+      };
+      if (newStatus === 'completed') {
+        updateData.completedAt = statusTimestamp;
+      }
       if (finishedImageUrl) {
         updateData.finishedImageUrl = finishedImageUrl;
       }
@@ -985,13 +992,27 @@ function AdminPageContent() {
 
   const resolveOrderDate = (createdAt: any) => {
     if (!createdAt) return null;
+    let resolvedDate: Date;
     if (createdAt.toDate) {
-      return createdAt.toDate();
+      resolvedDate = createdAt.toDate();
+    } else if (createdAt.seconds) {
+      resolvedDate = new Date(createdAt.seconds * 1000);
+    } else {
+      resolvedDate = new Date(createdAt);
     }
-    if (createdAt.seconds) {
-      return new Date(createdAt.seconds * 1000);
-    }
-    return new Date(createdAt);
+    return Number.isNaN(resolvedDate.getTime()) ? null : resolvedDate;
+  };
+
+  const getOrderCompletedDate = (order: any) => {
+    return resolveOrderDate(order?.completedAt)
+      || resolveOrderDate(order?.statusUpdatedAt)
+      || resolveOrderDate(order?.updatedAt)
+      || resolveOrderDate(order?.createdAt);
+  };
+
+  const isDateInYearMonth = (date: Date | null, yearMonth: string) => {
+    if (!date || Number.isNaN(date.getTime())) return false;
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}` === yearMonth;
   };
 
   const getOrderRevenue = (order: any) => {
@@ -1142,6 +1163,13 @@ function AdminPageContent() {
   const completedCount = orders.filter(o => o.status === 'completed').length;
   const toPercent = (count: number) => Math.min(100, Math.max(0, Math.round((count / safeOrderCount) * 100)));
 
+  const getCompletedCountForYearMonth = (orders: any[], yearMonth: string) => {
+    return orders.filter((order) => (
+      order.status === 'completed'
+      && isDateInYearMonth(getOrderCompletedDate(order), yearMonth)
+    )).length;
+  };
+
   const getSalesForMonth = (orders: any[], year: number, month: number) => {
     return orders
       .filter(o => o.status !== 'cancelled')
@@ -1214,6 +1242,9 @@ function AdminPageContent() {
 
   const netProfitGrowth = getGrowthMetrics(currentMonthNetProfit, previousMonthNetProfit);
   const previousMonthLabel = previousMonthStr ? formatMonthThai(previousMonthStr) : 'เดือนที่แล้ว';
+  const currentMonthCompletedCount = getCompletedCountForYearMonth(orders, currentMonthStr);
+  const previousMonthCompletedCount = getCompletedCountForYearMonth(orders, previousMonthStr);
+  const completedGrowth = getGrowthMetrics(currentMonthCompletedCount, previousMonthCompletedCount);
 
   const totalExpenses = expenses
     .filter(e => e.type === 'expense')
@@ -1256,37 +1287,37 @@ function AdminPageContent() {
       key: 'pending',
       label: 'รอตรวจสอบเงิน',
       value: `${pendingCount} รายการ`,
-      detail: `${Math.round((pendingCount / safeOrderCount) * 100)}% จากทั้งหมด`,
+      detail: 'รอแอดมินตรวจสอบการโอนเงิน',
       accent: '#FACE17',
       cardClass: 'metric-pending',
       progressPct: toPercent(pendingCount),
       ringLabelPct: toPercent(pendingCount),
       ringPrefix: '+',
-      detailPrefix: '↗',
+      detailPrefix: '',
     },
     {
       key: 'preparing',
       label: 'กำลังจัดเตรียม',
       value: `${preparingCount} รายการ`,
-      detail: `${Math.round((preparingCount / safeOrderCount) * 100)}% จากทั้งหมด`,
+      detail: 'ขอช่างจัดดอกไม้',
       accent: '#ef4e7b',
       cardClass: 'metric-preparing',
       progressPct: toPercent(preparingCount),
       ringLabelPct: toPercent(preparingCount),
       ringPrefix: '+',
-      detailPrefix: '↗',
+      detailPrefix: '',
     },
     {
       key: 'completed',
       label: 'ส่งสำเร็จแล้ว',
-      value: `${completedCount} รายการ`,
-      detail: `${Math.round((completedCount / safeOrderCount) * 100)}% จากทั้งหมด`,
+      value: `${currentMonthCompletedCount} รายการ`,
+      detail: `ยอดสะสมทั้งหมด ${completedCount} รายการ`,
       accent: '#35c770',
       cardClass: 'metric-completed',
-      progressPct: toPercent(completedCount),
-      ringLabelPct: toPercent(completedCount),
-      ringPrefix: '+',
-      detailPrefix: '↗',
+      progressPct: completedGrowth.progressPct,
+      ringLabelPct: completedGrowth.ringLabelPct,
+      ringPrefix: completedGrowth.ringPrefix,
+      detailPrefix: '',
     },
     {
       key: 'active-users',
