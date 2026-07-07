@@ -1428,6 +1428,14 @@ function AdminPageContent() {
     },
   ];
 
+  const getLedgerSortTime = (item: any) => {
+    const createdDate = resolveOrderDate(item.createdAt);
+    if (createdDate) return createdDate.getTime();
+
+    const dateTime = item.date ? new Date(`${item.date}T23:59:59`).getTime() : 0;
+    return Number.isFinite(dateTime) ? dateTime : 0;
+  };
+
   // Ledger Items for the selected month
   const monthlyLedgerItems = [
     ...monthlyOrders.filter(o => o.status !== 'cancelled').map(o => {
@@ -1450,7 +1458,8 @@ function AdminPageContent() {
         amount: getOrderRevenue(o),
         type: 'revenue',
         category: 'sales',
-        date: orderDate
+        date: orderDate,
+        createdAt: o.createdAt
       };
     }),
     ...monthlyExpenses.map(e => ({
@@ -1459,9 +1468,10 @@ function AdminPageContent() {
       amount: e.amount || 0,
       type: e.type || 'expense',
       category: e.category,
-      date: e.date
+      date: e.date,
+      createdAt: e.createdAt
     }))
-  ].sort((a, b) => new Date(b.date + 'T23:59:59').getTime() - new Date(a.date + 'T23:59:59').getTime());
+  ].sort((a, b) => getLedgerSortTime(b) - getLedgerSortTime(a));
 
 
   return (
