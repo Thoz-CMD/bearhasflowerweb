@@ -1273,7 +1273,7 @@ function AdminPageContent() {
   const overviewCards = [
     {
       key: 'net-profit',
-      label: 'กำไรสุทธิประจำเดือน',
+      label: 'กำไรประจำเดือน',
       value: `${currentMonthNetProfit.toLocaleString()} ฿`,
       detail: `${netProfitGrowth.detailLabel} ${netProfitGrowth.formattedPct}% จาก${previousMonthLabel}`,
       accent: 'rgb(245, 159, 58)',
@@ -1321,7 +1321,7 @@ function AdminPageContent() {
     },
     {
       key: 'active-users',
-      label: 'ผู้ใช้งานขณะนี้ (Live)',
+      label: 'ผู้ใช้งานขณะนี้',
       value: `${activeUsersCount} คน`,
       detail: activeUsersCount > 0 ? 'กำลังใช้งานอยู่ตอนนี้' : 'ยังไม่มีผู้ใช้งานที่ออนไลน์',
       accent: '#5a8dff',
@@ -1333,7 +1333,7 @@ function AdminPageContent() {
     },
     {
       key: 'registered-users',
-      label: 'ผู้สมัครใช้งานทั้งหมด',
+      label: 'ผู้สมัครใช้งาน',
       value: `${registeredUsersCount} คน`,
       detail: 'จำนวนบัญชีที่ลงทะเบียนไว้',
       accent: '#9b62ff',
@@ -4997,7 +4997,6 @@ function AdminPageContent() {
                     <span>🤖</span> อ่านใบเสร็จด้วย AI
                   </div>
                   <p className="ai-receipt-subtitle">
-                    อัปโหลดรูปใบเสร็จหรือสลิปได้หลายรูป แล้วให้ AI ช่วยกรอกฟอร์มให้อัตโนมัติ
                   </p>
                   <div className="ai-file-control">
                     <span className="ai-file-button">วางรูป</span>

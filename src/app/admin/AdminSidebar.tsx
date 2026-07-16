@@ -35,13 +35,13 @@ const navItems: NavItem[] = [
       pathname === '/admin' &&
       (!searchParams.get('view') || searchParams.get('view') === 'manager'),
     showInMobile: true,
-    mobileOrder: 3,
+    mobileOrder: 4,
     mobileCenter: true,
-    mobileLabel: 'Dashboard',
+    mobileLabel: 'ภาพรวม',
   },
   {
     href: '/admin?view=florist',
-    label: 'ช่างจัดดอกไม้',
+    label: 'จัดดอกไม้',
     description: 'คิวงานการผลิต',
     icon: ShoppingBag,
     isActive: (pathname, searchParams) =>
@@ -51,7 +51,7 @@ const navItems: NavItem[] = [
   },
   {
     href: '/admin?view=finance',
-    label: 'รายรับ-รายจ่าย',
+    label: 'รับ-จ่าย',
     description: 'บัญชีร้าน',
     icon: ReceiptText,
     isActive: (pathname, searchParams) =>
@@ -61,13 +61,13 @@ const navItems: NavItem[] = [
   },
   {
     href: '/admin/create-product',
-    label: 'สร้างสินค้าใหม่',
+    label: 'สร้างสินค้า',
     description: 'เพิ่มสินค้า',
     icon: PackagePlus,
     isActive: (pathname, searchParams) =>
       pathname.startsWith('/admin/create-product') && searchParams.get('manage') !== 'true',
     showInMobile: true,
-    mobileOrder: 4,
+    mobileOrder: 3,
   },
   {
     href: '/admin/manage-products',
@@ -81,11 +81,24 @@ const navItems: NavItem[] = [
     mobileOrder: 5,
   },
   {
+    href: '/admin/supplies',
+    label: 'สั่งซื้ออุปกรณ์',
+    description: 'ลิงก์ร้านค้าอุปกรณ์',
+    icon: ShoppingBag,
+    isActive: (pathname) => pathname === '/admin/supplies',
+    showInMobile: true,
+    mobileOrder: 6,
+    mobileLabel: 'อุปกรณ์',
+  },
+  {
     href: '/',
     label: 'กลับหน้าหลัก',
     description: 'หน้าร้าน',
     icon: Home,
     isActive: () => false,
+    showInMobile: true,
+    mobileOrder: 7,
+    mobileLabel: 'หน้าหลัก',
   },
 ];
 
