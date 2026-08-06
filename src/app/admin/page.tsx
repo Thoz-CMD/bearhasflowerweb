@@ -208,13 +208,15 @@ function AdminPageContent() {
     amount: string;
     date: string;
     type: 'expense' | 'income';
+    isThaiPlus?: boolean;
   }>>(() => [
     {
       id: crypto?.randomUUID ? crypto.randomUUID() : String(Date.now()),
       title: '',
       amount: '',
       date: new Date().toISOString().substring(0, 10),
-      type: 'expense'
+      type: 'expense',
+      isThaiPlus: false
     }
   ]);
   const [receiptPreviews, setReceiptPreviews] = useState<string[]>([]);
@@ -222,6 +224,7 @@ function AdminPageContent() {
   const [isParsingReceipt, setIsParsingReceipt] = useState(false);
   const [receiptParseError, setReceiptParseError] = useState<string | null>(null);
   const [receiptFileNames, setReceiptFileNames] = useState<string[]>([]);
+  const [ledgerTypeFilter, setLedgerTypeFilter] = useState<'all' | 'income' | 'expense' | 'thaiPlus'>('all');
   const [selectedMonth, setSelectedMonth] = useState(() => {
     const today = new Date();
     return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
@@ -710,6 +713,7 @@ function AdminPageContent() {
         category: 'other',
         date: item.date,
         type: item.type || 'expense',
+        isThaiPlus: Boolean(item.isThaiPlus),
         createdAt: serverTimestamp ? serverTimestamp() : new Date().toISOString(),
         recordedBy: user?.phoneNumber || user?.email || 'Admin'
       })));
@@ -723,7 +727,8 @@ function AdminPageContent() {
           title: '',
           amount: '',
           date: new Date().toISOString().substring(0, 10),
-          type: 'expense'
+          type: 'expense',
+          isThaiPlus: false
         }
       ]);
       await (window as any).showBeautifulAlert('บันทึกรายการสำเร็จเรียบร้อยแล้วค่ะ!', 'success', 'บันทึกสำเร็จ');
@@ -802,7 +807,9 @@ function AdminPageContent() {
           id: crypto?.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random()),
           title: String(item?.title || '').trim(),
           amount: item?.amount !== undefined && item?.amount !== null ? String(item.amount) : '',
-          date: String(item?.date || expenseDate)
+          date: String(item?.date || expenseDate),
+          type: 'expense' as const,
+          isThaiPlus: false
         }));
         setExpenseItems(normalizedItems);
       } else {
@@ -817,7 +824,8 @@ function AdminPageContent() {
             title: String(data?.title || ''),
             amount: data?.amount !== undefined && data?.amount !== null ? String(data.amount) : '',
             date: String(data?.date || expenseDate),
-            type: 'expense'
+            type: 'expense',
+            isThaiPlus: false
           }
         ]);
       }
@@ -1459,7 +1467,8 @@ function AdminPageContent() {
         type: 'revenue',
         category: 'sales',
         date: orderDate,
-        createdAt: o.createdAt
+        createdAt: o.createdAt,
+        isThaiPlus: false
       };
     }),
     ...monthlyExpenses.map(e => ({
@@ -1469,10 +1478,17 @@ function AdminPageContent() {
       type: e.type || 'expense',
       category: e.category,
       date: e.date,
-      createdAt: e.createdAt
+      createdAt: e.createdAt,
+      isThaiPlus: Boolean(e.isThaiPlus)
     }))
   ].sort((a, b) => getLedgerSortTime(b) - getLedgerSortTime(a));
 
+  const filteredLedgerItems = monthlyLedgerItems.filter((item) => {
+    if (ledgerTypeFilter === 'income') return item.type === 'revenue' || item.type === 'income';
+    if (ledgerTypeFilter === 'expense') return item.type === 'expense';
+    if (ledgerTypeFilter === 'thaiPlus') return item.isThaiPlus;
+    return true;
+  });
 
   return (
     <div className="admin-dashboard">
@@ -3469,6 +3485,48 @@ function AdminPageContent() {
           gap: 12px;
         }
 
+        .expense-header-actions {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+
+        .expense-preset-btn {
+          background: #1976d2;
+          color: #fff;
+          border: none;
+          padding: 8px 14px;
+          border-radius: 10px;
+          font-weight: 700;
+          font-size: 0.82rem;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          box-shadow: 0 4px 12px rgba(25, 118, 210, 0.18);
+        }
+
+        .expense-preset-btn:hover {
+          background: #1565c0;
+          transform: translateY(-1px);
+          box-shadow: 0 6px 16px rgba(25, 118, 210, 0.24);
+        }
+
+        .expense-preset-btn:active {
+          transform: translateY(1px);
+        }
+
+        .expense-preset-btn.inactive {
+          background: #ffffff;
+          color: #1976d2;
+          border: 1.5px solid #bbdefb;
+          box-shadow: none;
+        }
+
+        .expense-preset-btn.inactive:hover {
+          background: #e3f2fd;
+          border-color: #1976d2;
+          box-shadow: 0 4px 12px rgba(25, 118, 210, 0.12);
+        }
+
         .expense-item-actions {
           display: flex;
           justify-content: space-between;
@@ -3676,6 +3734,31 @@ function AdminPageContent() {
           margin-top: 15px;
         }
 
+        .ledger-filter-bar {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 10px;
+          margin-top: 16px;
+        }
+
+        .ledger-filter-btn {
+          border: 1px solid rgba(219, 138, 158, 0.35);
+          background: #fff;
+          color: #7a6352;
+          padding: 10px 14px;
+          border-radius: 999px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.15s ease;
+        }
+
+        .ledger-filter-btn:hover,
+        .ledger-filter-btn.active {
+          background: #f9e7eb;
+          border-color: #db8a9e;
+          color: #ad344f;
+        }
+
         .ledger-table {
           width: 100%;
           border-collapse: collapse;
@@ -3727,6 +3810,11 @@ function AdminPageContent() {
         .fin-badge.expense {
           background: #fdedec;
           color: #e74c3c;
+        }
+
+        .fin-badge.thai-plus {
+          background: #e3f2fd;
+          color: #1976d2;
         }
 
         .amount-text {
@@ -4990,11 +5078,11 @@ function AdminPageContent() {
               {/* Left Side: Expense Form Card */}
               <div className="finance-form-card">
                 <h3 className="form-title">
-                  <span style={{ fontSize: '1.2rem' }}>➕</span> บันทึกจัดซื้อ
+                  <span style={{ fontSize: '1.2rem' }}></span> บันทึกจัดซื้อ
                 </h3>
                 <div className="ai-receipt-card">
                   <div className="ai-receipt-title">
-                    <span>🤖</span> อ่านใบเสร็จด้วย AI
+                    <span></span> อ่านใบเสร็จด้วย AI
                   </div>
                   <p className="ai-receipt-subtitle">
                   </p>
@@ -5065,28 +5153,41 @@ function AdminPageContent() {
                         <div className="form-group" style={{ marginBottom: 0 }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                             <label className="form-label" style={{ marginBottom: 0 }}>คำอธิบายรายการ</label>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const next = [...expenseItems];
-                                next[idx] = { ...next[idx], type: item.type === 'expense' ? 'income' : 'expense' };
-                                setExpenseItems(next);
-                              }}
-                              style={{
-                                padding: '8px 16px',
-                                borderRadius: '8px',
-                                border: 'none',
-                                backgroundColor: item.type === 'income' ? '#23C560' : '#F14344',
-                                color: '#ffffff',
-                                fontSize: '0.75rem',
-                                fontWeight: '600',
-                                cursor: 'pointer',
-                                transition: 'all 0.2s',
-                                minWidth: '60px'
-                              }}
-                            >
-                              {item.type === 'income' ? 'รับ' : 'จ่าย'}
-                            </button>
+                            <div className="expense-header-actions">
+                              <button
+                                type="button"
+                                className={`expense-preset-btn${item.isThaiPlus ? '' : ' inactive'}`}
+                                onClick={() => {
+                                  const next = [...expenseItems];
+                                  next[idx] = { ...next[idx], isThaiPlus: !next[idx].isThaiPlus };
+                                  setExpenseItems(next);
+                                }}
+                              >
+                                ไทย+
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const next = [...expenseItems];
+                                  next[idx] = { ...next[idx], type: item.type === 'expense' ? 'income' : 'expense' };
+                                  setExpenseItems(next);
+                                }}
+                                style={{
+                                  padding: '8px 16px',
+                                  borderRadius: '8px',
+                                  border: 'none',
+                                  backgroundColor: item.type === 'income' ? '#23C560' : '#F14344',
+                                  color: '#ffffff',
+                                  fontSize: '0.75rem',
+                                  fontWeight: '600',
+                                  cursor: 'pointer',
+                                  transition: 'all 0.2s',
+                                  minWidth: '60px'
+                                }}
+                              >
+                                {item.type === 'income' ? 'รับ' : 'จ่าย'}
+                              </button>
+                            </div>
                           </div>
                           <input
                             type="text"
@@ -5176,7 +5277,8 @@ function AdminPageContent() {
                           title: '',
                           amount: '',
                           date: new Date().toISOString().substring(0, 10),
-                          type: 'expense'
+                          type: 'expense',
+                          isThaiPlus: false
                         }
                       ]);
                     }}
@@ -5197,10 +5299,41 @@ function AdminPageContent() {
               {/* Right Side: Ledger Table Ledger */}
               <div className="ledger-card">
                 <h3 className="form-title">
-                  <span style={{ fontSize: '1.2rem' }}>📜</span> สมุดบัญชีรายรับ-รายจ่าย ({formatMonthThai(selectedMonth)})
+                  <span style={{ fontSize: '1.2rem' }}></span> สมุดบัญชีรายรับ-รายจ่าย ({formatMonthThai(selectedMonth)})
                 </h3>
 
-                {monthlyLedgerItems.length === 0 ? (
+                <div className="ledger-filter-bar">
+                  <button
+                    type="button"
+                    className={`ledger-filter-btn${ledgerTypeFilter === 'all' ? ' active' : ''}`}
+                    onClick={() => setLedgerTypeFilter('all')}
+                  >
+                    ทั้งหมด
+                  </button>
+                  <button
+                    type="button"
+                    className={`ledger-filter-btn${ledgerTypeFilter === 'income' ? ' active' : ''}`}
+                    onClick={() => setLedgerTypeFilter('income')}
+                  >
+                    รับ
+                  </button>
+                  <button
+                    type="button"
+                    className={`ledger-filter-btn${ledgerTypeFilter === 'expense' ? ' active' : ''}`}
+                    onClick={() => setLedgerTypeFilter('expense')}
+                  >
+                    จ่าย
+                  </button>
+                  <button
+                    type="button"
+                    className={`ledger-filter-btn${ledgerTypeFilter === 'thaiPlus' ? ' active' : ''}`}
+                    onClick={() => setLedgerTypeFilter('thaiPlus')}
+                  >
+                    ไทย+
+                  </button>
+                </div>
+
+                {filteredLedgerItems.length === 0 ? (
                   <div style={{ textAlign: 'center', padding: '50px 20px', color: '#a08a8e' }}>
                     <span style={{ fontSize: '2.5rem' }}>
                       <img src="/images/Empty State Icon.png" alt="Empty State" style={{ width: '120px', height: 'auto', display: 'block', margin: '0 auto' }} />
@@ -5220,7 +5353,7 @@ function AdminPageContent() {
                         </tr>
                       </thead>
                       <tbody>
-                        {monthlyLedgerItems.map((item) => {
+                        {filteredLedgerItems.map((item) => {
                           return (
                             <tr key={item.id} className="ledger-row-item">
                               <td style={{ fontWeight: 600, color: '#7a6352' }}>
@@ -5231,8 +5364,10 @@ function AdminPageContent() {
                                 })}
                               </td>
                               <td>
-                                <span className={`fin-badge ${item.type}`}>
-                                  {item.type === 'revenue' || item.type === 'income' ? '🟢 รายรับ' : '🔴 รายจ่าย'}
+                                <span className={`fin-badge ${item.isThaiPlus ? 'thai-plus' : item.type}`}>
+                                  {item.type === 'revenue' || item.type === 'income'
+                                    ? `${item.isThaiPlus ? '🔵' : '🟢'} รายรับ`
+                                    : `${item.isThaiPlus ? '🔵' : '🔴'} รายจ่าย`}
                                 </span>
                               </td>
                               <td style={{ color: '#5c4738', fontSize: '0.85rem' }}>

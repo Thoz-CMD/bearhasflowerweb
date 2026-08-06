@@ -390,11 +390,11 @@ body::before {
 }
 
 .welcome-title {
-  font-family: 'Noto Sans Thai', serif;
-  font-size: 1.5rem;
+  font-family: 'Cormorant Garamond', 'Noto Sans Thai', serif;
+  font-size: clamp(1.8rem, 3.5vw, 2.6rem);
   font-weight: 400;
-  color: var(--mid-brown);
-  letter-spacing: .12em;
+  color: var(--deep-brown);
+  letter-spacing: .04em;
 }
 
 .slogan {
@@ -425,6 +425,11 @@ body::before {
   box-shadow: 0 8px 28px rgba(201, 149, 107, .45);
   transition: all var(--transition);
   text-decoration: none;
+}
+
+/* Temporarily hide the "ออกแบบช่อดอกไม้" design button (apply globally) */
+#design-btn {
+  display: none !important;
 }
 
 .order-btn:hover {
@@ -476,6 +481,12 @@ body::before {
   gap: 24px;
 }
 
+@media (min-width: 768px) {
+  .section-two-content {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 24px;
+  }
+}
 .category-card {
   position: relative;
   border-radius: 24px;
@@ -511,6 +522,10 @@ body::before {
 
 .cat-bg-2 {
   background: url('/images/ดอกไม้ลวดกำมะหยี่.jpg') center/cover no-repeat;
+}
+
+.cat-bg-3 {
+  background: url('/images/ดอกไม้ประดิษฐ์.png') center/cover no-repeat;
 }
 
 .cat-deco {
@@ -557,8 +572,8 @@ body::before {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(255, 253, 254, 0.92);
-  border: 1px solid rgba(219, 138, 158, 0.16);
+  background: #ffffff;
+  border: 1px solid rgba(219, 138, 158, 0.12);
   border-radius: 50%;
   padding: 0;
   box-shadow: var(--shadow-sm);
@@ -579,8 +594,8 @@ body::before {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, rgba(219, 138, 158, 0.16) 0%, rgba(240, 201, 209, 0.35) 100%);
-  color: var(--rose-gold);
+  background: transparent;
+  color: var(--deep-brown);
   flex-shrink: 0;
 }
 
@@ -1582,7 +1597,7 @@ body::before {
   }
 
   .section-two-content {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 18px;
   }
 
@@ -1630,6 +1645,11 @@ body::before {
     padding: 36px 20px 32px;
   }
 
+  /* Temporarily hide the "ออกแบบช่อดอกไม้" design button */
+  #design-btn {
+    display: none !important;
+  }
+
   .section-heading {
     padding: 16px 20px 0;
   }
@@ -1674,6 +1694,7 @@ body::before {
     aspect-ratio: 16/9;
     border-radius: 18px;
   }
+
 
   .cat-overlay {
     padding: 20px;

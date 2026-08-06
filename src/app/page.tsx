@@ -246,10 +246,26 @@ export default function Home() {
       };
 
       const getProductTypeKey = (product: any) => {
+        const name = String(product?.name || '').toLowerCase();
+        const description = String(product?.description || '').toLowerCase();
         const isVelvet = product.type === 'velvet_flower'
-          || (product.name && product.name.includes('กำมะหยี่'))
-          || (product.description && product.description.includes('กำมะหยี่'));
-        return isVelvet ? 'velvet' : 'glitter';
+          || name.includes('กำมะหยี่')
+          || description.includes('กำมะหยี่');
+        if (isVelvet) return 'velvet';
+
+        const isGlitter = product.type === 'glitter_rose'
+          || name.includes('กลิตเตอร์')
+          || description.includes('กลิตเตอร์');
+        if (isGlitter) return 'glitter';
+
+        const isArtificial = product.type === 'artificial_flower'
+          || name.includes('ดอกไม้ประดิษฐ์')
+          || description.includes('ดอกไม้ประดิษฐ์')
+          || name.includes('ประดิษฐ์')
+          || description.includes('ประดิษฐ์');
+        if (isArtificial) return 'artificial';
+
+        return 'glitter';
       };
 
       const getShippingFilterKey = (product: any) => {
@@ -321,7 +337,8 @@ export default function Home() {
           const typeMap: Record<string, string> = {
             all: 'สินค้าทั้งหมด',
             glitter: 'กุหลาบกลิตเตอร์',
-            velvet: 'ดอกไม้ลวดกำมะหยี่'
+            velvet: 'ดอกไม้ลวดกำมะหยี่',
+            artificial: 'ดอกไม้ประดิษฐ์'
           };
           const sortLabel = productState.filters.sort === 'likes' ? 'เรียงตามยอดถูกใจ' : 'เรียงตามสินค้าล่าสุด';
           const summaryText = `${typeMap[productState.filters.type] || 'สินค้าทั้งหมด'} • ${formatPriceLabel(productState.filters.minPrice)} - ${formatPriceLabel(productState.filters.maxPrice)} • ${shippingMap[productState.filters.shipping] || 'ทุกสถานะ'} • ${sortLabel}`;
@@ -599,7 +616,9 @@ export default function Home() {
             const productType = product._productType || getProductTypeKey(product);
             const shippingKey = product._shippingKey || getShippingFilterKey(product);
 
-            const matchType = productState.filters.type === 'all' || productType === productState.filters.type;
+            const matchType = productState.filters.type === 'all'
+              || productType === productState.filters.type
+              || (productState.filters.type === 'artificial' && isArtificialProduct(product));
             const matchPrice = priceValue >= productState.filters.minPrice && priceValue <= productState.filters.maxPrice;
             const matchShipping = productState.filters.shipping === 'all' || shippingKey === productState.filters.shipping;
 
@@ -622,8 +641,25 @@ export default function Home() {
       };
 
       (window as any).applyProductFilters = applyProductFilters;
+      const isArtificialProduct = (product: any) => {
+        const productType = product._productType || getProductTypeKey(product);
+        if (productType === 'artificial') return true;
+        const name = String(product?.name || '').toLowerCase();
+        const description = String(product?.description || '').toLowerCase();
+        return name.includes('ดอกไม้ประดิษฐ์')
+          || description.includes('ดอกไม้ประดิษฐ์')
+          || name.includes('ประดิษฐ์')
+          || description.includes('ประดิษฐ์');
+      };
+
       (window as any).filterProducts = function (type: string) {
-        productState.filters.type = type === 'velvet' || type === 'glitter' ? type : 'all';
+        const valid = ['velvet', 'glitter', 'artificial'];
+        if (!valid.includes(type)) {
+          productState.filters.type = 'all';
+        } else {
+          // Toggle: if already filtering this type, reset to 'all'
+          productState.filters.type = productState.filters.type === type ? 'all' : type;
+        }
         applyProductFilters(true);
       };
       (window as any).updateProductPriceFilter = function (bound: string, rawValue: string) {
@@ -1267,9 +1303,7 @@ export default function Home() {
       <span class="welcome-title">Welcome</span>
     </div>
     <p class="slogan">"ให้ดอกไม้ของเรา แทนความทรงจำที่ไม่มีวันเหี่ยวเฉา"</p>
-    <a href="/glitter_rose" class="order-btn" id="design-btn">
-      ออกแบบช่อดอกไม้
-    </a>
+    
   </section>
 
   <!-- Category Section -->
@@ -1281,7 +1315,7 @@ export default function Home() {
   <section class="section-two">
     <div class="section-two-content">
 
-      <div class="category-card fade-in" id="cat-glitter" onclick="window.location.href='/glitter_rose'" style="cursor: pointer;">
+      <div class="category-card fade-in" id="cat-glitter" onclick="filterProducts('glitter')" style="cursor: pointer;">
         <div class="cat-bg cat-bg-1"></div>
         <div class="cat-deco"></div>
         <div class="cat-overlay">
@@ -1294,6 +1328,14 @@ export default function Home() {
         <div class="cat-deco"></div>
         <div class="cat-overlay">
           <h3 class="cat-title">ดอกไม้ลวด<br>กำมะหยี่</h3>
+        </div>
+      </div>
+
+      <div class="category-card fade-in" id="cat-artificial" onclick="filterProducts('artificial')" style="animation-delay:.2s; cursor: pointer;">
+        <div class="cat-bg cat-bg-3"></div>
+        <div class="cat-deco"></div>
+        <div class="cat-overlay">
+          <h3 class="cat-title">ดอกไม้<br>ประดิษฐ์</h3>
         </div>
       </div>
 
