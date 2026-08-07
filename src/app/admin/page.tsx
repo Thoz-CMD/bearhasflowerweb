@@ -229,6 +229,12 @@ function AdminPageContent() {
     const today = new Date();
     return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
   });
+  const [financeViewMode, setFinanceViewMode] = useState<'monthly' | 'daily'>('monthly');
+  const [selectedDate, setSelectedDate] = useState(() => {
+    const today = new Date();
+    return today.toISOString().substring(0, 10);
+  });
+  const [showMonthPills, setShowMonthPills] = useState(false);
 
   // Custom Order Creation states
   const [coRoseQty, setCoRoseQty] = useState<number>(1);
@@ -793,6 +799,7 @@ function AdminPageContent() {
       });
 
       const data = await res.json();
+      console.log('AI Response:', JSON.stringify(data, null, 2));
       if (!res.ok) {
         const detailText = typeof data?.detail === 'string' ? data.detail : '';
         const trimmedDetail = detailText.length > 500 ? detailText.slice(0, 500) + '...' : detailText;
@@ -803,14 +810,16 @@ function AdminPageContent() {
       }
 
       if (Array.isArray(data?.items) && data.items.length > 0) {
+        console.log('Items from AI:', data.items);
         const normalizedItems = data.items.map((item: any) => ({
           id: crypto?.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random()),
           title: String(item?.title || '').trim(),
           amount: item?.amount !== undefined && item?.amount !== null ? String(item.amount) : '',
           date: String(item?.date || expenseDate),
-          type: 'expense' as const,
-          isThaiPlus: false
+          type: (item?.type === 'income' || item?.type === 'expense') ? item.type as 'income' | 'expense' : 'expense',
+          isThaiPlus: Boolean(item?.isThaiPlus)
         }));
+        console.log('Normalized items:', normalizedItems);
         setExpenseItems(normalizedItems);
       } else {
         if (data?.title) setExpenseTitle(String(data.title));
@@ -818,16 +827,16 @@ function AdminPageContent() {
           setExpenseAmount(String(data.amount));
         }
         if (data?.date) setExpenseDate(String(data.date));
-        setExpenseItems([
-          {
-            id: crypto?.randomUUID ? crypto.randomUUID() : String(Date.now()),
-            title: String(data?.title || ''),
-            amount: data?.amount !== undefined && data?.amount !== null ? String(data.amount) : '',
-            date: String(data?.date || expenseDate),
-            type: 'expense',
-            isThaiPlus: false
-          }
-        ]);
+        const singleItem = {
+          id: crypto?.randomUUID ? crypto.randomUUID() : String(Date.now()),
+          title: String(data?.title || ''),
+          amount: data?.amount !== undefined && data?.amount !== null ? String(data.amount) : '',
+          date: String(data?.date || expenseDate),
+          type: (data?.type === 'income' || data?.type === 'expense') ? data.type as 'income' | 'expense' : 'expense',
+          isThaiPlus: Boolean(data?.isThaiPlus)
+        };
+        console.log('Single item:', singleItem);
+        setExpenseItems([singleItem]);
       }
 
       await (window as any).showBeautifulAlert(`อ่านใบเสร็จสำเร็จ ${receiptDataUrls.length} รูป และกรอกฟอร์มให้อัตโนมัติแล้วค่ะ`, 'success', 'สำเร็จ');
@@ -1370,7 +1379,40 @@ function AdminPageContent() {
     return e.date && e.date.substring(0, 7) === selectedMonth;
   });
 
-  // Calculate monthly stats
+  // Filter orders and expenses based on the selected date for daily view
+  const dailyOrders = orders.filter(o => {
+    let orderDate = '';
+    if (o.createdAt?.toDate) {
+      orderDate = o.createdAt.toDate().toISOString().substring(0, 10);
+    } else if (o.createdAt?.seconds) {
+      orderDate = new Date(o.createdAt.seconds * 1000).toISOString().substring(0, 10);
+    } else if (o.createdAt) {
+      orderDate = new Date(o.createdAt).toISOString().substring(0, 10);
+    }
+    return orderDate === selectedDate;
+  });
+
+  const dailyExpenses = expenses.filter(e => {
+    return e.date && e.date.substring(0, 10) === selectedDate;
+  });
+
+  // Calculate stats based on view mode
+  const currentOrders = financeViewMode === 'daily' ? dailyOrders : monthlyOrders;
+  const currentExpenses = financeViewMode === 'daily' ? dailyExpenses : monthlyExpenses;
+
+  const currentSales = currentOrders
+    .filter(o => o.status !== 'cancelled')
+    .reduce((acc, o) => acc + getOrderRevenue(o), 0) +
+    currentExpenses
+    .filter(e => e.type === 'income')
+    .reduce((acc, e) => acc + (e.amount || 0), 0);
+
+  const currentExpensesTotal = currentExpenses
+    .filter(e => e.type === 'expense')
+    .reduce((acc, e) => acc + (e.amount || 0), 0);
+  const currentNetProfit = currentSales - currentExpensesTotal;
+
+  // Calculate monthly stats for comparison (always use monthly for growth metrics)
   const monthlySales = monthlyOrders
     .filter(o => o.status !== 'cancelled')
     .reduce((acc, o) => acc + getOrderRevenue(o), 0) +
@@ -1394,44 +1436,64 @@ function AdminPageContent() {
   const expensesFinanceGrowth = getGrowthMetrics(monthlyExpensesTotal, previousMonthExpensesFinance);
   const netProfitFinanceGrowth = getGrowthMetrics(monthlyNetProfit, previousMonthNetProfitFinance);
   const previousMonthLabelFinance = previousMonthFinance ? formatMonthThai(previousMonthFinance) : 'เดือนที่แล้ว';
+
+  // Format date for daily view
+  const formatDateThai = (dateStr: string) => {
+    if (!dateStr) return '';
+    const [year, month, day] = dateStr.split('-');
+    const thaiMonths = [
+      'ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.',
+      'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'
+    ];
+    const monthIdx = parseInt(month, 10) - 1;
+    const beYear = parseInt(year, 10) + 543;
+    return `${parseInt(day)} ${thaiMonths[monthIdx]} ${beYear}`;
+  };
+
   const financeCards = [
     {
       key: 'finance-net-profit',
-      label: 'กำไรสุทธิประจำเดือน',
-      value: `${monthlyNetProfit.toLocaleString()} ฿`,
-      detail: `${netProfitFinanceGrowth.detailLabel} ${netProfitFinanceGrowth.formattedPct}% จาก${previousMonthLabelFinance}`,
+      label: financeViewMode === 'daily' ? 'กำไรสุทธิประจำวัน' : 'กำไรสุทธิประจำเดือน',
+      value: `${currentNetProfit.toLocaleString()} ฿`,
+      detail: financeViewMode === 'daily' 
+        ? `วันที่ ${formatDateThai(selectedDate)}`
+        : `${netProfitFinanceGrowth.detailLabel} ${netProfitFinanceGrowth.formattedPct}% จาก${previousMonthLabelFinance}`,
       accent: 'rgb(245, 159, 58)',
       cardClass: 'metric-completed',
-      progressPct: netProfitFinanceGrowth.progressPct,
-      ringLabelPct: netProfitFinanceGrowth.ringLabelPct,
-      ringPrefix: netProfitFinanceGrowth.ringPrefix,
-      detailPrefix: netProfitFinanceGrowth.detailPrefix,
+      progressPct: financeViewMode === 'daily' ? 0 : netProfitFinanceGrowth.progressPct,
+      ringLabelPct: financeViewMode === 'daily' ? 0 : netProfitFinanceGrowth.ringLabelPct,
+      ringPrefix: financeViewMode === 'daily' ? '' : netProfitFinanceGrowth.ringPrefix,
+      detailPrefix: financeViewMode === 'daily' ? '•' : netProfitFinanceGrowth.detailPrefix,
       valueColor: '#1a1a1a',
     },
     {
       key: 'finance-sales',
-      label: 'รายรับประจำเดือน',
-      value: `${monthlySales.toLocaleString()} ฿`,
-      detail: `${salesFinanceGrowth.detailLabel} ${salesFinanceGrowth.formattedPct}% จาก${previousMonthLabelFinance}`,
+      label: financeViewMode === 'daily' ? 'รายรับประจำวัน' : 'รายรับประจำเดือน',
+      value: `${currentSales.toLocaleString()} ฿`,
+      detail: financeViewMode === 'daily'
+        ? `วันที่ ${formatDateThai(selectedDate)}`
+        : `${salesFinanceGrowth.detailLabel} ${salesFinanceGrowth.formattedPct}% จาก${previousMonthLabelFinance}`,
       accent: 'rgb(53, 199, 112)',
       cardClass: 'metric-sales',
-      progressPct: salesFinanceGrowth.progressPct,
-      ringLabelPct: salesFinanceGrowth.ringLabelPct,
-      ringPrefix: salesFinanceGrowth.ringPrefix,
-      detailPrefix: salesFinanceGrowth.detailPrefix,
+      progressPct: financeViewMode === 'daily' ? 0 : salesFinanceGrowth.progressPct,
+      ringLabelPct: financeViewMode === 'daily' ? 0 : salesFinanceGrowth.ringLabelPct,
+      ringPrefix: financeViewMode === 'daily' ? '' : salesFinanceGrowth.ringPrefix,
+      detailPrefix: financeViewMode === 'daily' ? '•' : salesFinanceGrowth.detailPrefix,
       valueColor: '#1a1a1a',
     },
     {
       key: 'finance-expenses',
-      label: 'รายจ่ายจัดซื้อประจำเดือน',
-      value: `${monthlyExpensesTotal.toLocaleString()} ฿`,
-      detail: `${expensesFinanceGrowth.detailLabel} ${expensesFinanceGrowth.formattedPct}% จาก${previousMonthLabelFinance}`,
+      label: financeViewMode === 'daily' ? 'รายจ่ายจัดซื้อประจำวัน' : 'รายจ่ายจัดซื้อประจำเดือน',
+      value: `${currentExpensesTotal.toLocaleString()} ฿`,
+      detail: financeViewMode === 'daily'
+        ? `วันที่ ${formatDateThai(selectedDate)}`
+        : `${expensesFinanceGrowth.detailLabel} ${expensesFinanceGrowth.formattedPct}% จาก${previousMonthLabelFinance}`,
       accent: 'rgb(255, 95, 135)',
       cardClass: 'metric-pending',
-      progressPct: expensesFinanceGrowth.progressPct,
-      ringLabelPct: expensesFinanceGrowth.ringLabelPct,
-      ringPrefix: expensesFinanceGrowth.ringPrefix,
-      detailPrefix: expensesFinanceGrowth.detailPrefix,
+      progressPct: financeViewMode === 'daily' ? 0 : expensesFinanceGrowth.progressPct,
+      ringLabelPct: financeViewMode === 'daily' ? 0 : expensesFinanceGrowth.ringLabelPct,
+      ringPrefix: financeViewMode === 'daily' ? '' : expensesFinanceGrowth.ringPrefix,
+      detailPrefix: financeViewMode === 'daily' ? '•' : expensesFinanceGrowth.detailPrefix,
       valueColor: '#1a1a1a',
     },
   ];
@@ -1444,9 +1506,9 @@ function AdminPageContent() {
     return Number.isFinite(dateTime) ? dateTime : 0;
   };
 
-  // Ledger Items for the selected month
-  const monthlyLedgerItems = [
-    ...monthlyOrders.filter(o => o.status !== 'cancelled').map(o => {
+  // Ledger Items for the selected period (month or day)
+  const currentLedgerItems = [
+    ...currentOrders.filter(o => o.status !== 'cancelled').map(o => {
       let orderDate = '';
       const customerDisplayName = getOrderCustomerDisplayName(o);
       try {
@@ -1471,7 +1533,7 @@ function AdminPageContent() {
         isThaiPlus: false
       };
     }),
-    ...monthlyExpenses.map(e => ({
+    ...currentExpenses.map(e => ({
       id: e.id,
       title: e.title,
       amount: e.amount || 0,
@@ -1483,7 +1545,7 @@ function AdminPageContent() {
     }))
   ].sort((a, b) => getLedgerSortTime(b) - getLedgerSortTime(a));
 
-  const filteredLedgerItems = monthlyLedgerItems.filter((item) => {
+  const filteredLedgerItems = currentLedgerItems.filter((item) => {
     if (ledgerTypeFilter === 'income') return item.type === 'revenue' || item.type === 'income';
     if (ledgerTypeFilter === 'expense') return item.type === 'expense';
     if (ledgerTypeFilter === 'thaiPlus') return item.isThaiPlus;
@@ -3244,16 +3306,31 @@ function AdminPageContent() {
           box-shadow: 0 4px 15px rgba(219, 138, 158, 0.02);
           display: flex;
           flex-direction: column;
-          gap: 12px;
+          gap: 16px;
           margin-bottom: 25px;
         }
 
+        .filter-bar-top {
+          display: flex;
+          flex-direction: row;
+          gap: 12px;
+          align-items: center;
+          justify-content: space-between;
+        }
+
         @media (min-width: 768px) {
-          .monthly-filter-bar {
+          .filter-bar-top {
             flex-direction: row;
             align-items: center;
+            gap: 12px;
             justify-content: space-between;
           }
+        }
+
+        .filter-bar-bottom {
+          display: flex;
+          justify-content: flex-end;
+          align-items: center;
         }
 
         .month-select-label {
@@ -3262,6 +3339,11 @@ function AdminPageContent() {
           color: #5c4738;
           display: flex;
           align-items: center;
+          gap: 8px;
+        }
+
+        .view-mode-buttons {
+          display: flex;
           gap: 8px;
         }
 
@@ -3286,9 +3368,14 @@ function AdminPageContent() {
           background: #fff;
           color: #a08a8e;
           padding: 8px 18px;
-          border-radius: 50px;
+          border-radius: 12px;
           font-weight: 700;
           font-size: 0.88rem;
+          line-height: 1.2;
+          height: 38px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
           cursor: pointer;
           white-space: nowrap;
           transition: all 0.2s ease;
@@ -3298,7 +3385,6 @@ function AdminPageContent() {
           border-color: #db8a9e;
           color: #db8a9e;
           background: #fffafb;
-          transform: translateY(-1px);
         }
 
         .month-pill-btn.active {
@@ -3306,6 +3392,57 @@ function AdminPageContent() {
           background: #db8a9e;
           color: #fff;
           box-shadow: 0 4px 12px rgba(219, 138, 158, 0.25);
+        }
+
+        .view-mode-btn {
+          border: 1.5px solid #f2e2e5;
+          background: #fff;
+          color: #a08a8e;
+          padding: 8px 18px;
+          border-radius: 12px;
+          font-size: 0.88rem;
+          font-weight: 700;
+          line-height: 1.2;
+          height: 38px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          white-space: nowrap;
+        }
+
+        .view-mode-btn:hover {
+          border-color: #db8a9e;
+          color: #db8a9e;
+        }
+
+        .view-mode-btn.active {
+          background: linear-gradient(135deg, #db8a9e 0%, #c77a8e 100%);
+          border-color: #db8a9e;
+          color: #fff;
+          box-shadow: 0 4px 12px rgba(219, 138, 158, 0.25);
+        }
+
+        .daily-date-picker {
+          display: flex;
+          align-items: center;
+        }
+
+        .daily-date-picker .form-input {
+          padding: 8px 12px;
+          border: 1.5px solid #f2e2e5;
+          border-radius: 12px;
+          font-size: 0.85rem;
+          color: #5c4738;
+          background: #fff;
+          cursor: pointer;
+        }
+
+        .daily-date-picker .form-input:focus {
+          outline: none;
+          border-color: #db8a9e;
+          box-shadow: 0 0 0 3px rgba(219, 138, 158, 0.1);
         }
 
         /* Form styling */
@@ -3427,7 +3564,7 @@ function AdminPageContent() {
           color: #db8a9e;
           border: 1.5px solid #f2e2e5;
           padding: 12px;
-          border-radius: 14px;
+          border-radius: 12px;
           font-weight: 700;
           font-size: 0.9rem;
           cursor: pointer;
@@ -3496,7 +3633,7 @@ function AdminPageContent() {
           color: #fff;
           border: none;
           padding: 8px 14px;
-          border-radius: 10px;
+          border-radius: 12px;
           font-weight: 700;
           font-size: 0.82rem;
           cursor: pointer;
@@ -3558,7 +3695,7 @@ function AdminPageContent() {
           color: #e74c3c;
           border: none;
           padding: 6px 12px;
-          border-radius: 10px;
+          border-radius: 12px;
           font-weight: 700;
           font-size: 0.78rem;
           cursor: pointer;
@@ -3691,7 +3828,7 @@ function AdminPageContent() {
           color: #fff;
           border: none;
           padding: 14px;
-          border-radius: 14px;
+          border-radius: 12px;
           font-weight: 700;
           font-size: 0.95rem;
           cursor: pointer;
@@ -3746,7 +3883,7 @@ function AdminPageContent() {
           background: #fff;
           color: #7a6352;
           padding: 10px 14px;
-          border-radius: 999px;
+          border-radius: 12px;
           font-weight: 600;
           cursor: pointer;
           transition: all 0.15s ease;
@@ -4929,19 +5066,58 @@ function AdminPageContent() {
 
             {/* Monthly Filter Bar */}
             <div className="monthly-filter-bar">
-              <div className="month-select-label">
-                <span>เลือกเดือนบัญชีเพื่อดูข้อมูลย้อนหลัง:</span>
-              </div>
-              <div className="month-pill-container">
-                {availableMonths.map(m => (
+              <div className="filter-bar-top">
+                <div className="month-select-label">
+                  <span>เลือกข้อมูล:</span>
+                </div>
+                <div className="view-mode-buttons">
                   <button
-                    key={m}
-                    className={`month-pill-btn ${selectedMonth === m ? 'active' : ''}`}
-                    onClick={() => setSelectedMonth(m)}
+                    type="button"
+                    className={`view-mode-btn ${financeViewMode === 'monthly' ? 'active' : ''}`}
+                    onClick={() => {
+                      setFinanceViewMode('monthly');
+                      setShowMonthPills(true);
+                    }}
                   >
-                    {formatMonthThai(m)}
+                    รายเดือน
                   </button>
-                ))}
+                  <button
+                    type="button"
+                    className={`view-mode-btn ${financeViewMode === 'daily' ? 'active' : ''}`}
+                    onClick={() => {
+                      setFinanceViewMode('daily');
+                      setShowMonthPills(false);
+                    }}
+                  >
+                    รายวัน
+                  </button>
+                </div>
+              </div>
+              <div className="filter-bar-bottom">
+                {financeViewMode === 'monthly' && (
+                  <div className="month-pill-container">
+                    {availableMonths.map(m => (
+                      <button
+                        key={m}
+                        className={`month-pill-btn ${selectedMonth === m ? 'active' : ''}`}
+                        onClick={() => setSelectedMonth(m)}
+                      >
+                        {formatMonthThai(m)}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {financeViewMode === 'daily' && (
+                  <div className="daily-date-picker">
+                    <input
+                      type="date"
+                      className="form-input"
+                      value={selectedDate}
+                      onChange={(e) => setSelectedDate(e.target.value)}
+                      max={new Date().toISOString().substring(0, 10)}
+                    />
+                  </div>
+                )}
               </div>
             </div>
 
@@ -5299,7 +5475,7 @@ function AdminPageContent() {
               {/* Right Side: Ledger Table Ledger */}
               <div className="ledger-card">
                 <h3 className="form-title">
-                  <span style={{ fontSize: '1.2rem' }}></span> สมุดบัญชีรายรับ-รายจ่าย ({formatMonthThai(selectedMonth)})
+                  <span style={{ fontSize: '1.2rem' }}></span> สมุดบัญชีรายรับ-รายจ่าย ({financeViewMode === 'daily' ? formatDateThai(selectedDate) : formatMonthThai(selectedMonth)})
                 </h3>
 
                 <div className="ledger-filter-bar">
@@ -5338,7 +5514,11 @@ function AdminPageContent() {
                     <span style={{ fontSize: '2.5rem' }}>
                       <img src="/images/Empty State Icon.png" alt="Empty State" style={{ width: '120px', height: 'auto', display: 'block', margin: '0 auto' }} />
                     </span>
-                    <p style={{ marginTop: '10px', fontSize: '0.9rem' }}>ยังไม่มีรายการทางการเงินในรอบบัญชีเดือนนี้เลยค่ะ</p>
+                    <p style={{ marginTop: '10px', fontSize: '0.9rem' }}>
+                      {financeViewMode === 'daily' 
+                        ? `ยังไม่มีรายการทางการเงินในวันที่ ${formatDateThai(selectedDate)} เลยค่ะ`
+                        : 'ยังไม่มีรายการทางการเงินในรอบบัญชีเดือนนี้เลยค่ะ'}
+                    </p>
                   </div>
                 ) : (
                   <div className="ledger-table-container">

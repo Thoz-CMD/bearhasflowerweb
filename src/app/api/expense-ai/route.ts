@@ -11,6 +11,8 @@ type ReceiptItem = {
   title: string;
   amount: number;
   date: string;
+  type: 'income' | 'expense';
+  isThaiPlus: boolean;
 };
 
 type ReceiptParseOutcome = {
@@ -103,6 +105,23 @@ const normalizeResult = (raw: unknown): ReceiptParseResult => {
   return { title, amount, date, category };
 };
 
+const normalizeSingleItem = (raw: unknown, fallbackDate: string): ReceiptItem => {
+  const data = (raw && typeof raw === 'object' ? raw : {}) as LooseObject;
+  const title = normalizeTitle(data.title) || 'รายการจากใบเสร็จ';
+  const amount = toNumber(data.amount ?? data.total ?? data.grand_total);
+  const date = normalizeDate(data.date, fallbackDate);
+  const type = (data.type === 'income' || data.type === 'expense') ? data.type as 'income' | 'expense' : 'expense';
+  const isThaiPlus = Boolean(data.isThaiPlus);
+
+  return {
+    title,
+    amount,
+    date,
+    type,
+    isThaiPlus
+  };
+};
+
 const normalizeItems = (rawItems: unknown, fallbackDate: string): ReceiptItem[] => {
   if (!Array.isArray(rawItems)) {
     return [];
@@ -118,11 +137,15 @@ const normalizeItems = (rawItems: unknown, fallbackDate: string): ReceiptItem[] 
       const date = normalizeDate(data.date, fallbackDate);
       const explicitAmount = toNumber(data.amount ?? data.total);
       const amount = explicitAmount > 0 ? explicitAmount : unitPrice * quantity;
+      const type = (data.type === 'income' || data.type === 'expense') ? data.type as 'income' | 'expense' : 'expense';
+      const isThaiPlus = Boolean(data.isThaiPlus);
 
       return {
         title,
         amount,
-        date
+        date,
+        type,
+        isThaiPlus
       };
     })
     .filter((item) => item.title && item.amount > 0);
@@ -210,9 +233,9 @@ const buildPrompt = (today: string) => [
   'You extract expense items from receipt screenshots, shopping cart screenshots, order summaries, and payment slip images.',
   'Return only valid JSON. Do not include markdown fences or explanation text.',
   'If the image shows multiple product rows, output:',
-  '{"items":[{"title":"string","unitPrice":21,"quantity":2,"amount":42,"date":"YYYY-MM-DD"}]}',
+  '{"items":[{"title":"string","unitPrice":21,"quantity":2,"amount":42,"date":"YYYY-MM-DD","type":"expense","isThaiPlus":false}]}',
   'If the image shows only one total, output:',
-  '{"title":"string","amount":99,"date":"YYYY-MM-DD","category":"other"}',
+  '{"title":"string","amount":99,"date":"YYYY-MM-DD","category":"other","type":"expense","isThaiPlus":false"}',
   'Rules:',
   '- For shopping-cart style screenshots, each visible product row is one expense item.',
   '- Read the product-specific Thai description, not the shop name or promotional prefix.',
@@ -221,10 +244,38 @@ const buildPrompt = (today: string) => [
   '- Examples of good titles: "เกสรสีขาว 2 มม. 300 ชิ้น", "สีเขียวกองทัพอ่อน-100pcs", "สีเหลืองเข้ม-100pcs", "สีเหลืองไข่ตุ๋น".',
   '- Read the price from the right side of each row, for example "฿21.00".',
   '- Read quantity from markers like "x1", "x2".',
-  '- `amount` must equal `unitPrice * quantity` for each item, not the page total.',
+  '- amount must equal unitPrice * quantity for each item, not the page total.',
   '- If a row has unit price 21 and quantity x2, the item amount must be 42.',
   `- If no date is visible, use "${today}".`,
-  `- Allowed categories: ${ALLOWED_CATEGORIES.join(', ')}.`
+  `- Allowed categories: ${ALLOWED_CATEGORIES.join(', ')}.`,
+  '',
+  'CRITICAL: DETERMINE TRANSACTION TYPE BY COLUMN POSITION AND COLOR:',
+  '',
+  'The image shows a table with colored columns. You MUST identify which column the amount belongs to:',
+  '',
+  'STEP 1: Look at the table structure. Identify ALL colored columns.',
+  'STEP 2: For each row, find the cell containing the amount/number.',
+  'STEP 3: Determine which COLUMN that cell is in.',
+  'STEP 4: Check the COLOR of that COLUMN (not just the cell, the entire column header/background).',
+  '',
+  'COLUMN COLOR RULES:',
+  '- If the amount is in a GREEN column (green header, green background, or green-tinted column) → "type":"income"',
+  '- If the amount is in a RED column (red header, red background, or red-tinted column) → "type":"expense"',
+  '- If the amount is in a WHITE/NEUTRAL column → "type":"expense" (default)',
+  '',
+  'STEP 5: Check the LAST COLUMN (rightmost column) for ThaiPlus:',
+  '- If the last column has BLUE color (blue header, blue background, or blue-tinted) → "isThaiPlus":true',
+  '- Otherwise → "isThaiPlus":false',
+  '',
+  'VISUAL EXAMPLES:',
+  'If you see a table with GREEN column on left and RED column on right:',
+  '- Amount in GREEN column → type:income',
+  '- Amount in RED column → type:expense',
+  '',
+  'If you see BLUE checkmarks or blue color in the last column:',
+  '- That row has isThaiPlus:true',
+  '',
+  'PAY ATTENTION: Look at the ENTIRE COLUMN color, not just individual cells. The column color determines the transaction type.'
 ].join('\n');
 
 const requestGemini = async (
@@ -256,7 +307,7 @@ const requestGemini = async (
           }
         ],
         generationConfig: {
-          temperature: 0.1,
+          temperature: 0.3,
           responseMimeType: 'application/json'
         }
       })
@@ -373,11 +424,7 @@ export async function POST(req: Request) {
     if (aggregatedItems.length > 0) {
       const singleItems = singles
         .filter((item) => item.title && item.amount > 0)
-        .map((item) => ({
-          title: item.title,
-          amount: item.amount,
-          date: item.date
-        }));
+        .map((item) => normalizeSingleItem(item, today));
 
       return NextResponse.json({ items: [...aggregatedItems, ...singleItems] });
     }
@@ -386,16 +433,19 @@ export async function POST(req: Request) {
       return NextResponse.json({
         items: singles
           .filter((item) => item.title && item.amount > 0)
-          .map((item) => ({
-            title: item.title,
-            amount: item.amount,
-            date: item.date
-          }))
+          .map((item) => normalizeSingleItem(item, today))
       });
     }
 
     if (singles[0]) {
-      return NextResponse.json(singles[0]);
+      const singleItem = normalizeSingleItem(singles[0], today);
+      return NextResponse.json({
+        title: singleItem.title,
+        amount: singleItem.amount,
+        date: singleItem.date,
+        type: singleItem.type,
+        isThaiPlus: singleItem.isThaiPlus
+      });
     }
 
     return NextResponse.json({ error: 'ไม่พบข้อมูลรายการในรูปภาพที่ส่งมา' }, { status: 500 });
