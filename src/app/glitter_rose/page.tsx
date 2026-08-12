@@ -5,6 +5,7 @@ import { usePresetProduct } from '@/hooks/usePresetProduct';
 import { ToastProvider, useToast } from '@/components/Toast';
 import dynamic from 'next/dynamic';
 import GreetingCardAI from '@/components/GreetingCardAI';
+import { getMinDateTimeFromBadge, getDeliveryTimeText, formatMinDeliveryDateTime } from '@/components/DateTimePicker';
 
 const DateTimePicker = dynamic(() => import('@/components/DateTimePicker'), { ssr: false });
 
@@ -623,6 +624,19 @@ function GlitterRoseContent() {
 
   const minDelivery = getMinDeliveryStr(state.selectedQty);
   const tomorrowStr = getTomorrowStr();
+  const minDateTime = useMemo(() => {
+    if (presetProduct?.badge) {
+      return getMinDateTimeFromBadge(presetProduct.badge);
+    }
+    return undefined;
+  }, [presetProduct?.badge]);
+
+  const deliveryHelperText = useMemo(() => {
+    if (!presetProduct?.badge) return '';
+    const deliveryTime = getDeliveryTimeText(presetProduct.badge);
+    const minDateTimeStr = minDateTime ? formatMinDeliveryDateTime(minDateTime) : '';
+    return `เลือกวันที่และเวลาจัดส่งตามต้องการได้เลยค่ะ แต่หากต้องการรับสินค้าเร็วที่สุด ช่อนี้ขอเวลาทำ ${deliveryTime} นะคะ ลูกค้าสามารถรับสินค้าได้เร็วที่สุดตั้งแต่${minDateTimeStr} โดยประมาณ หรืออาจเร็วกว่านั้น สามารถติดตามสถานะการจัดดอกไม้ได้ที่หน้า ประวัติการสั่งซื้อ หรือทักมาสอบถามในไลน์ @145dmmit ได้เลยนะคะ`;
+  }, [presetProduct?.badge, minDateTime]);
   const initialMinTime = state.deliveryDate === tomorrowStr ? '09:00' : '00:00';
 
   return (
@@ -966,6 +980,7 @@ function GlitterRoseContent() {
                     value={state.deliveryDate && state.deliveryTime ? `${state.deliveryDate} ${state.deliveryTime}` : undefined}
                     minDate={minDelivery}
                     minTime={initialMinTime}
+                    minDateTime={minDateTime}
                     onChange={handleDateChange}
                     style={{ width: '100%', background: 'var(--glass-bg)', border: '1px solid var(--glass-border)', padding: '12px', borderRadius: '12px', color: 'var(--text-color)', fontSize: '16px' }}
                   />
@@ -976,6 +991,11 @@ function GlitterRoseContent() {
                         : '* กรุณาสั่งล่วงหน้าอย่างน้อย 1 วัน'
                     )}
                   </span>
+                  {deliveryHelperText && (
+                    <span style={{ fontSize: '.75rem', color: 'var(--mid-brown)', marginTop: '6px', display: 'block', lineHeight: '1.4' }}>
+                      {deliveryHelperText}
+                    </span>
+                  )}
                 </div>
                 
                 <div className="form-group">

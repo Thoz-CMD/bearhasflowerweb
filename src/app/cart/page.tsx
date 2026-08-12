@@ -310,6 +310,11 @@ export default function CartPage() {
       localStorage.setItem('editing_cart_id', item.id);
       const presetId = item.config?.presetId || item.presetId;
       window.location.href = presetId ? `/velvet_wire?edit=true&preset=${presetId}` : '/velvet_wire?edit=true';
+    } else if (item.type === 'artificial_flowers' && item.config) {
+      localStorage.setItem('bear_flower_artificial_v1', JSON.stringify(item.config));
+      localStorage.setItem('editing_cart_id', item.id);
+      const presetId = item.config?.presetId || item.presetId;
+      window.location.href = presetId ? `/artificial_flowers?edit=true&preset=${presetId}` : '/artificial_flowers?edit=true';
     }
   };
 

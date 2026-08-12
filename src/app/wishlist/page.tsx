@@ -180,13 +180,14 @@ export default function Wishlist() {
           let meta = PRODUCTS_REGISTRY[key];
           if (dbProd) {
             const isVelvet = dbProd.type === 'velvet_flower' || (dbProd.name && dbProd.name.includes('กำมะหยี่')) || (dbProd.description && dbProd.description.includes('กำมะหยี่'));
+            const isArtificial = dbProd.type === 'artificial_flowers';
             meta = {
               emoji: '🌹',
               badge: dbProd.badge || 'แนะนำ',
               name: dbProd.name,
               desc: dbProd.description || 'สินค้าหมีมีดอกไม้คัดสรรพิเศษเพื่อคุณ',
               price: dbProd.price !== undefined ? dbProd.price.toLocaleString() : '—',
-              link: isVelvet ? '/velvet_wire?preset=' + dbProd.id : '/glitter_rose?preset=' + dbProd.id,
+              link: isArtificial ? '/artificial_flowers?preset=' + dbProd.id : (isVelvet ? '/velvet_wire?preset=' + dbProd.id : '/glitter_rose?preset=' + dbProd.id),
               coverImage: dbProd.coverImage || null
             };
           }

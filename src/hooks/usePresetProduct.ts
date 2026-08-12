@@ -12,6 +12,7 @@ export interface PresetProduct {
   readyToShip?: boolean;
   stockQuantity?: number;
   config?: Record<string, any>;
+  Artificial_flowers?: boolean;
   [key: string]: any;
 }
 

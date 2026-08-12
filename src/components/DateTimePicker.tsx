@@ -10,6 +10,7 @@ interface DateTimePickerProps {
   value?: string;
   minDate?: string | Date;
   minTime?: string;
+  minDateTime?: string;
   onChange?: (dateStr: string, timeStr: string) => void;
   style?: React.CSSProperties;
 }
@@ -25,6 +26,7 @@ export default function DateTimePicker({
   value,
   minDate,
   minTime,
+  minDateTime,
   onChange,
   style,
 }: DateTimePickerProps) {
@@ -66,10 +68,16 @@ export default function DateTimePicker({
     const computedMinDate = minDate || getTomorrowStr();
     const tomorrowStr = getTomorrowStr();
 
+    // Calculate minDateTime if provided
+    let minDateTimeObj: Date | undefined;
+    if (minDateTime) {
+      minDateTimeObj = new Date(minDateTime);
+    }
+
     fpRef.current = flatpickr(inputRef.current, {
       enableTime: true,
       dateFormat: 'Y-m-d H:i',
-      minDate: computedMinDate,
+      minDate: minDateTimeObj || computedMinDate,
       minTime: minTime || '00:00',
       time_24hr: true,
       locale: Thai,
@@ -93,7 +101,30 @@ export default function DateTimePicker({
             '-' +
             String(d.getDate()).padStart(2, '0');
 
-          if (dStr === tomorrowStr) {
+          // If minDateTime is set, use it for minTime calculation
+          if (minDateTimeObj) {
+            const minDStr =
+              minDateTimeObj.getFullYear() +
+              '-' +
+              String(minDateTimeObj.getMonth() + 1).padStart(2, '0') +
+              '-' +
+              String(minDateTimeObj.getDate()).padStart(2, '0');
+            const minTStr =
+              String(minDateTimeObj.getHours()).padStart(2, '0') +
+              ':' +
+              String(minDateTimeObj.getMinutes()).padStart(2, '0');
+
+            if (dStr === minDStr) {
+              instance.set('minTime', minTStr);
+              if (d.getHours() < minDateTimeObj.getHours() || 
+                  (d.getHours() === minDateTimeObj.getHours() && d.getMinutes() < minDateTimeObj.getMinutes())) {
+                d.setHours(minDateTimeObj.getHours(), minDateTimeObj.getMinutes(), 0, 0);
+                instance.setDate(d, false);
+              }
+            } else if (dStr > minDStr) {
+              instance.set('minTime', '00:00');
+            }
+          } else if (dStr === tomorrowStr) {
             instance.set('minTime', '09:00');
             if (d.getHours() < 9) {
               d.setHours(9, 0, 0, 0);
@@ -125,7 +156,7 @@ export default function DateTimePicker({
       fpRef.current?.destroy();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [minDate, minTime]);
+  }, [minDate, minTime, minDateTime]);
 
   return (
     <>
@@ -151,6 +182,67 @@ function getTomorrowStr(): string {
   const d = new Date();
   d.setDate(d.getDate() + 1);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/**
+ * Parse delivery badge and calculate minimum delivery datetime
+ * @param badge - Delivery badge string (e.g., "ส่งใน 1 ชั่วโมง", "ส่งใน 1 วัน")
+ * @returns ISO string of minimum delivery datetime
+ */
+export function getMinDateTimeFromBadge(badge: string): string {
+  const now = new Date();
+  
+  // Parse hours
+  const hourMatch = badge.match(/(\d+)\s*ชั่วโมง/);
+  if (hourMatch) {
+    const hours = parseInt(hourMatch[1], 10);
+    now.setHours(now.getHours() + hours);
+    return now.toISOString();
+  }
+  
+  // Parse days
+  const dayMatch = badge.match(/(\d+)\s*วัน/);
+  if (dayMatch) {
+    const days = parseInt(dayMatch[1], 10);
+    now.setDate(now.getDate() + days);
+    return now.toISOString();
+  }
+  
+  // Default to tomorrow if no match
+  now.setDate(now.getDate() + 1);
+  return now.toISOString();
+}
+
+/**
+ * Extract delivery time text from badge for display
+ * @param badge - Delivery badge string (e.g., "ส่งใน 1 ชั่วโมง", "ส่งใน 1 วัน")
+ * @returns Formatted time text (e.g., "1 ชั่วโมง", "1 วัน")
+ */
+export function getDeliveryTimeText(badge: string): string {
+  const hourMatch = badge.match(/(\d+)\s*ชั่วโมง/);
+  if (hourMatch) {
+    return `${hourMatch[1]} ชั่วโมง`;
+  }
+  
+  const dayMatch = badge.match(/(\d+)\s*วัน/);
+  if (dayMatch) {
+    return `${dayMatch[1]} วัน`;
+  }
+  
+  return badge;
+}
+
+/**
+ * Format minimum delivery datetime for display
+ * @param minDateTime - ISO string of minimum delivery datetime
+ * @returns Formatted datetime string (e.g., "วันที่ 12 เวลา 23:00")
+ */
+export function formatMinDeliveryDateTime(minDateTime: string): string {
+  const date = new Date(minDateTime);
+  const day = date.getDate();
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  return `วันที่ ${day} เวลา ${hours}:${minutes}`;
 }
 
 /**

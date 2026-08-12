@@ -495,7 +495,8 @@ export default function Home() {
           adminCache[p.id] = p;
 
           const isVelvet = productType === 'velvet';
-          const targetUrl = isVelvet ? '/velvet_wire?preset=' + p.id : '/glitter_rose?preset=' + p.id;
+          const isArtificial = p.type === 'artificial_flowers';
+          const targetUrl = isArtificial ? '/artificial_flowers?preset=' + p.id : (isVelvet ? '/velvet_wire?preset=' + p.id : '/glitter_rose?preset=' + p.id);
           const isReadyToShip = Boolean(p.readyToShip);
           const stockQuantity = Number(p.stockQuantity || 0);
           const hasReadyStock = isReadyToShip && stockQuantity > 0;

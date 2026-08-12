@@ -10,7 +10,7 @@ import { getMinDateTimeFromBadge, getDeliveryTimeText, formatMinDeliveryDateTime
 // Dynamic import DateTimePicker เพื่อหลีกเลี่ยง SSR issues กับ flatpickr
 const DateTimePicker = dynamic(() => import('@/components/DateTimePicker'), { ssr: false });
 
-const STORAGE_KEY = 'bear_flower_velvet_v1';
+const STORAGE_KEY = 'bear_flower_artificial_v1';
 const CART_KEY = 'bear_flower_cart';
 
 const MESSAGE_CARD_VARIANTS = [
@@ -23,7 +23,7 @@ const MESSAGE_CARD_VARIANTS = [
   { id: 'congratulation', label: 'CONGRATULATION' },
 ];
 
-interface VelvetState {
+interface ArtificialState {
   customerName: string;
   customerPhone: string;
   customerAddress: string;
@@ -34,9 +34,11 @@ interface VelvetState {
   selectedCard: string | null;
   selectedMessageCardVariant: string | null;
   selectedStick: boolean;
+  selectedDiamondFlower: boolean;
+  selectedDiamondLetter: boolean;
 }
 
-const initialState: VelvetState = {
+const initialState: ArtificialState = {
   customerName: '',
   customerPhone: '',
   customerAddress: '',
@@ -47,14 +49,16 @@ const initialState: VelvetState = {
   selectedCard: null,
   selectedMessageCardVariant: null,
   selectedStick: false,
+  selectedDiamondFlower: false,
+  selectedDiamondLetter: false,
 };
 
-function VelvetWireContent() {
+function ArtificialFlowersContent() {
   const router = useRouter();
   const { showToast } = useToast();
   const { presetProduct, isLoading, error } = usePresetProduct();
 
-  const [state, setState] = useState<VelvetState>(initialState);
+  const [state, setState] = useState<ArtificialState>(initialState);
   const [isHydrated, setIsHydrated] = useState(false);
   const [openDecorationDropdown, setOpenDecorationDropdown] = useState<string | null>(null);
 
@@ -77,6 +81,8 @@ function VelvetWireContent() {
           selectedCard: s.selectedCard || null,
           selectedMessageCardVariant: s.selectedMessageCardVariant || null,
           selectedStick: s.selectedStick || false,
+          selectedDiamondFlower: s.selectedDiamondFlower || false,
+          selectedDiamondLetter: s.selectedDiamondLetter || false,
         });
       }
     } catch (err) {
@@ -150,7 +156,7 @@ function VelvetWireContent() {
     }
   }, [state.deliveryDate]);
 
-  const updateField = useCallback((field: keyof VelvetState, value: string) => {
+  const updateField = useCallback((field: keyof ArtificialState, value: string) => {
     setState(prev => ({ ...prev, [field]: value }));
   }, []);
 
@@ -176,6 +182,14 @@ function VelvetWireContent() {
 
   const handleStickSelect = useCallback(() => {
     setState(prev => ({ ...prev, selectedStick: !prev.selectedStick }));
+  }, []);
+
+  const handleDiamondFlowerSelect = useCallback(() => {
+    setState(prev => ({ ...prev, selectedDiamondFlower: !prev.selectedDiamondFlower }));
+  }, []);
+
+  const handleDiamondLetterSelect = useCallback(() => {
+    setState(prev => ({ ...prev, selectedDiamondLetter: !prev.selectedDiamondLetter }));
   }, []);
 
   const handleMessageCardVariantSelect = useCallback((variantId: string) => {
@@ -227,12 +241,12 @@ function VelvetWireContent() {
 
     const editingId = typeof window !== 'undefined' ? window.localStorage.getItem('editing_cart_id') : null;
     const customItem = {
-      id: editingId || 'vw_' + Date.now(),
-      type: 'velvet_flower',
+      id: editingId || 'af_' + Date.now(),
+      type: 'artificial_flowers',
       name: presetProduct.name,
       price: totalPrice,
       qty: 1,
-      details: presetProduct.description || 'ดอกไม้ลวดกำมะหยี่',
+      details: presetProduct.description || 'ดอกไม้ประดิษฐ์',
       coverImage: presetProduct.coverImage,
       presetId: presetProduct.id,
       readyToShip: isPresetReadyToShip,
@@ -248,6 +262,8 @@ function VelvetWireContent() {
         selectedCard: state.selectedCard,
         selectedMessageCardVariant: state.selectedMessageCardVariant,
         selectedStick: state.selectedStick,
+        selectedDiamondFlower: state.selectedDiamondFlower,
+        selectedDiamondLetter: state.selectedDiamondLetter,
       },
     };
 
@@ -334,8 +350,8 @@ function VelvetWireContent() {
       <div className="page-wrap">
         {/* Heading */}
         <div className="page-heading">
-          <h1>&quot;Velvet Wire&quot;</h1>
-          <p className="subtitle">ออกแบบดอกไม้ลวดกำมะหยี่ของคุณ</p>
+          <h1>&quot;Artificial Flower&quot;</h1>
+          <p className="subtitle">ออกแบบดอกไม้ประดิษฐ์ของคุณ</p>
         </div>
 
         {/* Order Summary */}
@@ -526,6 +542,28 @@ function VelvetWireContent() {
                   <span className="color-name" style={{ textTransform: 'none', fontSize: '.8rem', marginBottom: '4px' }}>ก้านเสียบ</span>
                   <span style={{ fontSize: '.7rem', fontWeight: 700, color: 'var(--rose-gold)', background: 'rgba(201,149,107,0.1)', padding: '2px 10px', borderRadius: '12px', letterSpacing: '.02em' }}>+5 ฿</span>
                 </div>
+
+                <div
+                  className={`color-card decor-card ${state.selectedDiamondFlower ? 'selected' : ''}`}
+                  onClick={handleDiamondFlowerSelect}
+                >
+                  <div className="color-swatch" style={{ overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--warm-white)', border: '1px solid var(--glass-border)' }}>
+                    <img src="/images/ติดเพชรดอกไม้.png" alt="ติดเพชรดอกไม้" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />
+                  </div>
+                  <span className="color-name" style={{ textTransform: 'none', fontSize: '.8rem', marginBottom: '4px' }}>ติดเพชรดอกไม้</span>
+                  <span style={{ fontSize: '.7rem', fontWeight: 700, color: '#4caf50', background: '#e8f5e9', padding: '2px 10px', borderRadius: '12px', letterSpacing: '.02em' }}>ฟรี</span>
+                </div>
+
+                <div
+                  className={`color-card decor-card ${state.selectedDiamondLetter ? 'selected' : ''}`}
+                  onClick={handleDiamondLetterSelect}
+                >
+                  <div className="color-swatch" style={{ overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--warm-white)', border: '1px solid var(--glass-border)' }}>
+                    <img src="/images/ติดเพชรตัวอักษร.png" alt="ติดเพชรตัวอักษร" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />
+                  </div>
+                  <span className="color-name" style={{ textTransform: 'none', fontSize: '.8rem', marginBottom: '4px' }}>ติดเพชรตัวอักษร</span>
+                  <span style={{ fontSize: '.7rem', fontWeight: 700, color: '#4caf50', background: '#e8f5e9', padding: '2px 10px', borderRadius: '12px', letterSpacing: '.02em' }}>ฟรี</span>
+                </div>
               </div>
             </div>
 
@@ -561,10 +599,10 @@ function VelvetWireContent() {
 }
 
 // Wrapper with Toast provider
-export default function VelvetWire() {
+export default function ArtificialFlowers() {
   return (
     <ToastProvider>
-      <VelvetWireContent />
+      <ArtificialFlowersContent />
     </ToastProvider>
   );
 }

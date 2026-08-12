@@ -5,7 +5,7 @@ type ProductTypeRouteParams = {
   productType: string;
 };
 
-const productTypes = ['glitter_rose', 'velvet_flower'] as const;
+const productTypes = ['glitter_rose', 'velvet_flower', 'artificial_flowers'] as const;
 
 type ProductStudioType = (typeof productTypes)[number];
 

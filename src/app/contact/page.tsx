@@ -39,7 +39,7 @@ export default function ContactPage() {
               <div className="contact-icon-box">📞</div>
               <div className="contact-text">
                 <h3>Phone</h3>
-                <p>06-2272-0348<br />(จันทร์ - อาทิตย์: 09:00 - 20:00)</p>
+                <p>06-2272-0348<br />06-5614-4703<br />(จันทร์ - อาทิตย์: 09:00 - 20:00)</p>
               </div>
             </div>
 
@@ -47,7 +47,7 @@ export default function ContactPage() {
               <div className="contact-icon-box">✉️</div>
               <div className="contact-text">
                 <h3>Email & Line</h3>
-                <p>bearhasflower@gmail.com<br />Line: @bearhasflower</p>
+                <p>bearhasflower@gmail.com<br />Line: @145dmmit</p>
               </div>
             </div>
 

@@ -10,7 +10,7 @@ type ProductStudioPageProps = {
   initialProductType?: ProductStudioType;
 };
 
-type ProductStudioType = 'glitter_rose' | 'velvet_flower';
+type ProductStudioType = 'glitter_rose' | 'velvet_flower' | 'artificial_flowers';
 
 export function ProductStudioPage({ forceManageMode = false, initialProductType }: ProductStudioPageProps) {
   const EDIT_KEY = 'bear_flower_edit_product';
@@ -38,7 +38,11 @@ export function ProductStudioPage({ forceManageMode = false, initialProductType 
       return 'velvet_flower';
     }
 
+    if (product.Artificial_flowers) return 'artificial_flowers';
+    if (searchableText.includes('ประดิษฐ์') || searchableText.includes('artificial')) return 'artificial_flowers';
+
     if (product.type === 'velvet_flower' || product.productType === 'velvet_flower') return 'velvet_flower';
+    if (product.type === 'artificial_flowers' || product.productType === 'artificial_flowers') return 'artificial_flowers';
     if (product.type === 'glitter_rose' || product.productType === 'glitter_rose') return 'glitter_rose';
 
     return 'glitter_rose';
@@ -55,8 +59,8 @@ export function ProductStudioPage({ forceManageMode = false, initialProductType 
     const isEditQuery = params.get('edit') === 'true';
     if (!isEditQuery) return null;
 
-    if (queryType === 'velvet_flower' || queryType === 'glitter_rose') return queryType;
-    if (storedType === 'velvet_flower' || storedType === 'glitter_rose') return storedType;
+    if (queryType === 'velvet_flower' || queryType === 'glitter_rose' || queryType === 'artificial_flowers') return queryType;
+    if (storedType === 'velvet_flower' || storedType === 'glitter_rose' || storedType === 'artificial_flowers') return storedType;
 
     if (editRaw) {
       try {
@@ -277,7 +281,7 @@ export function ProductStudioPage({ forceManageMode = false, initialProductType 
 
   // Main interactive logic is loaded when option is selected
   useEffect(() => {
-    if (isAdminUser !== true || (selectedType !== 'glitter_rose' && selectedType !== 'velvet_flower') || viewMode !== 'form') return;
+    if (isAdminUser !== true || (selectedType !== 'glitter_rose' && selectedType !== 'velvet_flower' && selectedType !== 'artificial_flowers') || viewMode !== 'form') return;
 
     const script = document.createElement('script');
     script.innerHTML = `
@@ -387,9 +391,12 @@ export function ProductStudioPage({ forceManageMode = false, initialProductType 
 
       // Product fields
       const DELIVERY_BADGE_OPTIONS = [
+        'ส่งใน 1 ชั่วโมง',
+        'ส่งใน 2 ชั่วโมง',
+        'ส่งใน 3 ชั่วโมง',
+        'ส่งใน 4 ชั่วโมง',
         'ส่งใน 1 วัน',
-        'ส่งใน 2 วัน',
-        'ส่งใน 3 วัน',
+        'ส่งใน 4 วัน',
       ];
       let productName = '';
       let productDesc = '';
@@ -398,6 +405,7 @@ export function ProductStudioPage({ forceManageMode = false, initialProductType 
       let productCoverImage = ''; // Base64 data URL
       let productReadyToShip = false;
       let productStockQuantity = '';
+      let productArtificialFlowers = false;
 
       let editingProductId = null;
       const EDIT_KEY = 'bear_flower_edit_product';
@@ -479,7 +487,7 @@ export function ProductStudioPage({ forceManageMode = false, initialProductType 
           current, maxStepReached, selectedQty, selectedColors, selectedLayers, selectedPaper,
           selectedShape, selectedDecorations, selectedRibbonJfyClearVariant, selectedRibbonJfySolidVariant, selectedMessageCardVariant, basePrice,
           productName, productDesc, productBadge, productPrice, productCoverImage,
-          productReadyToShip, productStockQuantity
+          productReadyToShip, productStockQuantity, productArtificialFlowers
         };
         localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
       }
@@ -501,6 +509,7 @@ export function ProductStudioPage({ forceManageMode = false, initialProductType 
             productCoverImage = p.coverImage || '';
             productReadyToShip = Boolean(p.readyToShip);
             productStockQuantity = p.stockQuantity !== undefined ? String(p.stockQuantity) : '';
+            productArtificialFlowers = Boolean(p.Artificial_flowers);
 
             const cfg = p.config || {};
             selectedQty = cfg.selectedQty || null;
@@ -513,8 +522,8 @@ export function ProductStudioPage({ forceManageMode = false, initialProductType 
             selectedRibbonJfySolidVariant = cfg.selectedRibbonJfySolidVariant || null;
             selectedMessageCardVariant = cfg.selectedMessageCardVariant || null;
             basePrice = cfg.basePrice || 0;
-            current = PRODUCT_TYPE === 'velvet_flower' ? 4 : 0;
-            maxStepReached = PRODUCT_TYPE === 'velvet_flower' ? 4 : 4;
+            current = PRODUCT_TYPE === 'velvet_flower' || PRODUCT_TYPE === 'artificial_flowers' ? 4 : 0;
+            maxStepReached = PRODUCT_TYPE === 'velvet_flower' || PRODUCT_TYPE === 'artificial_flowers' ? 4 : 4;
             saveState();
           } catch (err) {
             console.error('Failed to parse edit product', err);
@@ -548,9 +557,15 @@ export function ProductStudioPage({ forceManageMode = false, initialProductType 
             productCoverImage = s.productCoverImage || '';
             productReadyToShip = Boolean(s.productReadyToShip);
             productStockQuantity = s.productStockQuantity || '';
+            productArtificialFlowers = Boolean(s.productArtificialFlowers);
           } catch (err) { console.error('Failed to parse saved state', err); }
         } else {
           resetForm();
+        }
+
+        // Set productArtificialFlowers to true for artificial_flowers type if not explicitly set
+        if (PRODUCT_TYPE === 'artificial_flowers' && !productArtificialFlowers) {
+          productArtificialFlowers = true;
         }
         updateTotalPrice();
         updateStep1Summary();
@@ -561,8 +576,8 @@ export function ProductStudioPage({ forceManageMode = false, initialProductType 
       }
 
       function resetForm() {
-        current = PRODUCT_TYPE === 'velvet_flower' ? 4 : 0;
-        maxStepReached = PRODUCT_TYPE === 'velvet_flower' ? 4 : 0;
+        current = PRODUCT_TYPE === 'velvet_flower' || PRODUCT_TYPE === 'artificial_flowers' ? 4 : 0;
+        maxStepReached = PRODUCT_TYPE === 'velvet_flower' || PRODUCT_TYPE === 'artificial_flowers' ? 4 : 0;
         selectedQty = null;
         selectedColors = [];
         selectedLayers = [];
@@ -580,6 +595,7 @@ export function ProductStudioPage({ forceManageMode = false, initialProductType 
         productCoverImage = '';
         productReadyToShip = false;
         productStockQuantity = '';
+        productArtificialFlowers = PRODUCT_TYPE === 'artificial_flowers';
         editingProductId = null;
         sessionStorage.removeItem(EDIT_ID_KEY);
         sessionStorage.removeItem(EDIT_KEY);
@@ -1260,8 +1276,8 @@ export function ProductStudioPage({ forceManageMode = false, initialProductType 
               <div style="border: 1px solid rgba(219,138,158,0.22); background: linear-gradient(180deg, rgba(255,255,255,0.86), rgba(255,250,251,0.78)); border-radius: 18px; padding: 14px; box-shadow: 0 8px 24px rgba(80,50,57,0.05);">
                 <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px;">
                   \${DELIVERY_BADGE_OPTIONS.map((option, index) => \`
-                    <button type="button" data-delivery-badge="\${option}" onclick="selectDeliveryBadge('\${option}')" class="badge-choice \${!productReadyToShip && getResolvedProductBadge() === option ? 'selected' : ''}" style="border: 1px solid \${!productReadyToShip && getResolvedProductBadge() === option ? 'var(--rose-gold)' : 'var(--glass-border)'}; background: \${!productReadyToShip && getResolvedProductBadge() === option ? 'rgba(219,138,158,0.13)' : '#fff'}; color: var(--deep-brown); border-radius: 12px; padding: 11px 10px; min-height: 48px; font-size: 0.88rem; font-weight: 700; cursor: \${productReadyToShip ? 'default' : 'pointer'}; box-shadow: \${!productReadyToShip && getResolvedProductBadge() === option ? '0 8px 18px rgba(219,138,158,0.14)' : 'none'}; transition: all 0.18s ease;">
-                      <span style="display: block; color: var(--rose-gold); font-size: 0.72rem; margin-bottom: 3px;">ตัวเลือก \${index + 1}</span>
+                    <button type="button" data-delivery-badge="\${option}" onclick="selectDeliveryBadge('\${option}')" class="badge-choice \${!productReadyToShip && getResolvedProductBadge() === option ? 'selected' : ''}" style="border: 1px solid \${!productReadyToShip && getResolvedProductBadge() === option ? 'var(--rose-gold)' : 'var(--glass-border)'}; background: \${!productReadyToShip && getResolvedProductBadge() === option ? 'rgba(219,138,158,0.13)' : '#fff'}; color: var(--deep-brown); border-radius: 12px; padding: 10px 8px; min-height: 52px; font-size: 0.82rem; font-weight: 700; cursor: \${productReadyToShip ? 'default' : 'pointer'}; box-shadow: \${!productReadyToShip && getResolvedProductBadge() === option ? '0 8px 18px rgba(219,138,158,0.14)' : 'none'}; transition: all 0.18s ease;">
+                      <span style="display: block; color: var(--rose-gold); font-size: 0.68rem; margin-bottom: 2px;">ตัวเลือก \${index + 1}</span>
                       \${option}
                     </button>
                   \`).join('')}
@@ -1462,7 +1478,7 @@ export function ProductStudioPage({ forceManageMode = false, initialProductType 
 
           const productData = {
             name: productName.trim(),
-            description: productDesc.trim() || (PRODUCT_TYPE === 'velvet_flower' ? 'ดอกไม้ลวดกำมะหยี่สั่งทำพิเศษตามแบบ' : 'ช่อกุหลาบกลิตเตอร์สั่งทำพิเศษตามแบบ'),
+            description: productDesc.trim() || (PRODUCT_TYPE === 'velvet_flower' ? 'ดอกไม้ลวดกำมะหยี่สั่งทำพิเศษตามแบบ' : PRODUCT_TYPE === 'artificial_flowers' ? 'ดอกไม้ประดิษฐ์สั่งทำพิเศษตามแบบ' : 'ช่อกุหลาบกลิตเตอร์สั่งทำพิเศษตามแบบ'),
             price: parseFloat(productPrice),
             badge: getResolvedProductBadge(),
             coverImage: productCoverImage,
@@ -1470,6 +1486,7 @@ export function ProductStudioPage({ forceManageMode = false, initialProductType 
             readyToShip: productReadyToShip,
             stockQuantity: productReadyToShip ? parseInt(productStockQuantity, 10) : 0,
             soldOut: productReadyToShip ? parseInt(productStockQuantity, 10) <= 0 : false,
+            Artificial_flowers: productArtificialFlowers,
             config: {
               selectedQty,
               selectedColors,
@@ -1750,7 +1767,7 @@ export function ProductStudioPage({ forceManageMode = false, initialProductType 
         }
 
         .option-select-screen {
-          max-width: 800px;
+          max-width: 1400px;
           margin: 60px auto;
           padding: 0 20px;
           text-align: center;
@@ -1767,8 +1784,8 @@ export function ProductStudioPage({ forceManageMode = false, initialProductType 
         }
         .options-grid {
           display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 25px;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 30px;
           margin-top: 20px;
         }
         @media (max-width: 600px) {
@@ -2115,6 +2132,17 @@ export function ProductStudioPage({ forceManageMode = false, initialProductType 
                   <p>สร้างสินค้ากลุ่มดอกไม้ประดิษฐ์จากลวดกำมะหยี่ เช่น ดอกทานตะวัน ทิวลิป ดอกเดซี่ และการจัดช่อตกแต่งพิเศษ</p>
                   <span className="option-badge active">เริ่มสร้างตัวเลือกสินค้า</span>
                 </div>
+
+                <div className="option-card" onClick={() => {
+                  if (typeof window !== 'undefined') {
+                    window.location.href = '/admin/create-product/artificial_flowers';
+                  }
+                }}>
+                  <div className="option-icon">🌸</div>
+                  <h3>ดอกไม้ประดิษฐ์</h3>
+                  <p>สร้างสินค้าดอกไม้ประดิษฐ์ที่มีตัวเลือกพิเศษ "ติดเพชรดอกไม้" และ "ติดเพชรตัวอักษร" เพื่อตกแต่งเพิ่มความพิเศษให้กับช่อดอกไม้</p>
+                  <span className="option-badge active">เริ่มสร้างตัวเลือกสินค้า</span>
+                </div>
               </div>
             </div>
           ) : (
@@ -2127,19 +2155,19 @@ export function ProductStudioPage({ forceManageMode = false, initialProductType 
             <div class="stepper-outer">
               <div class="stepper-container" id="stepper">
                 <div class="stepper-line"></div>
-                <div class="step active" data-step="1" style="${selectedType === 'velvet_flower' ? 'display: none;' : ''}">
+                <div class="step active" data-step="1" style="${selectedType === 'velvet_flower' || selectedType === 'artificial_flowers' ? 'display: none;' : ''}">
                   <div class="step-circle">1</div>
                   <span class="step-label">Rose</span>
                 </div>
-                <div class="step" data-step="2" style="${selectedType === 'velvet_flower' ? 'display: none;' : ''}">
+                <div class="step" data-step="2" style="${selectedType === 'velvet_flower' || selectedType === 'artificial_flowers' ? 'display: none;' : ''}">
                   <div class="step-circle">2</div>
                   <span class="step-label">Secondary Layer</span>
                 </div>
-                <div class="step" data-step="3" style="${selectedType === 'velvet_flower' ? 'display: none;' : ''}">
+                <div class="step" data-step="3" style="${selectedType === 'velvet_flower' || selectedType === 'artificial_flowers' ? 'display: none;' : ''}">
                   <div class="step-circle">3</div>
                   <span class="step-label">Paper</span>
                 </div>
-                <div class="step" data-step="4" style="${selectedType === 'velvet_flower' ? 'display: none;' : ''}">
+                <div class="step" data-step="4" style="${selectedType === 'velvet_flower' || selectedType === 'artificial_flowers' ? 'display: none;' : ''}">
                   <div class="step-circle">4</div>
                   <span class="step-label step-label-no-wrap">Decorations</span>
                 </div>
