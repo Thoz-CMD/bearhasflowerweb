@@ -249,6 +249,16 @@ const buildPrompt = (today: string) => [
   `- If no date is visible, use "${today}".`,
   `- Allowed categories: ${ALLOWED_CATEGORIES.join(', ')}.`,
   '',
+  'CRITICAL: DATE PARSING FOR THAI FORMAT:',
+  '- Thai receipts often use format: d/m/yy (e.g., "1/7/69" = 1st July 2569 BE)',
+  '- The year (yy) is in Buddhist Era (BE). Convert to Christian Era (CE) by: CE = BE + 2500 - 543 = BE + 1957',
+  '- Example: "1/7/69" → day=1, month=7, year=69 → BE year=2569 → CE year=2569-543=2026 → "2026-07-01"',
+  '- Example: "15/12/68" → day=15, month=12, year=68 → BE year=2568 → CE year=2568-543=2025 → "2025-12-15"',
+  '- Always output date in YYYY-MM-DD format (Christian Era)',
+  '- If you see 2-digit year, assume it is Buddhist Era and convert to Christian Era',
+  '- If you see 4-digit year starting with 25xx, subtract 543 to get Christian Era',
+  '- Do NOT misinterpret Thai dates as US format (mm/dd/yy)',
+  '',
   'FALLBACK RULES - If you cannot clearly identify colored columns:',
   '- Extract ANY text that looks like a product name or description',
   '- Extract ANY numbers that look like prices (with or without currency symbols)',
@@ -278,16 +288,25 @@ const buildPrompt = (today: string) => [
   '- If the amount is in column 4 (red column) → type:expense',
   '',
   'STEP 5: Check the LAST COLUMN (rightmost column) for ThaiPlus:',
-  '- If the last column has BLUE color (blue header, blue background, or blue-tinted) → "isThaiPlus":true',
-  '- Otherwise → "isThaiPlus":false',
+  '- Look at the BACKGROUND COLOR of each CELL in the last column',
+  '- SPECIFIC COLOR RULES:',
+  '- If the last column cell is BLUE (any shade: light blue, pale blue, blue tint, baby blue, sky blue) → "isThaiPlus":true',
+  '- If the last column cell is PURPLE (any shade: light purple, lavender, violet) → "isThaiPlus":false',
+  '- If the last column cell is WHITE, GRAY, or any other color → "isThaiPlus":false',
+  '- Do NOT rely on checkmarks or text, only rely on background color',
   '',
   'VISUAL EXAMPLES:',
   'If you see a table with GREEN column 3 and RED column 4:',
   '- Amount in column 3 (green) → type:income',
   '- Amount in column 4 (red) → type:expense',
   '',
-  'If you see BLUE checkmarks or blue color in the last column:',
-  '- That row has isThaiPlus:true',
+  'For ThaiPlus detection in the last column:',
+  '- Row with BLUE background cell → isThaiPlus:true',
+  '- Row with PURPLE background cell → isThaiPlus:false',
+  '- Row with WHITE background cell → isThaiPlus:false',
+  '- Row with GRAY background cell → isThaiPlus:false',
+  '',
+  'IMPORTANT: BLUE = ThaiPlus, PURPLE = No ThaiPlus. This is the most reliable indicator.',
   '',
   'PAY ATTENTION: You MUST check the COLUMN NUMBER and its COLOR. Do not default all to expense.'
 ].join('\n');
@@ -373,16 +392,22 @@ const parseSingleImageWithGemini = async (
       }
 
       const rawText = getGeminiText(payload);
+      console.log('[AI] Raw response from Gemini:', rawText);
+      
       if (!rawText) {
         lastStatus = 500;
         lastDetail = `Gemini model ${model} ไม่ส่งข้อมูลที่อ่านได้กลับมา`;
+        console.error('[AI] No raw text from Gemini');
         break;
       }
 
       const parsedResult = extractJsonPayload(rawText);
+      console.log('[AI] Parsed JSON result:', parsedResult);
+      
       if (!parsedResult) {
         lastStatus = 500;
         lastDetail = `Gemini model ${model} ส่งข้อมูลกลับมาในรูปแบบที่ไม่ถูกต้อง`;
+        console.error('[AI] Failed to extract JSON from:', rawText);
         break;
       }
 
@@ -392,11 +417,24 @@ const parseSingleImageWithGemini = async (
         normalizeDate(parsedObject.date, today)
       );
 
+      console.log('[AI] Normalized items:', normalizedItems);
+
       if (normalizedItems.length > 0) {
         return { items: normalizedItems, single: null };
       }
 
-      return { items: [], single: normalizeResult(parsedResult) };
+      const singleResult = normalizeResult(parsedResult);
+      console.log('[AI] Single result:', singleResult);
+      
+      // Check if single result has valid data
+      if (singleResult.amount > 0) {
+        return { items: [], single: singleResult };
+      }
+      
+      // If no valid data found, log and try next model
+      console.warn('[AI] No valid data found in result, trying next model');
+      lastDetail = `Gemini model ${model} ส่งข้อมูลกลับมาแต่ไม่มีข้อมูลที่ใช้ได้ (amount=0)`;
+      break;
     }
   }
 

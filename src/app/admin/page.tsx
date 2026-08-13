@@ -861,7 +861,11 @@ function AdminPageContent() {
         await (window as any).showBeautifulAlert('อ่านใบเสร็จสำเร็จ แต่ไม่พบข้อมูลรายการ กรุณากรอกข้อมูลเองค่ะ', 'warning', 'ไม่พบข้อมูล');
       }
 
-      await (window as any).showBeautifulAlert(`อ่านใบเสร็จสำเร็จ ${receiptDataUrls.length} รูป และกรอกฟอร์มให้อัตโนมัติแล้วค่ะ`, 'success', 'สำเร็จ');
+      const imageCount = receiptDataUrls.length;
+      setReceiptDataUrls([]);
+      setReceiptFileNames([]);
+      setReceiptPreviews([]);
+      await (window as any).showBeautifulAlert(`อ่านใบเสร็จสำเร็จ ${imageCount} รูป และกรอกฟอร์มให้อัตโนมัติแล้วค่ะ`, 'success', 'สำเร็จ');
     } catch (err: any) {
       const message = err?.message || 'อ่านใบเสร็จไม่สำเร็จ กรุณาลองใหม่อีกครั้ง';
       setReceiptParseError(message);
@@ -895,33 +899,32 @@ function AdminPageContent() {
   };
 
   const handleDeleteAllExpenses = async () => {
-    const ok = await (window as any).showBeautifulConfirm('คุณแน่ใจหรือไม่ว่าต้องการลบรายการทั้งหมดในรอบบัญชีนี้? รวมทั้งรายการที่บันทึกเองและรายการจากระบบ (ออเดอร์ที่เสร็จสิ้นและยกเลิก) การกระทำนี้ไม่สามารถย้อนกลับได้', 'ยืนยันการลบรายการทั้งหมด');
+    const periodText = financeViewMode === 'daily' 
+      ? `วันที่ ${formatDateThai(selectedDate)}` 
+      : `เดือน ${formatMonthThai(selectedMonth)}`;
+    const ok = await (window as any).showBeautifulConfirm(`คุณแน่ใจหรือไม่ว่าต้องการลบรายการทั้งหมดใน${periodText}? รวมทั้งรายการที่บันทึกเองและรายการจากระบบ (ออเดอร์ที่เสร็จสิ้นและยกเลิก) การกระทำนี้ไม่สามารถย้อนกลับได้`, 'ยืนยันการลบรายการทั้งหมด');
     if (!ok) return;
     try {
       let deletedCount = 0;
       
-      // Delete all user expenses
-      const expensesCollection = collection(db, 'expenses');
-      const q = query(expensesCollection, orderBy('createdAt', 'desc'));
-      const snapshot = await getDocs(q);
+      // Delete only current period expenses
+      const batchSize = 500;
+      const totalDocs = currentExpenses.length;
       
-      const batchSize = 500; // Firestore batch limit
-      const totalDocs = snapshot.docs.length;
-      
-      // Process expenses in batches
+      // Process current expenses in batches
       for (let i = 0; i < totalDocs; i += batchSize) {
         const batch = writeBatch(db);
         const end = Math.min(i + batchSize, totalDocs);
         
         for (let j = i; j < end; j++) {
-          batch.delete(snapshot.docs[j].ref);
+          batch.delete(doc(db, 'expenses', currentExpenses[j].id));
         }
         
         await batch.commit();
         deletedCount += (end - i);
       }
       
-      // Delete orders that are completed or cancelled (system entries in ledger)
+      // Delete orders that are completed or cancelled in the current period (system entries in ledger)
       const ordersToDelete = currentOrders.filter(o => 
         o.status === 'completed' || o.status === 'cancelled'
       );

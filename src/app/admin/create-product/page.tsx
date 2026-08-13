@@ -2051,7 +2051,6 @@ export function ProductStudioPage({ forceManageMode = false, initialProductType 
           {viewMode !== 'manage' ? (
             <div className="admin-page-header">
               <div className="admin-page-title-block">
-                <span className="admin-page-badge">Product Studio</span>
                 <h1 className="admin-page-title">จัดการสินค้า</h1>
                 <p className="admin-page-subtitle">
                   สร้างสินค้าใหม่หรือเลือก workflow ที่ต้องการ
@@ -2064,7 +2063,6 @@ export function ProductStudioPage({ forceManageMode = false, initialProductType 
             <div className="manage-screen">
               <div className="manage-header">
                 <div className="admin-page-title-block">
-                  <span className="admin-page-badge">Product Studio</span>
                   <h1 className="admin-page-title">จัดเก็บสินค้า</h1>
                   <p className="admin-page-subtitle">รายการสินค้าที่สร้างไว้ทั้งหมด</p>
                 </div>
