@@ -1557,6 +1557,7 @@ body::before {
 
   body {
     padding-bottom: 0;
+    overflow-x: hidden;
   }
 
   .footer {
@@ -1577,6 +1578,8 @@ body::before {
 
   .hero {
     padding: 40px 28px 16px;
+    max-width: 100%;
+    overflow-x: hidden;
   }
 
   .welcome-section,
@@ -1585,29 +1588,47 @@ body::before {
   .product-filter-shell {
     padding-left: 28px;
     padding-right: 28px;
+    max-width: 100%;
+    overflow-x: hidden;
   }
 
   .section-heading {
     padding-left: 28px;
     padding-right: 28px;
+    max-width: 100%;
+    overflow-x: hidden;
   }
 
   .banner-container {
     aspect-ratio: 16/7;
+    max-width: 100%;
+    overflow: hidden;
   }
 
   .section-two-content {
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 18px;
+    max-width: 100%;
   }
 
   .product-grid {
     grid-template-columns: repeat(3, 1fr);
     gap: 18px;
+    max-width: 100%;
   }
 
   .product-filter-layout {
     grid-template-columns: 1fr;
+  }
+
+  .page-wrap {
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  .main-box {
+    max-width: 100%;
+    overflow-x: hidden;
   }
 }
 
@@ -1622,7 +1643,10 @@ body::before {
     margin-right: -10px !important;
   }
 
-
+  .delete-all-btn {
+    padding: 6px 12px !important;
+    font-size: 0.75rem !important;
+  }
 
   .bottom-tab-bar {
     display: block;

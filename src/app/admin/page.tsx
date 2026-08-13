@@ -4,7 +4,7 @@ import React, { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { auth, db, storage } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
-import { collection, query, orderBy, onSnapshot, doc, updateDoc, addDoc, deleteDoc, serverTimestamp, getDoc } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, doc, updateDoc, addDoc, deleteDoc, serverTimestamp, getDoc, getDocs, writeBatch } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { checkIsAdmin } from '@/lib/admin';
 
@@ -800,6 +800,15 @@ function AdminPageContent() {
 
       const data = await res.json();
       console.log('AI Response:', JSON.stringify(data, null, 2));
+      console.log('Response structure:', {
+        hasItems: Array.isArray(data?.items),
+        itemsLength: data?.items?.length,
+        hasTitle: !!data?.title,
+        hasAmount: data?.amount !== undefined && data?.amount !== null,
+        amount: data?.amount,
+        title: data?.title
+      });
+      
       if (!res.ok) {
         const detailText = typeof data?.detail === 'string' ? data.detail : '';
         const trimmedDetail = detailText.length > 500 ? detailText.slice(0, 500) + '...' : detailText;
@@ -821,7 +830,7 @@ function AdminPageContent() {
         }));
         console.log('Normalized items:', normalizedItems);
         setExpenseItems(normalizedItems);
-      } else {
+      } else if (data?.title || (data?.amount !== undefined && data?.amount !== null)) {
         if (data?.title) setExpenseTitle(String(data.title));
         if (data?.amount !== undefined && data?.amount !== null) {
           setExpenseAmount(String(data.amount));
@@ -829,7 +838,7 @@ function AdminPageContent() {
         if (data?.date) setExpenseDate(String(data.date));
         const singleItem = {
           id: crypto?.randomUUID ? crypto.randomUUID() : String(Date.now()),
-          title: String(data?.title || ''),
+          title: String(data?.title || 'รายการจากใบเสร็จ'),
           amount: data?.amount !== undefined && data?.amount !== null ? String(data.amount) : '',
           date: String(data?.date || expenseDate),
           type: (data?.type === 'income' || data?.type === 'expense') ? data.type as 'income' | 'expense' : 'expense',
@@ -837,6 +846,19 @@ function AdminPageContent() {
         };
         console.log('Single item:', singleItem);
         setExpenseItems([singleItem]);
+      } else {
+        console.log('No valid data found in response, using fallback');
+        const fallbackItem = {
+          id: crypto?.randomUUID ? crypto.randomUUID() : String(Date.now()),
+          title: 'รายการจากใบเสร็จ (กรุณากรอกข้อมูล)',
+          amount: '',
+          date: expenseDate,
+          type: 'expense' as 'income' | 'expense',
+          isThaiPlus: false
+        };
+        console.log('Fallback item:', fallbackItem);
+        setExpenseItems([fallbackItem]);
+        await (window as any).showBeautifulAlert('อ่านใบเสร็จสำเร็จ แต่ไม่พบข้อมูลรายการ กรุณากรอกข้อมูลเองค่ะ', 'warning', 'ไม่พบข้อมูล');
       }
 
       await (window as any).showBeautifulAlert(`อ่านใบเสร็จสำเร็จ ${receiptDataUrls.length} รูป และกรอกฟอร์มให้อัตโนมัติแล้วค่ะ`, 'success', 'สำเร็จ');
@@ -849,15 +871,70 @@ function AdminPageContent() {
     }
   };
 
-  const handleDeleteExpense = async (id: string) => {
-    const ok = await (window as any).showBeautifulConfirm('คุณแน่ใจหรือไม่ว่าต้องการลบรายการรายจ่ายนี้?', 'ยืนยันการลบรายการ');
+  const handleDeleteExpense = async (id: string, type?: string) => {
+    const isSystemEntry = type === 'revenue';
+    const confirmMessage = isSystemEntry 
+      ? 'คุณแน่ใจหรือไม่ว่าต้องการลบรายการระบบนี้? (รายการนี้มาจากออเดอร์)'
+      : 'คุณแน่ใจหรือไม่ว่าต้องการลบรายการนี้?';
+    const ok = await (window as any).showBeautifulConfirm(confirmMessage, 'ยืนยันการลบรายการ');
     if (!ok) return;
     try {
-      await deleteDoc(doc(db, 'expenses', id));
-      await (window as any).showBeautifulAlert('ลบรายการรายจ่ายสำเร็จเรียบร้อย!', 'success', 'ลบรายการสำเร็จ');
+      if (isSystemEntry) {
+        // Delete from orders collection for system entries
+        await deleteDoc(doc(db, 'orders', id));
+        await (window as any).showBeautifulAlert('ลบรายการระบบสำเรียบร้อย!', 'success', 'ลบรายการสำเร็จ');
+      } else {
+        // Delete from expenses collection for user entries
+        await deleteDoc(doc(db, 'expenses', id));
+        await (window as any).showBeautifulAlert('ลบรายการสำเรียบร้อย!', 'success', 'ลบรายการสำเร็จ');
+      }
     } catch (err) {
-      console.error("Failed to delete expense:", err);
+      console.error("Failed to delete item:", err);
       await (window as any).showBeautifulAlert('เกิดข้อผิดพลาดในการลบรายการ', 'error', 'เกิดข้อผิดพลาด');
+    }
+  };
+
+  const handleDeleteAllExpenses = async () => {
+    const ok = await (window as any).showBeautifulConfirm('คุณแน่ใจหรือไม่ว่าต้องการลบรายการทั้งหมดในรอบบัญชีนี้? รวมทั้งรายการที่บันทึกเองและรายการจากระบบ (ออเดอร์ที่เสร็จสิ้นและยกเลิก) การกระทำนี้ไม่สามารถย้อนกลับได้', 'ยืนยันการลบรายการทั้งหมด');
+    if (!ok) return;
+    try {
+      let deletedCount = 0;
+      
+      // Delete all user expenses
+      const expensesCollection = collection(db, 'expenses');
+      const q = query(expensesCollection, orderBy('createdAt', 'desc'));
+      const snapshot = await getDocs(q);
+      
+      const batchSize = 500; // Firestore batch limit
+      const totalDocs = snapshot.docs.length;
+      
+      // Process expenses in batches
+      for (let i = 0; i < totalDocs; i += batchSize) {
+        const batch = writeBatch(db);
+        const end = Math.min(i + batchSize, totalDocs);
+        
+        for (let j = i; j < end; j++) {
+          batch.delete(snapshot.docs[j].ref);
+        }
+        
+        await batch.commit();
+        deletedCount += (end - i);
+      }
+      
+      // Delete orders that are completed or cancelled (system entries in ledger)
+      const ordersToDelete = currentOrders.filter(o => 
+        o.status === 'completed' || o.status === 'cancelled'
+      );
+      
+      for (const order of ordersToDelete) {
+        await deleteDoc(doc(db, 'orders', order.id));
+        deletedCount++;
+      }
+      
+      await (window as any).showBeautifulAlert(`ลบรายการทั้งหมด ${deletedCount} รายการสำเร็จเรียบร้อย!`, 'success', 'ลบรายการสำเร็จ');
+    } catch (err) {
+      console.error("Failed to delete all expenses:", err);
+      await (window as any).showBeautifulAlert('เกิดข้อผิดพลาดในการลบรายการทั้งหมด', 'error', 'เกิดข้อผิดพลาด');
     }
   };
 
@@ -1412,6 +1489,15 @@ function AdminPageContent() {
     .reduce((acc, e) => acc + (e.amount || 0), 0);
   const currentNetProfit = currentSales - currentExpensesTotal;
 
+  // Thai+ calculations
+  const currentThaiPlusIncome = currentExpenses
+    .filter(e => e.type === 'income' && e.isThaiPlus)
+    .reduce((acc, e) => acc + (e.amount || 0), 0);
+  const currentThaiPlusExpense = currentExpenses
+    .filter(e => e.type === 'expense' && e.isThaiPlus)
+    .reduce((acc, e) => acc + (e.amount || 0), 0);
+  const currentThaiPlusTotal = currentThaiPlusIncome + currentThaiPlusExpense;
+
   // Calculate monthly stats for comparison (always use monthly for growth metrics)
   const monthlySales = monthlyOrders
     .filter(o => o.status !== 'cancelled')
@@ -1494,6 +1580,21 @@ function AdminPageContent() {
       ringLabelPct: financeViewMode === 'daily' ? 0 : expensesFinanceGrowth.ringLabelPct,
       ringPrefix: financeViewMode === 'daily' ? '' : expensesFinanceGrowth.ringPrefix,
       detailPrefix: financeViewMode === 'daily' ? '•' : expensesFinanceGrowth.detailPrefix,
+      valueColor: '#1a1a1a',
+    },
+    {
+      key: 'finance-thaiplus',
+      label: financeViewMode === 'daily' ? 'รายการไทย+ ประจำวัน' : 'รายการไทย+ ประจำเดือน',
+      value: `${currentThaiPlusTotal.toLocaleString()} ฿`,
+      detail: financeViewMode === 'daily'
+        ? `วันที่ ${formatDateThai(selectedDate)}`
+        : `รายรับ ${currentThaiPlusIncome.toLocaleString()} ฿`,
+      accent: 'rgb(59, 130, 246)',
+      cardClass: 'metric-thaiplus',
+      progressPct: 0,
+      ringLabelPct: 0,
+      ringPrefix: '',
+      detailPrefix: '•',
       valueColor: '#1a1a1a',
     },
   ];
@@ -1951,6 +2052,24 @@ function AdminPageContent() {
           grid-template-columns: minmax(210px, 2fr) minmax(140px, 1.1fr) minmax(150px, 1fr) minmax(170px, 1fr) 24px;
           align-items: center;
           gap: 14px;
+          max-width: 100%;
+          overflow: hidden;
+        }
+
+        @media (max-width: 900px) {
+          .order-summary-row {
+            grid-template-columns: minmax(180px, 2fr) minmax(120px, 1fr) minmax(130px, 1fr) minmax(140px, 1fr) 24px !important;
+            gap: 10px !important;
+          }
+
+          .order-price {
+            font-size: 1rem !important;
+          }
+
+          .status-badge {
+            font-size: 0.72rem !important;
+            padding: 6px 10px !important;
+          }
         }
 
         .order-main-info {
@@ -2004,12 +2123,16 @@ function AdminPageContent() {
 
         .order-right-meta {
           align-items: flex-end;
+          min-width: 0;
         }
 
         .order-price {
           font-weight: 800;
           font-size: 1.18rem;
           color: #ea678f;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
         }
 
         .status-badge {
@@ -2018,6 +2141,10 @@ function AdminPageContent() {
           font-size: 0.78rem;
           font-weight: 700;
           width: fit-content;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          max-width: 100%;
         }
 
         .order-expand-indicator {
@@ -5302,7 +5429,7 @@ function AdminPageContent() {
                       onClick={handleParseReceipt}
                       disabled={isParsingReceipt}
                     >
-                      {isParsingReceipt ? 'กำลังอ่านใบเสร็จ...' : 'อ่านใบเสร็จ'}
+                      {isParsingReceipt ? 'กำลังอ่าน...' : 'อ่านใบเสร็จ'}
                     </button>
                     <button
                       type="button"
@@ -5474,9 +5601,37 @@ function AdminPageContent() {
 
               {/* Right Side: Ledger Table Ledger */}
               <div className="ledger-card">
-                <h3 className="form-title">
-                  <span style={{ fontSize: '1.2rem' }}></span> สมุดบัญชีรายรับ-รายจ่าย ({financeViewMode === 'daily' ? formatDateThai(selectedDate) : formatMonthThai(selectedMonth)})
-                </h3>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                  <h3 className="form-title" style={{ margin: 0 }}>
+                    <span style={{ fontSize: '1.2rem' }}></span> สมุดบัญชีรายรับ-รายจ่าย ({financeViewMode === 'daily' ? formatDateThai(selectedDate) : formatMonthThai(selectedMonth)})
+                  </h3>
+                  <button
+                    type="button"
+                    className="delete-all-btn"
+                    onClick={handleDeleteAllExpenses}
+                    style={{
+                      padding: '8px 16px',
+                      background: '#ffebee',
+                      border: '1px solid #ef9a9a',
+                      color: '#c62828',
+                      borderRadius: '8px',
+                      fontSize: '0.85rem',
+                      fontWeight: '600',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease'
+                    }}
+                    onMouseOver={(e) => {
+                      e.currentTarget.style.background = '#ffcdd2';
+                      e.currentTarget.style.borderColor = '#ef5350';
+                    }}
+                    onMouseOut={(e) => {
+                      e.currentTarget.style.background = '#ffebee';
+                      e.currentTarget.style.borderColor = '#ef9a9a';
+                    }}
+                  >
+                    ลบรายการทั้งหมด
+                  </button>
+                </div>
 
                 <div className="ledger-filter-bar">
                   <button
@@ -5560,13 +5715,20 @@ function AdminPageContent() {
                                 {item.type === 'expense' || item.type === 'income' ? (
                                   <button
                                     className="delete-btn-circle"
-                                    onClick={() => handleDeleteExpense(item.id)}
+                                    onClick={() => handleDeleteExpense(item.id, item.type)}
                                     title={item.type === 'income' ? 'ลบรายการรายรับนี้' : 'ลบรายการรายจ่ายนี้'}
                                   >
                                     ✕
                                   </button>
                                 ) : (
-                                  <span style={{ color: '#ccc', fontSize: '0.75rem' }}>ระบบ</span>
+                                  <button
+                                    className="delete-btn-circle"
+                                    onClick={() => handleDeleteExpense(item.id, item.type)}
+                                    title="ลบรายการระบบนี้"
+                                    style={{ opacity: 0.5 }}
+                                  >
+                                    ✕
+                                  </button>
                                 )}
                               </td>
                             </tr>

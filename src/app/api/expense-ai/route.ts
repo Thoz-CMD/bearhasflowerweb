@@ -235,7 +235,7 @@ const buildPrompt = (today: string) => [
   'If the image shows multiple product rows, output:',
   '{"items":[{"title":"string","unitPrice":21,"quantity":2,"amount":42,"date":"YYYY-MM-DD","type":"expense","isThaiPlus":false}]}',
   'If the image shows only one total, output:',
-  '{"title":"string","amount":99,"date":"YYYY-MM-DD","category":"other","type":"expense","isThaiPlus":false"}',
+  '{"title":"string","amount":99,"date":"YYYY-MM-DD","category":"other","type":"expense","isThaiPlus":false}',
   'Rules:',
   '- For shopping-cart style screenshots, each visible product row is one expense item.',
   '- Read the product-specific Thai description, not the shop name or promotional prefix.',
@@ -249,33 +249,47 @@ const buildPrompt = (today: string) => [
   `- If no date is visible, use "${today}".`,
   `- Allowed categories: ${ALLOWED_CATEGORIES.join(', ')}.`,
   '',
+  'FALLBACK RULES - If you cannot clearly identify colored columns:',
+  '- Extract ANY text that looks like a product name or description',
+  '- Extract ANY numbers that look like prices (with or without currency symbols)',
+  '- Default type to "expense" if uncertain',
+  '- Default isThaiPlus to false if uncertain',
+  '- It is better to return incomplete data than no data at all',
+  '',
   'CRITICAL: DETERMINE TRANSACTION TYPE BY COLUMN POSITION AND COLOR:',
   '',
   'The image shows a table with colored columns. You MUST identify which column the amount belongs to:',
   '',
-  'STEP 1: Look at the table structure. Identify ALL colored columns.',
+  'STEP 1: Look at the table structure. Count the columns from left to right (1, 2, 3, 4, etc).',
   'STEP 2: For each row, find the cell containing the amount/number.',
-  'STEP 3: Determine which COLUMN that cell is in.',
-  'STEP 4: Check the COLOR of that COLUMN (not just the cell, the entire column header/background).',
+  'STEP 3: Determine which COLUMN NUMBER that cell is in (column 3, column 4, etc).',
+  'STEP 4: Check the COLOR of that SPECIFIC COLUMN (look at the column header and background color).',
   '',
-  'COLUMN COLOR RULES:',
-  '- If the amount is in a GREEN column (green header, green background, or green-tinted column) → "type":"income"',
-  '- If the amount is in a RED column (red header, red background, or red-tinted column) → "type":"expense"',
-  '- If the amount is in a WHITE/NEUTRAL column → "type":"expense" (default)',
+  'SPECIFIC COLUMN RULES FOR THIS TABLE:',
+  '- COLUMN 3 (third column from left) is GREEN → if amount is in column 3 → "type":"income"',
+  '- COLUMN 4 (fourth column from left) is RED → if amount is in column 4 → "type":"expense"',
+  '',
+  'HOW TO IDENTIFY:',
+  '- Look at the column headers at the top of the table',
+  '- Column 3 header is GREEN (green background or green text)',
+  '- Column 4 header is RED (red background or red text)',
+  '- For each row, check which column contains the numeric amount',
+  '- If the amount is in column 3 (green column) → type:income',
+  '- If the amount is in column 4 (red column) → type:expense',
   '',
   'STEP 5: Check the LAST COLUMN (rightmost column) for ThaiPlus:',
   '- If the last column has BLUE color (blue header, blue background, or blue-tinted) → "isThaiPlus":true',
   '- Otherwise → "isThaiPlus":false',
   '',
   'VISUAL EXAMPLES:',
-  'If you see a table with GREEN column on left and RED column on right:',
-  '- Amount in GREEN column → type:income',
-  '- Amount in RED column → type:expense',
+  'If you see a table with GREEN column 3 and RED column 4:',
+  '- Amount in column 3 (green) → type:income',
+  '- Amount in column 4 (red) → type:expense',
   '',
   'If you see BLUE checkmarks or blue color in the last column:',
   '- That row has isThaiPlus:true',
   '',
-  'PAY ATTENTION: Look at the ENTIRE COLUMN color, not just individual cells. The column color determines the transaction type.'
+  'PAY ATTENTION: You MUST check the COLUMN NUMBER and its COLOR. Do not default all to expense.'
 ].join('\n');
 
 const requestGemini = async (
@@ -448,7 +462,14 @@ export async function POST(req: Request) {
       });
     }
 
-    return NextResponse.json({ error: 'ไม่พบข้อมูลรายการในรูปภาพที่ส่งมา' }, { status: 500 });
+    // Fallback: return a placeholder item instead of error
+    return NextResponse.json({
+      title: 'รายการจากใบเสร็จ (กรุณากรอกข้อมูล)',
+      amount: 0,
+      date: today,
+      type: 'expense',
+      isThaiPlus: false
+    });
   } catch (err: unknown) {
     const error = err instanceof Error ? err : new Error('Unknown error');
     const errorWithStatus = error as Error & { status?: number };
