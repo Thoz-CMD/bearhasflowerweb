@@ -224,6 +224,7 @@ function AdminPageContent() {
   const [isParsingReceipt, setIsParsingReceipt] = useState(false);
   const [receiptParseError, setReceiptParseError] = useState<string | null>(null);
   const [receiptFileNames, setReceiptFileNames] = useState<string[]>([]);
+  const [isSyncingGoogleSheets, setIsSyncingGoogleSheets] = useState(false);
   const [ledgerTypeFilter, setLedgerTypeFilter] = useState<'all' | 'income' | 'expense' | 'thaiPlus'>('all');
   const [selectedMonth, setSelectedMonth] = useState(() => {
     const today = new Date();
@@ -872,6 +873,43 @@ function AdminPageContent() {
       await (window as any).showBeautifulAlert(message, 'error', 'เกิดข้อผิดพลาด');
     } finally {
       setIsParsingReceipt(false);
+    }
+  };
+
+  const handleSyncGoogleSheets = async () => {
+    setIsSyncingGoogleSheets(true);
+    try {
+      const res = await fetch('/api/google-sheets-sync', {
+        method: 'POST'
+      });
+
+      const data = await res.json();
+      console.log('Google Sheets sync response:', data);
+
+      if (!res.ok) {
+        throw new Error(data?.error || 'ไม่สามารถอ่าน Google Sheets ได้');
+      }
+
+      if (data.items && data.items.length > 0) {
+        const normalizedItems = data.items.map((item: any) => ({
+          id: crypto?.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random()),
+          title: String(item?.title || '').trim(),
+          amount: item?.amount !== undefined && item?.amount !== null ? String(item.amount) : '',
+          date: String(item?.date || expenseDate),
+          type: (item?.type === 'income' || item?.type === 'expense') ? item.type as 'income' | 'expense' : 'expense',
+          isThaiPlus: Boolean(item?.isThaiPlus)
+        }));
+        console.log('Normalized Google Sheets items:', normalizedItems);
+        setExpenseItems(normalizedItems);
+        await (window as any).showBeautifulAlert(`Sync ข้อมูลจาก Google Sheets สำเร็จ ${data.items.length} รายการค่ะ`, 'success', 'Sync สำเร็จ');
+      } else {
+        await (window as any).showBeautifulAlert('ไม่พบข้อมูลรายการใน Google Sheets ค่ะ', 'warning', 'ไม่พบข้อมูล');
+      }
+    } catch (err: any) {
+      const message = err?.message || 'Sync Google Sheets ไม่สำเร็จ กรุณาลองใหม่อีกครั้ง';
+      await (window as any).showBeautifulAlert(message, 'error', 'เกิดข้อผิดพลาด');
+    } finally {
+      setIsSyncingGoogleSheets(false);
     }
   };
 
@@ -5451,6 +5489,25 @@ function AdminPageContent() {
                   {receiptParseError && (
                     <div className="ai-error-text">{receiptParseError}</div>
                   )}
+                </div>
+
+                <div className="ai-receipt-card" style={{ marginTop: '1rem' }}>
+                  <div className="ai-receipt-title">
+                    <span></span> Sync จาก Google Sheets
+                  </div>
+                  <p className="ai-receipt-subtitle">
+                    อ่านข้อมูลจาก Google Sheets โดยตรง
+                  </p>
+                  <div className="ai-receipt-actions">
+                    <button
+                      type="button"
+                      className="submit-btn"
+                      onClick={handleSyncGoogleSheets}
+                      disabled={isSyncingGoogleSheets}
+                    >
+                      {isSyncingGoogleSheets ? 'กำลัง Sync...' : 'Sync ข้อมูล'}
+                    </button>
+                  </div>
                 </div>
                 <form onSubmit={handleAddExpense}>
                   {expenseItems.map((item, idx) => (
