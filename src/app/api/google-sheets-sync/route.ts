@@ -21,16 +21,26 @@ export async function POST(req: Request) {
     const body = await req.json();
     const autoSave = body.autoSave === true;
 
+    console.log('Starting Google Sheets sync...');
+    console.log('Environment check:', !!process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
+
     // อ่าน credentials จาก environment variable (สำหรับ production) หรือไฟล์ (สำหรับ local)
     let credentials;
     
-    if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
-      // ใช้ environment variable (production)
-      credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
-    } else {
-      // ใช้ไฟล์ (local development)
-      const serviceAccountPath = join(process.cwd(), 'service-account.json');
-      credentials = JSON.parse(readFileSync(serviceAccountPath, 'utf-8'));
+    try {
+      if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
+        // ใช้ environment variable (production)
+        console.log('Using environment variable for credentials');
+        credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
+      } else {
+        // ใช้ไฟล์ (local development)
+        console.log('Using file for credentials');
+        const serviceAccountPath = join(process.cwd(), 'service-account.json');
+        credentials = JSON.parse(readFileSync(serviceAccountPath, 'utf-8'));
+      }
+    } catch (e) {
+      console.error('Error loading credentials:', e);
+      throw new Error('ไม่สามารถโหลด Google Service Account credentials: ' + (e as Error).message);
     }
 
     console.log('Credentials loaded:', Object.keys(credentials));
