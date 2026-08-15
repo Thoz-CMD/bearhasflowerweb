@@ -21,9 +21,17 @@ export async function POST(req: Request) {
     const body = await req.json();
     const autoSave = body.autoSave === true;
 
-    // อ่านไฟล์ service account
-    const serviceAccountPath = join(process.cwd(), 'service-account.json');
-    const credentials = JSON.parse(readFileSync(serviceAccountPath, 'utf-8'));
+    // อ่าน credentials จาก environment variable (สำหรับ production) หรือไฟล์ (สำหรับ local)
+    let credentials;
+    
+    if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
+      // ใช้ environment variable (production)
+      credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
+    } else {
+      // ใช้ไฟล์ (local development)
+      const serviceAccountPath = join(process.cwd(), 'service-account.json');
+      credentials = JSON.parse(readFileSync(serviceAccountPath, 'utf-8'));
+    }
 
     console.log('Credentials loaded:', Object.keys(credentials));
     console.log('client_email:', credentials.client_email);
