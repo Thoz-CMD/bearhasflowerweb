@@ -1,39 +1,18 @@
 // Google Apps Script for Auto-Sync Google Sheets to Web Application
-// วิธีติดตั้ง:
-// 1. เปิด Google Sheets
-// 2. ไปที่ Extensions > Apps Script (ส่วนขยาย > Apps Script)
-// 3. คัดลอกโค้ดนี้ไปวางใน Code Editor
-// 4. เปลี่ยน API_URL เป็น URL ของเว็บแอปพลิเคชันของคุณ
-// 5. ไปที่ Triggers > Add Trigger
-// 6. ตั้งค่า: On edit, From spreadsheet, On edit
-// 7. บันทึกและทดสอบ
+// วิธีติดตั้ง Auto Sync:
+// 1. คัดลอกโค้ดนี้ไปวางใน Google Apps Script Editor แทนที่โค้ดเดิมทั้งหมด แล้วกด บันทึก (Ctrl+S)
+// 2. ไปที่เมนูด้านซ้าย เลือกไอคอนรูปนาฬิกา ⏰ "ทริกเกอร์" (Triggers)
+// 3. กด "เพิ่มทริกเกอร์" (Add Trigger) มุมขวาล่าง
+// 4. ตั้งค่าดังนี้:
+//    - เลือกฟังก์ชันที่จะเรียกใช้: autoSyncOnEdit (หรือ syncToDatabase)
+//    - เลือกแหล่งที่มาของกิจกรรม: จาก แผ่นตารางทำการ (From spreadsheet)
+//    - เลือกประเภทเหตุการณ์: เมื่อแก้ไข (On edit)
+// 5. กด บันทึก (Save) และอนุมัติสิทธิ์
 
 const API_URL = 'https://bearhasflower.vercel.app/api/google-sheets-sync'; // Production URL
 
-function onEdit(e) {
-  if (!e) {
-    syncToDatabase();
-    return;
-  }
-
-  const sheet = e.source.getActiveSheet();
-  const sheetName = sheet.getName();
-
-  if (sheetName !== 'ชีต1' && sheetName !== 'หมีมีดอกไม้') {
-    return;
-  }
-
-  const range = e.range;
-  const column = range.getColumn();
-  if (column < 1 || column > 6) {
-    return;
-  }
-
-  const row = range.getRow();
-  if (row === 1) {
-    return;
-  }
-
+// ฟังก์ชันที่จะถูกเรียกใช้อัตโนมัติโดย Trigger เมื่อมีการพิมพ์แก้ไขในชีต
+function autoSyncOnEdit(e) {
   syncToDatabase();
 }
 
@@ -71,7 +50,7 @@ function syncToDatabase() {
       try {
         const ss = SpreadsheetApp.getActiveSpreadsheet();
         if (ss) {
-          ss.toast('Sync สำเร็จ: ' + result.count + ' รายการ', 'Google Sheets Sync');
+          ss.toast('Auto Sync สำเร็จ: ' + result.count + ' รายการ', 'Google Sheets Auto Sync');
         }
       } catch (e) {}
     } else {
@@ -82,7 +61,7 @@ function syncToDatabase() {
   }
 }
 
-// ฟังก์ชันสำหรับทดสอบ manual sync
+// ฟังก์ชันสำหรับกดทดสอบรันด้วยมือ
 function testSync() {
   syncToDatabase();
 }
