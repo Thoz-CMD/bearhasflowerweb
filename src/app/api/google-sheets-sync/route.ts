@@ -309,53 +309,93 @@ export async function POST(req: Request) {
     // ถ้า autoSave=true ให้ลองบันทึกลง database อัตโนมัติด้วย firebase-admin
     if (autoSave) {
       console.log('Attempting autoSave via firebase-admin...');
-      try {
-        let adminApp;
-        if (getApps().length > 0) {
-          adminApp = getApps()[0]!;
-        } else {
-          adminApp = initializeApp({
-            credential: cert({
-              projectId: credentials.project_id || process.env.FIREBASE_ADMIN_PROJECT_ID || 'bearhasflower',
-              clientEmail: credentials.client_email,
-              privateKey: credentials.private_key
-            })
-          });
-        }
-
-        const adminDb = getFirestore(adminApp);
-        const batch = adminDb.batch();
-
-        for (const item of items) {
-          const docRef = adminDb.collection('expenses').doc();
-          batch.set(docRef, {
-            title: item.title,
-            amount: item.amount,
-            category: 'other',
-            date: item.date,
-            type: item.type,
-            isThaiPlus: item.isThaiPlus,
-            createdAt: FieldValue.serverTimestamp(),
-            recordedBy: 'Google Sheets Auto Sync'
-          });
-        }
-
-        await batch.commit();
-        console.log('Auto-save via firebase-admin completed successfully!');
-        return NextResponse.json({ 
-          items, 
-          count: items.length, 
-          autoSaved: true,
-          message: `Auto-save สำเร็จ: บันทึก ${items.length} รายการลงเว็บเรียบร้อยแล้ว` 
+      
+      const candidateCredentials = [];
+      if (credentials?.client_email && credentials?.private_key) {
+        candidateCredentials.push({
+          name: 'GOOGLE_SERVICE_ACCOUNT_JSON',
+          projectId: credentials.project_id || 'bearhasflower',
+          clientEmail: credentials.client_email,
+          privateKey: credentials.private_key
         });
-      } catch (saveError: any) {
-        console.warn('Auto-save via firebase-admin skipped:', saveError?.message);
+      }
+      
+      if (process.env.FIREBASE_ADMIN_CLIENT_EMAIL && process.env.FIREBASE_ADMIN_PRIVATE_KEY) {
+        let pk = process.env.FIREBASE_ADMIN_PRIVATE_KEY.trim();
+        if ((pk.startsWith('"') && pk.endsWith('"')) || (pk.startsWith("'") && pk.endsWith("'"))) {
+          pk = pk.slice(1, -1);
+        }
+        pk = pk.replace(/\\n/g, '\n');
+
+        candidateCredentials.push({
+          name: 'FIREBASE_ADMIN_* env vars',
+          projectId: process.env.FIREBASE_ADMIN_PROJECT_ID || 'bearhasflower',
+          clientEmail: process.env.FIREBASE_ADMIN_CLIENT_EMAIL.trim(),
+          privateKey: pk
+        });
+      }
+
+      let saveSuccess = false;
+      let lastSaveError = '';
+
+      for (let idx = 0; idx < candidateCredentials.length; idx++) {
+        const cred = candidateCredentials[idx];
+        const appName = `auto-save-app-${idx}`;
+        try {
+          let adminApp;
+          const existingApps = getApps();
+          const foundApp = existingApps.find(a => a.name === appName);
+          if (foundApp) {
+            adminApp = foundApp;
+          } else {
+            adminApp = initializeApp({
+              credential: cert({
+                projectId: cred.projectId,
+                clientEmail: cred.clientEmail,
+                privateKey: cred.privateKey
+              })
+            }, appName);
+          }
+
+          const adminDb = getFirestore(adminApp);
+          const batch = adminDb.batch();
+
+          for (const item of items) {
+            const docRef = adminDb.collection('expenses').doc();
+            batch.set(docRef, {
+              title: item.title,
+              amount: item.amount,
+              category: 'other',
+              date: item.date,
+              type: item.type,
+              isThaiPlus: item.isThaiPlus,
+              createdAt: FieldValue.serverTimestamp(),
+              recordedBy: 'Google Sheets Auto Sync'
+            });
+          }
+
+          await batch.commit();
+          console.log(`Auto-save via firebase-admin (${cred.name}) completed successfully!`);
+          saveSuccess = true;
+          return NextResponse.json({ 
+            items, 
+            count: items.length, 
+            autoSaved: true,
+            message: `Auto-save สำเร็จ: บันทึก ${items.length} รายการลงเว็บเรียบร้อยแล้ว (${cred.name})` 
+          });
+        } catch (err: any) {
+          console.warn(`Auto-save via ${cred.name} failed:`, err?.message);
+          lastSaveError = err?.message || 'Permission denied';
+        }
+      }
+
+      if (!saveSuccess) {
         return NextResponse.json({ 
           items, 
           count: items.length, 
           autoSaved: false,
           message: `อ่านข้อมูลจาก Google Sheets สำเร็จ (${items.length} รายการ)`,
-          warning: 'ไม่สามารถบันทึกอัตโนมัติได้เนื่องจากสิทธิ์ Firestore: ' + saveError?.message 
+          warning: 'ไม่สามารถบันทึกอัตโนมัติลงฐานข้อมูลได้ เนื่องจากสิทธิ์ Firestore ใน Vercel: ' + lastSaveError 
         });
       }
     }
