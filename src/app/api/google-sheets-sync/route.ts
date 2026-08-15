@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { google } from 'googleapis';
 import { readFileSync } from 'fs';
 import { join } from 'path';
+import { cert, getApps, initializeApp } from 'firebase-admin/app';
+import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 
 type ExpenseItem = {
   title: string;
@@ -302,6 +304,60 @@ export async function POST(req: Request) {
 
     if (items.length === 0) {
       return NextResponse.json({ error: 'ไม่พบข้อมูลรายการที่ถูกต้องใน Google Sheets' }, { status: 400 });
+    }
+
+    // ถ้า autoSave=true ให้ลองบันทึกลง database อัตโนมัติด้วย firebase-admin
+    if (autoSave) {
+      console.log('Attempting autoSave via firebase-admin...');
+      try {
+        let adminApp;
+        if (getApps().length > 0) {
+          adminApp = getApps()[0]!;
+        } else {
+          adminApp = initializeApp({
+            credential: cert({
+              projectId: credentials.project_id || process.env.FIREBASE_ADMIN_PROJECT_ID || 'bearhasflower',
+              clientEmail: credentials.client_email,
+              privateKey: credentials.private_key
+            })
+          });
+        }
+
+        const adminDb = getFirestore(adminApp);
+        const batch = adminDb.batch();
+
+        for (const item of items) {
+          const docRef = adminDb.collection('expenses').doc();
+          batch.set(docRef, {
+            title: item.title,
+            amount: item.amount,
+            category: 'other',
+            date: item.date,
+            type: item.type,
+            isThaiPlus: item.isThaiPlus,
+            createdAt: FieldValue.serverTimestamp(),
+            recordedBy: 'Google Sheets Auto Sync'
+          });
+        }
+
+        await batch.commit();
+        console.log('Auto-save via firebase-admin completed successfully!');
+        return NextResponse.json({ 
+          items, 
+          count: items.length, 
+          autoSaved: true,
+          message: `Auto-save สำเร็จ: บันทึก ${items.length} รายการลงเว็บเรียบร้อยแล้ว` 
+        });
+      } catch (saveError: any) {
+        console.warn('Auto-save via firebase-admin skipped:', saveError?.message);
+        return NextResponse.json({ 
+          items, 
+          count: items.length, 
+          autoSaved: false,
+          message: `อ่านข้อมูลจาก Google Sheets สำเร็จ (${items.length} รายการ)`,
+          warning: 'ไม่สามารถบันทึกอัตโนมัติได้เนื่องจากสิทธิ์ Firestore: ' + saveError?.message 
+        });
+      }
     }
 
     return NextResponse.json({ 
