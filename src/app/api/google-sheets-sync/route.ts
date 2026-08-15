@@ -190,30 +190,25 @@ export async function POST(req: Request) {
       const expenseRaw = row[3];
       const thaiPlusRaw = row[4];
 
-      // 1. Check text in Column E / Column B for Thai+ keywords
-      const thaiPlusStr = String(thaiPlusRaw || '').toLowerCase().trim();
-      const hasTextThaiPlus = thaiPlusStr.includes('ไทย') || thaiPlusStr === 'ใช่' || thaiPlusStr === 'yes' || thaiPlusStr === 'true' || thaiPlusStr === '1';
+      // ตรวจสอบ Thai+ จากสีพื้นหลังของ คอลัมน์ F (Index 5) เท่านั้น
+      // ถ้าสีฟ้า = true, ถ้าสีขาว/อื่นๆ = false
+      let isThaiPlus = false;
+      const colFCellFormat = rowFormats[i]?.[5];
+      const colFBgColor = colFCellFormat?.effectiveFormat?.backgroundColor;
 
-      // 2. Check cell background colors for distinct soft blue highlight (RGB blue component significantly higher than red)
-      let hasBlueHighlight = false;
-      const cellFormats = rowFormats[i] || [];
-      for (const cellFormat of cellFormats) {
-        const bgColor = cellFormat?.effectiveFormat?.backgroundColor;
-        if (bgColor) {
-          const red = bgColor.red || 0;
-          const green = bgColor.green || 0;
-          const blue = bgColor.blue || 0;
+      if (colFBgColor) {
+        const red = colFBgColor.red ?? 1;
+        const green = colFBgColor.green ?? 1;
+        const blue = colFBgColor.blue ?? 1;
 
-          // Distinct soft blue highlight threshold: blue > 0.85 and (blue - red) >= 0.08
-          if (blue > 0.85 && (blue - red) >= 0.08 && blue >= green) {
-            hasBlueHighlight = true;
-            break;
-          }
+        // สีขาว/เทาของ Google Sheets จะมี red >= 0.95 (เช่น 1.0 หรือ 0.96)
+        // ถ้าเป็นสีฟ้าเติมใน Column F: red จะน้อยกว่า 0.95 และ blue จะมากกว่า red อย่างชัดเจน
+        if (red < 0.95 && blue > red + 0.08 && blue >= green) {
+          isThaiPlus = true;
         }
       }
 
-      const isThaiPlus = hasTextThaiPlus || hasBlueHighlight;
-      console.log(`Row ${i} (${titleRaw}): textThaiPlus=${hasTextThaiPlus}, blueHighlight=${hasBlueHighlight} => isThaiPlus=${isThaiPlus}`);
+      console.log(`Row ${i} (${titleRaw}) Column F RGB:`, colFBgColor, `=> isThaiPlus: ${isThaiPlus}`);
 
       // Parse date
       let date = '';
