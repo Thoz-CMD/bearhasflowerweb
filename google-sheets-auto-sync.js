@@ -8,7 +8,7 @@
 // 6. ตั้งค่า: On edit, From spreadsheet, On edit
 // 7. บันทึกและทดสอบ
 
-const API_URL = 'http://localhost:3000/api/google-sheets-sync'; // เปลี่ยนเป็น URL ของ production เมื่อ deploy
+const API_URL = 'https://bearhasflower.vercel.app/api/google-sheets-sync'; // Production URL
 
 function onEdit(e) {
   // ถ้ารันด้วยตนเอง (ไม่ใช่ trigger) ให้ sync เลย
@@ -45,20 +45,36 @@ function onEdit(e) {
 
 function syncToDatabase() {
   try {
+    console.log('Starting syncToDatabase...');
+    console.log('API_URL:', API_URL);
+    
     const payload = {
       autoSave: true
     };
+    
+    console.log('Payload:', JSON.stringify(payload));
     
     const options = {
       method: 'POST',
       contentType: 'application/json',
       payload: JSON.stringify(payload),
-      muteHttpExceptions: true
+      muteHttpExceptions: true,
+      headers: {
+        'Accept': 'application/json'
+      },
+      validateHttpsCertificates: true
     };
     
+    console.log('Fetching API with timeout...');
+    // Set timeout to 60 seconds
     const response = UrlFetchApp.fetch(API_URL, options);
+    console.log('Response received');
+    
     const responseCode = response.getResponseCode();
     const responseBody = response.getContentText();
+    
+    console.log('Response code:', responseCode);
+    console.log('Response body:', responseBody);
     
     if (responseCode === 200) {
       const result = JSON.parse(responseBody);
@@ -71,6 +87,8 @@ function syncToDatabase() {
     }
   } catch (error) {
     console.error('Sync error:', error);
+    console.error('Error message:', error.message);
+    console.error('Error stack:', error.stack);
   }
 }
 

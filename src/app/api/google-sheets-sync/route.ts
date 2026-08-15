@@ -30,6 +30,16 @@ export async function POST(req: Request) {
 
     console.log('Starting Google Sheets sync...');
     console.log('Environment check:', !!process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
+    console.log('Request body:', JSON.stringify(body));
+
+    // Simple test response first
+    return NextResponse.json({ 
+      message: 'POST request received',
+      autoSave: autoSave,
+      status: 'test'
+    });
+
+    // อ่าน credentials จาก environment variable (สำหรับ production) หรือไฟล์ (สำหรับ local)
 
     // อ่าน credentials จาก environment variable (สำหรับ production) หรือไฟล์ (สำหรับ local)
     let credentials;
