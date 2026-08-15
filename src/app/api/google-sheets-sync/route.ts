@@ -16,6 +16,13 @@ type ExpenseItem = {
 // Spreadsheet ID - ควรเก็บใน environment variable ใน production
 const SPREADSHEET_ID = '1uw_2QEarlsYnLu1qGM3MRywURJAG3zOF_kBRLJCFN1k';
 
+export async function GET(req: Request) {
+  return NextResponse.json({ 
+    message: 'Google Sheets Sync API is working. Use POST method to sync data.',
+    status: 'ok'
+  });
+}
+
 export async function POST(req: Request) {
   try {
     const body = await req.json();
