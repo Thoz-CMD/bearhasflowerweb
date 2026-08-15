@@ -103,52 +103,39 @@ export async function POST(req: Request) {
     const rows = response.data.values;
 
     console.log('Google Sheets rows:', rows);
-    console.log('Number of rows:', rows?.length);
 
-    if (!rows || rows.length < 2) {
-      return NextResponse.json({ error: 'Google Sheets ไม่มีข้อมูล' }, { status: 400 });
+    if (!rows || rows.length === 0) {
+      return NextResponse.json({ error: 'ไม่พบข้อมูลใน Google Sheets' }, { status: 400 });
     }
 
-    // ดึงข้อมูลสีพื้นหลังจาก column F
+    // Extract background colors from format response
     const backgroundColors: any[] = [];
-    try {
-      const sheetData = formatResponse.data.sheets?.[0]?.data?.[0]?.rowData || [];
-      for (let i = 1; i < rows.length; i++) {
-        const cellData = sheetData[i]?.values?.[0];
-        const bgColor = cellData?.effectiveFormat?.backgroundColor;
+    if (formatResponse.data.sheets && formatResponse.data.sheets[0]?.data?.[0]?.rowData) {
+      const rowData = formatResponse.data.sheets[0].data[0].rowData;
+      for (const row of rowData) {
+        const bgColor = row.values?.[0]?.effectiveFormat?.backgroundColor;
         backgroundColors.push(bgColor);
       }
-      console.log('Background colors:', backgroundColors);
-    } catch (e) {
-      console.log('Error reading background colors:', e);
     }
 
-    // Skip header row (row 0), process data rows
     const items: ExpenseItem[] = [];
-    
-    console.log('Processing rows...');
-    for (let i = 1; i < rows.length; i++) {
+
+    // Skip header row and process data rows - limit to 100 rows to reduce processing time
+    const maxRows = Math.min(rows.length, 101); // header + 100 data rows
+    for (let i = 1; i < maxRows; i++) {
       const row = rows[i];
-      if (!row || row.length === 0) continue;
+      if (!row || row.length < 2) continue;
 
-      console.log(`Row ${i}:`, row);
-
-      // Column A: วันที่ (index 0)
       const dateRaw = row[0];
-      // Column B: รายละเอียด (index 1)
       const titleRaw = row[1];
-      // Column C: รายรับ (index 2)
       const incomeRaw = row[2];
-      // Column D: รายจ่าย (index 3)
       const expenseRaw = row[3];
-      // Column E: ยอดคงเหลือ (index 4) - skip
-      // Column F: ไทย+ (index 5)
-      const thaiPlusRaw = row[5];
-      
+      const thaiPlusRaw = row[4];
+
       // ตรวจสอบสีพื้นหลังของ cell ใน column F
       const bgColor = backgroundColors[i - 1];
       console.log(`Row ${i} background color:`, bgColor);
-      
+
       // ตรวจสอบ Thai+ จากสีพื้นหลัง (สีฟ้า = ใช่, สีม่วง = ไม่ใช่)
       let isThaiPlus = false;
       if (bgColor) {
@@ -157,13 +144,13 @@ export async function POST(req: Request) {
         const green = bgColor.green || 0;
         const blue = bgColor.blue || 0;
         console.log(`Row ${i} RGB: R=${red}, G=${green}, B=${blue}`);
-        
+
         // สีฟ้ามี blue สูงกว่า red และ green
         if (blue > red && blue > green) {
           isThaiPlus = true;
         }
       }
-      
+
       // ถ้าไม่มีสีพื้นหลัง ให้ตรวจสอบจากค่าใน cell
       if (!bgColor) {
         const thaiPlusStr = String(thaiPlusRaw || '').toLowerCase().trim();
@@ -180,12 +167,12 @@ export async function POST(req: Request) {
           const day = thaiDateMatch[1].padStart(2, '0');
           const month = thaiDateMatch[2].padStart(2, '0');
           let year = thaiDateMatch[3];
-          
+
           // Convert 2-digit year to 4-digit (assuming Buddhist Era)
           if (year.length === 2) {
             year = '25' + year;
           }
-          
+
           // Convert Buddhist Era to Christian Era (only if year > 2500)
           const yearNum = parseInt(year);
           const ceYear = yearNum > 2500 ? yearNum - 543 : yearNum;
@@ -205,13 +192,13 @@ export async function POST(req: Request) {
         const str = String(value).replace(/[฿$,]/g, '').replace(/,/g, '').trim();
         return parseFloat(str) || 0;
       };
-      
+
       const income = cleanAmount(incomeRaw);
       const expense = cleanAmount(expenseRaw);
-      
+
       let type: 'income' | 'expense' = 'expense';
       let amount = 0;
-      
+
       if (income > 0 && expense === 0) {
         type = 'income';
         amount = income;
@@ -253,7 +240,7 @@ export async function POST(req: Request) {
         isThaiPlus
       });
     }
-    
+
     console.log(`Total valid items: ${items.length}`);
 
     if (items.length === 0) {
