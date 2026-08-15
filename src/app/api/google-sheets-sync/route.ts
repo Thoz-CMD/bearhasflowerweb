@@ -32,15 +32,6 @@ export async function POST(req: Request) {
     console.log('Environment check:', !!process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
     console.log('Request body:', JSON.stringify(body));
 
-    // Simple test response first
-    return NextResponse.json({ 
-      message: 'POST request received',
-      autoSave: autoSave,
-      status: 'test'
-    });
-
-    // อ่าน credentials จาก environment variable (สำหรับ production) หรือไฟล์ (สำหรับ local)
-
     // อ่าน credentials จาก environment variable (สำหรับ production) หรือไฟล์ (สำหรับ local)
     let credentials;
     
@@ -48,7 +39,7 @@ export async function POST(req: Request) {
       if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
         // ใช้ environment variable (production)
         console.log('Using environment variable for credentials');
-        credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
+        credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON as string);
       } else {
         // ใช้ไฟล์ (local development)
         console.log('Using file for credentials');
