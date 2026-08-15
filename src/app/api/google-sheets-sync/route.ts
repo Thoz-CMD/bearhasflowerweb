@@ -358,9 +358,39 @@ export async function POST(req: Request) {
           }
 
           const adminDb = getFirestore(adminApp);
+          
+          // 1. Fetch existing expenses from Firestore for deduplication
+          const existingSnap = await adminDb.collection('expenses').limit(500).get();
+          const existingSet = new Set<string>();
+          
+          existingSnap.forEach((docSnap) => {
+            const d = docSnap.data();
+            const key = `${d.date || ''}|${(d.title || '').trim().toLowerCase()}|${d.amount || 0}|${d.type || ''}|${Boolean(d.isThaiPlus)}`;
+            existingSet.add(key);
+          });
+
+          // 2. Filter out items that already exist in Firestore
+          const newItems = items.filter((item) => {
+            const key = `${item.date || ''}|${(item.title || '').trim().toLowerCase()}|${item.amount || 0}|${item.type || ''}|${Boolean(item.isThaiPlus)}`;
+            return !existingSet.has(key);
+          });
+
+          console.log(`Auto-save deduplication: ${items.length} total items from sheet, ${newItems.length} new items to insert`);
+
+          if (newItems.length === 0) {
+            saveSuccess = true;
+            return NextResponse.json({ 
+              items, 
+              count: items.length, 
+              newCount: 0,
+              autoSaved: true,
+              message: `ไม่มีรายการใหม่ต้องบันทึก (รายการใน Google Sheets ทั้งหมด ${items.length} รายการมีในระบบแล้ว)` 
+            });
+          }
+
           const batch = adminDb.batch();
 
-          for (const item of items) {
+          for (const item of newItems) {
             const docRef = adminDb.collection('expenses').doc();
             batch.set(docRef, {
               title: item.title,
@@ -375,13 +405,14 @@ export async function POST(req: Request) {
           }
 
           await batch.commit();
-          console.log(`Auto-save via firebase-admin (${cred.name}) completed successfully!`);
+          console.log(`Auto-save via firebase-admin (${cred.name}) saved ${newItems.length} new items!`);
           saveSuccess = true;
           return NextResponse.json({ 
             items, 
             count: items.length, 
+            newCount: newItems.length,
             autoSaved: true,
-            message: `Auto-save สำเร็จ: บันทึก ${items.length} รายการลงเว็บเรียบร้อยแล้ว (${cred.name})` 
+            message: `Auto-save สำเร็จ: เพิ่ม ${newItems.length} รายการใหม่ลงเว็บเรียบร้อยแล้ว` 
           });
         } catch (err: any) {
           console.warn(`Auto-save via ${cred.name} failed:`, err?.message);
