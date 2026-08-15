@@ -1,31 +1,29 @@
-// Google Apps Script for Auto-Sync Google Sheets to Web Application
-// วิธีติดตั้ง Auto Sync:
-// 1. คัดลอกโค้ดนี้ไปวางใน Google Apps Script Editor แทนที่โค้ดเดิมทั้งหมด แล้วกด บันทึก (Ctrl+S)
+// Google Apps Script for Scheduled Auto-Sync Google Sheets to Web Application
+// วิธีตั้งเวลา Auto Sync (Time-driven Trigger):
+// 1. คัดลอกโค้ดนี้ไปวางใน Google Apps Script Editor แล้วกด บันทึก (Ctrl+S)
 // 2. ไปที่เมนูด้านซ้าย เลือกไอคอนรูปนาฬิกา ⏰ "ทริกเกอร์" (Triggers)
-// 3. กด "เพิ่มทริกเกอร์" (Add Trigger) มุมขวาล่าง
-// 4. ตั้งค่าดังนี้:
-//    - เลือกฟังก์ชันที่จะเรียกใช้: autoSyncOnEdit (หรือ syncToDatabase)
-//    - เลือกแหล่งที่มาของกิจกรรม: จาก แผ่นตารางทำการ (From spreadsheet)
-//    - เลือกประเภทเหตุการณ์: เมื่อแก้ไข (On edit)
-// 5. กด บันทึก (Save) และอนุมัติสิทธิ์
+// 3. ลบทริกเกอร์เดิมออก แล้วกด "เพิ่มทริกเกอร์" (Add Trigger) มุมขวาล่าง
+// 4. ตั้งค่าทริกเกอร์ตามเวลาดังนี้:
+//    - เลือกฟังก์ชันที่จะเรียกใช้: scheduledSyncToDatabase (หรือ syncToDatabase)
+//    - เลือกแหล่งที่มาของกิจกรรม: ตามเวลา (Time-driven)
+//    - เลือกประเภททริกเกอร์ตามเวลา: ตัวนับเวลาเป็นนาที (Minute timer)
+//    - เลือกระหว่างเวลา: ทุก 1 นาที / ทุก 5 นาที / ทุก 15 นาที (ตามต้องการ)
+// 5. กด บันทึก (Save)
 
 const API_URL = 'https://bearhasflower.vercel.app/api/google-sheets-sync'; // Production URL
 
-// ฟังก์ชันที่จะถูกเรียกใช้อัตโนมัติโดย Trigger เมื่อมีการพิมพ์แก้ไขในชีต
-function autoSyncOnEdit(e) {
+// ฟังก์ชันที่จะทำงานตามรอบเวลาที่ตั้งไว้
+function scheduledSyncToDatabase() {
   syncToDatabase();
 }
 
 function syncToDatabase() {
   try {
     Logger.log('Starting syncToDatabase...');
-    Logger.log('API_URL: ' + API_URL);
     
     const payload = {
       autoSave: true
     };
-    
-    Logger.log('Payload: ' + JSON.stringify(payload));
     
     const options = {
       method: 'POST',
@@ -34,34 +32,25 @@ function syncToDatabase() {
       muteHttpExceptions: true
     };
     
-    Logger.log('Fetching API...');
     const response = UrlFetchApp.fetch(API_URL, options);
-    
     const responseCode = response.getResponseCode();
     const responseBody = response.getContentText();
     
-    Logger.log('Response code: ' + responseCode);
-    Logger.log('Response body: ' + responseBody);
+    Logger.log('Response Code: ' + responseCode);
+    Logger.log('Response Body: ' + responseBody);
     
     if (responseCode === 200) {
       const result = JSON.parse(responseBody);
-      Logger.log('Sync successful: ' + JSON.stringify(result));
-      
-      try {
-        const ss = SpreadsheetApp.getActiveSpreadsheet();
-        if (ss) {
-          ss.toast('Auto Sync สำเร็จ: ' + result.count + ' รายการ', 'Google Sheets Auto Sync');
-        }
-      } catch (e) {}
+      Logger.log('Sync Successful: ' + result.count + ' items');
     } else {
-      Logger.log('Sync failed: ' + responseCode + ' ' + responseBody);
+      Logger.log('Sync Failed: ' + responseCode + ' - ' + responseBody);
     }
   } catch (error) {
-    Logger.log('Sync error: ' + error.message);
+    Logger.log('Sync Error: ' + error.message);
   }
 }
 
-// ฟังก์ชันสำหรับกดทดสอบรันด้วยมือ
+// ฟังก์ชันสำหรับทดสอบรันด้วยมือ
 function testSync() {
   syncToDatabase();
 }
