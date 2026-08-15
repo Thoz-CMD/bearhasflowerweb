@@ -87,17 +87,10 @@ export async function POST(req: Request) {
     const sheetName = targetSheet?.properties?.title || 'Sheet1';
     console.log('Using sheet:', sheetName);
 
-    // อ่านข้อมูลจาก Google Sheets (รวม formatting)
+    // อ่านข้อมูลจาก Google Sheets (เฉพาะ values เพื่อลดเวลา)
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
-      range: `${sheetName}!A:F`, // อ่าน column A-F ทั้งหมด
-    });
-
-    // อ่าน cell formatting เพื่อตรวจสอบสีพื้นหลัง (สำหรับ Thai+)
-    const formatResponse = await sheets.spreadsheets.get({
-      spreadsheetId: SPREADSHEET_ID,
-      ranges: [`${sheetName}!F:F`],
-      fields: 'sheets/data/rowData/values/effectiveFormat/backgroundColor'
+      range: `${sheetName}!A:E`, // อ่าน column A-E (ไม่รวม formatting)
     });
 
     const rows = response.data.values;
@@ -106,16 +99,6 @@ export async function POST(req: Request) {
 
     if (!rows || rows.length === 0) {
       return NextResponse.json({ error: 'ไม่พบข้อมูลใน Google Sheets' }, { status: 400 });
-    }
-
-    // Extract background colors from format response
-    const backgroundColors: any[] = [];
-    if (formatResponse.data.sheets && formatResponse.data.sheets[0]?.data?.[0]?.rowData) {
-      const rowData = formatResponse.data.sheets[0].data[0].rowData;
-      for (const row of rowData) {
-        const bgColor = row.values?.[0]?.effectiveFormat?.backgroundColor;
-        backgroundColors.push(bgColor);
-      }
     }
 
     const items: ExpenseItem[] = [];
@@ -132,30 +115,9 @@ export async function POST(req: Request) {
       const expenseRaw = row[3];
       const thaiPlusRaw = row[4];
 
-      // ตรวจสอบสีพื้นหลังของ cell ใน column F
-      const bgColor = backgroundColors[i - 1];
-      console.log(`Row ${i} background color:`, bgColor);
-
-      // ตรวจสอบ Thai+ จากสีพื้นหลัง (สีฟ้า = ใช่, สีม่วง = ไม่ใช่)
-      let isThaiPlus = false;
-      if (bgColor) {
-        // ตรวจสอบว่าเป็นสีฟ้าหรือไม่ (blue component > red and green)
-        const red = bgColor.red || 0;
-        const green = bgColor.green || 0;
-        const blue = bgColor.blue || 0;
-        console.log(`Row ${i} RGB: R=${red}, G=${green}, B=${blue}`);
-
-        // สีฟ้ามี blue สูงกว่า red และ green
-        if (blue > red && blue > green) {
-          isThaiPlus = true;
-        }
-      }
-
-      // ถ้าไม่มีสีพื้นหลัง ให้ตรวจสอบจากค่าใน cell
-      if (!bgColor) {
-        const thaiPlusStr = String(thaiPlusRaw || '').toLowerCase().trim();
-        isThaiPlus = thaiPlusStr === 'ใช่' || thaiPlusStr === 'yes' || thaiPlusStr === 'true' || thaiPlusStr === '1';
-      }
+      // ตรวจสอบ Thai+ จากค่าใน cell เท่านั้น (ไม่ใช้สีพื้นหลังเพื่อลดเวลา)
+      const thaiPlusStr = String(thaiPlusRaw || '').toLowerCase().trim();
+      const isThaiPlus = thaiPlusStr === 'ใช่' || thaiPlusStr === 'yes' || thaiPlusStr === 'true' || thaiPlusStr === '1';
 
       // Parse date
       let date = '';
