@@ -2,8 +2,6 @@ import { NextResponse } from 'next/server';
 import { google } from 'googleapis';
 import { readFileSync } from 'fs';
 import { join } from 'path';
-import { db } from '@/lib/firebase';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 
 type ExpenseItem = {
   title: string;
@@ -306,47 +304,12 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'ไม่พบข้อมูลรายการที่ถูกต้องใน Google Sheets' }, { status: 400 });
     }
 
-    // ถ้า autoSave=true ให้ลองบันทึกลง database (พร้อม 3s timeout ป้องกัน serverless hang)
-    if (autoSave) {
-      console.log('Auto-saving items to database...');
-      try {
-        const savePromise = Promise.all(items.map((item) => addDoc(collection(db, 'expenses'), {
-          title: item.title,
-          amount: item.amount,
-          category: 'other',
-          date: item.date,
-          type: item.type,
-          isThaiPlus: item.isThaiPlus,
-          createdAt: serverTimestamp(),
-          recordedBy: 'Google Sheets Auto Sync'
-        })));
-
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Firestore autoSave permission/timeout')), 3000)
-        );
-
-        await Promise.race([savePromise, timeoutPromise]);
-        console.log('Auto-save completed successfully');
-        return NextResponse.json({ 
-          items, 
-          count: items.length, 
-          autoSaved: true,
-          message: 'Sync และบันทึกข้อมูลสำเร็จ' 
-        });
-      } catch (saveError) {
-        console.warn('Auto-save skipped:', (saveError as any)?.message);
-        return NextResponse.json({ 
-          items, 
-          count: items.length, 
-          autoSaved: false,
-          message: `อ่านข้อมูลจาก Google Sheets สำเร็จ (${items.length} รายการ)`,
-          note: (saveError as any)?.message 
-        });
-      }
-    }
-
-    // ถ้าไม่ autoSave ให้คืนค่าข้อมูลเพื่อให้ user กดบันทึกเอง
-    return NextResponse.json({ items, count: items.length, autoSaved: false });
+    return NextResponse.json({ 
+      items, 
+      count: items.length, 
+      autoSaved: false,
+      message: `Sync และอ่านข้อมูลจาก Google Sheets สำเร็จเรียบร้อย (${items.length} รายการ)` 
+    });
   } catch (err: any) {
     console.error('Google Sheets sync error:', err);
     return NextResponse.json({ error: 'เกิดข้อผิดพลาดในการอ่าน Google Sheets: ' + (err?.message || 'Unknown error') }, { status: 500 });
