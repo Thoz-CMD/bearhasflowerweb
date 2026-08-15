@@ -16,6 +16,59 @@ type ExpenseItem = {
 // Spreadsheet ID - ควรเก็บใน environment variable ใน production
 const SPREADSHEET_ID = '1uw_2QEarlsYnLu1qGM3MRywURJAG3zOF_kBRLJCFN1k';
 
+function parseCredentials(raw: string) {
+  if (!raw) return null;
+  let str = raw.trim();
+
+  // Remove surrounding quotes if any
+  if ((str.startsWith("'") && str.endsWith("'")) || (str.startsWith('"') && str.endsWith('"'))) {
+    str = str.slice(1, -1).trim();
+  }
+
+  // Handle base64 encoded JSON
+  if (!str.startsWith('{') && !str.startsWith('[')) {
+    try {
+      const decoded = Buffer.from(str, 'base64').toString('utf-8').trim();
+      if (decoded.startsWith('{')) {
+        str = decoded;
+      }
+    } catch (e) {}
+  }
+
+  let credentials: any = null;
+
+  // 1. Standard JSON parse
+  try {
+    credentials = JSON.parse(str);
+  } catch (e) {}
+
+  // 2. Fix single quotes in JSON string
+  if (!credentials) {
+    try {
+      const formatted = str
+        .replace(/'([^'\\]*(\\.[^'\\]*)*)'/g, (match, p1) => '"' + p1.replace(/"/g, '\\"') + '"')
+        .replace(/([{,]\s*)([a-zA-Z0-9_]+)\s*:/g, '$1"$2":');
+      credentials = JSON.parse(formatted);
+    } catch (e) {}
+  }
+
+  // 3. Safe Function eval fallback for JS object literals
+  if (!credentials) {
+    try {
+      credentials = new Function('return (' + str + ')')();
+    } catch (e) {}
+  }
+
+  if (credentials && typeof credentials === 'object') {
+    if (credentials.private_key) {
+      credentials.private_key = credentials.private_key.replace(/\\n/g, '\n');
+    }
+    return credentials;
+  }
+
+  return null;
+}
+
 export async function GET(req: Request) {
   return NextResponse.json({ 
     message: 'Google Sheets Sync API is working. Use POST method to sync data.',
@@ -25,39 +78,45 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
+    let body: any = {};
+    try {
+      body = await req.json();
+    } catch (e) {
+      // Allow empty or non-JSON body defaults
+    }
     const autoSave = body.autoSave === true;
 
     console.log('Starting Google Sheets sync...');
-    console.log('Environment check:', !!process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
-    console.log('Request body:', JSON.stringify(body));
+    console.log('Environment GOOGLE_SERVICE_ACCOUNT_JSON check:', !!process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
 
-    // อ่าน credentials จาก environment variable (สำหรับ production) หรือไฟล์ (สำหรับ local)
-    let credentials;
+    let credentials: any = null;
     
-    try {
-      if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
-        // ใช้ environment variable (production)
-        console.log('Using environment variable for credentials');
-        credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON as string);
-      } else {
-        // ใช้ไฟล์ (local development)
-        console.log('Using file for credentials');
-        const serviceAccountPath = join(process.cwd(), 'service-account.json');
-        credentials = JSON.parse(readFileSync(serviceAccountPath, 'utf-8'));
-      }
-    } catch (e) {
-      console.error('Error loading credentials:', e);
-      throw new Error('ไม่สามารถโหลด Google Service Account credentials: ' + (e as Error).message);
+    // Attempt 1: From GOOGLE_SERVICE_ACCOUNT_JSON env var
+    if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
+      credentials = parseCredentials(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
     }
 
-    console.log('Credentials loaded:', Object.keys(credentials));
-    console.log('client_email:', credentials.client_email);
-    console.log('private_key exists:', !!credentials.private_key);
+    // Attempt 2: From individual GOOGLE_CLIENT_EMAIL / GOOGLE_PRIVATE_KEY env vars
+    if (!credentials && process.env.GOOGLE_CLIENT_EMAIL && process.env.GOOGLE_PRIVATE_KEY) {
+      credentials = {
+        client_email: process.env.GOOGLE_CLIENT_EMAIL,
+        private_key: process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n')
+      };
+    }
 
-    // ตรวจสอบว่ามี client_email และ private_key
-    if (!credentials.client_email || !credentials.private_key) {
-      throw new Error(`Service account JSON ไม่มี client_email หรือ private_key. Keys: ${Object.keys(credentials).join(', ')}`);
+    // Attempt 3: From local service-account.json file
+    if (!credentials) {
+      try {
+        const serviceAccountPath = join(process.cwd(), 'service-account.json');
+        const fileContent = readFileSync(serviceAccountPath, 'utf-8');
+        credentials = parseCredentials(fileContent);
+      } catch (e) {
+        console.warn('Local service-account.json not found or invalid:', (e as Error).message);
+      }
+    }
+
+    if (!credentials || !credentials.client_email || !credentials.private_key) {
+      throw new Error('ไม่พบ Google Service Account credentials ที่ถูกต้อง ( client_email หรือ private_key ขาดหายไป )');
     }
 
     // สร้าง auth client ด้วย GoogleAuth และ credentials
