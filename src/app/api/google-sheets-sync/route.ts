@@ -201,9 +201,9 @@ export async function POST(req: Request) {
         const green = colFBgColor.green ?? 1;
         const blue = colFBgColor.blue ?? 1;
 
-        // สีขาว/เทาของ Google Sheets จะมี red >= 0.95 (เช่น 1.0 หรือ 0.96)
-        // ถ้าเป็นสีฟ้าเติมใน Column F: red จะน้อยกว่า 0.95 และ blue จะมากกว่า red อย่างชัดเจน
-        if (red < 0.95 && blue > red + 0.08 && blue >= green) {
+        // สีฟ้าไฮไลต์ใน Column F มีค่า RGB ประมาณ R=0.23 (60), G=0.47 (120), B=0.85 (216)
+        // สีขาว/เทาของ Google Sheets จะมี red >= 0.90
+        if (red < 0.5 && blue > 0.7 && blue > green) {
           isThaiPlus = true;
         }
       }
