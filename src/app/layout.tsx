@@ -11,8 +11,9 @@ const cormorant = Cormorant_Garamond({
 });
 
 const notoSansThai = Noto_Sans_Thai({ 
-  subsets: ["thai", "latin"],
+  subsets: ["thai"],
   weight: ["300", "400", "500", "600", "700"],
+  display: "swap",
   variable: '--font-noto'
 });
 
