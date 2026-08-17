@@ -146,18 +146,13 @@ export async function POST(req: Request) {
     const sheetName = targetSheet?.properties?.title || 'Sheet1';
     console.log('Using sheet:', sheetName);
 
-    // อ่านข้อมูลจาก Google Sheets (FORMATTED_VALUE สำหรับ columns B-F)
+    // อ่านข้อมูลจาก Google Sheets ด้วย UNFORMATTED_VALUE:
+    // - date cells ใน column A → serial number (ตัวเลข) = ที่เชื่อถือได้ที่สุด
+    // - text cells → string ตามปกติ
+    // - number cells (amounts) → number โดยตรง, cleanAmount() รับได้อยู่แล้ว
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
       range: `${sheetName}!A:F`,
-      valueRenderOption: 'FORMATTED_VALUE',
-    });
-
-    // อ่านคอลัมน์ A แบบ UNFORMATTED_VALUE เพื่อดึงวันที่เป็น serial number โดยตรง
-    // (ไม่ขึ้นกับ locale หรือ format ของ sheet)
-    const dateColResponse = await sheets.spreadsheets.values.get({
-      spreadsheetId: SPREADSHEET_ID,
-      range: `${sheetName}!A:A`,
       valueRenderOption: 'UNFORMATTED_VALUE',
     });
 
@@ -169,10 +164,9 @@ export async function POST(req: Request) {
     });
 
     const rows = response.data.values;
-    const dateColRaw = dateColResponse.data.values; // raw date values (serial numbers or strings)
 
     console.log('Google Sheets rows count:', rows?.length);
-    console.log('Date column raw (first 15):', dateColRaw?.slice(0, 15));
+    console.log('Col A first 15 rows (unformatted):', rows?.slice(0, 15).map((r: any[]) => r?.[0]));
 
     if (!rows || rows.length === 0) {
       return NextResponse.json({ error: 'ไม่พบข้อมูลใน Google Sheets' }, { status: 400 });
@@ -241,27 +235,27 @@ export async function POST(req: Request) {
     })();
 
     // ---- Pass 1: Pre-compute วันที่ของทุกแถว โดย fill-down ----
-    // ใช้ข้อมูลจาก dateColRaw (UNFORMATTED_VALUE) ซึ่งส่ง date cells เป็น serial number โดยตรง
-    // ไม่ขึ้นกับ locale หรือ format ของ sheet เลย
+    // rows[ri][0] คือ UNFORMATTED date: serial number (number) หรือข้อความที่ไม่ใช่วันที่ (string) หรือว่าง
     const rowDates: string[] = new Array(rows.length).fill('');
     let fillDate = '';
     for (let ri = 0; ri < rows.length; ri++) {
-      // ดึงค่าจาก unformatted column A (ให้ serial number สำหรับ date cells)
-      const rawUnformatted = dateColRaw?.[ri]?.[0];
+      const rawUnformatted = rows[ri]?.[0]; // ค่า UNFORMATTED จาก request เดียว
       const parsed = parseDateRaw(rawUnformatted);
-      console.log(`Pass1 row[${ri}] unformatted="${rawUnformatted}" (${typeof rawUnformatted}) → parsed="${parsed}"`);
+      console.log(`Pass1 row[${ri}] colA="${rawUnformatted}" (${typeof rawUnformatted}) → parsed="${parsed}"`);
       if (parsed) fillDate = parsed;
       rowDates[ri] = fillDate;
     }
     console.log('Pre-computed row dates (first 15):', rowDates.slice(0, 15));
 
 
-    // ---- Pass 2: Process rows ใช้วันที่จาก rowDates ----
+    // ---- Pass 2: Process 100 แถวล่าสุดล่างสุดของ Sheet (Tail Reading) ----
     const items: ExpenseItem[] = [];
+    const MAX_TAIL_ROWS = 100; // อ่านเฉพาะ 100 แถวล่าสุดของ Sheet
+    const startIndex = Math.max(1, rows.length - MAX_TAIL_ROWS);
 
-    // Skip header row and process data rows - limit to 100 rows to reduce processing time
-    const maxRows = Math.min(rows.length, 101); // header + 100 data rows
-    for (let i = 1; i < maxRows; i++) {
+    console.log(`Processing sheet tail: rows ${startIndex} to ${rows.length - 1} (total ${rows.length} rows in sheet)`);
+
+    for (let i = startIndex; i < rows.length; i++) {
       const row = rows[i];
       if (!row || row.length < 2) continue;
 
@@ -269,7 +263,7 @@ export async function POST(req: Request) {
       const incomeRaw = row[2];
       const expenseRaw = row[3];
 
-      // ใช้วันที่จาก pre-computed array (fill-down จากแถวก่อนหน้า)
+      // ใช้วันที่จาก pre-computed array (fill-down จากแถวก่อนหน้าตั้งแต่แถวแรก)
       const date = rowDates[i] || todayBkk;
       console.log(`Row ${i} (${titleRaw}) → date: ${date} | raw dateCol: ${JSON.stringify(rows[i]?.[0])}`);
 
@@ -405,15 +399,25 @@ export async function POST(req: Request) {
 
           const adminDb = getFirestore(adminApp);
           
-          // 1. Fetch existing expenses from Firestore for deduplication
-          const existingSnap = await adminDb.collection('expenses').limit(500).get();
+          // 1. Fetch existing expenses from Firestore matching the dates in items (Date Range Deduplication)
+          const uniqueDates = Array.from(new Set(items.map(it => it.date).filter(Boolean)));
           const existingSet = new Set<string>();
-          
-          existingSnap.forEach((docSnap) => {
-            const d = docSnap.data();
-            const key = `${d.date || ''}|${(d.title || '').trim().toLowerCase()}|${d.amount || 0}|${d.type || ''}|${Boolean(d.isThaiPlus)}`;
-            existingSet.add(key);
-          });
+
+          if (uniqueDates.length > 0) {
+            // ดึงข้อมูลจาก Firestore เฉพาะช่วงวันที่ที่เจอใน Sheet รอบนี้ (แบ่ง batch ละ 10 วันถ้าจำเป็น)
+            for (let dIdx = 0; dIdx < uniqueDates.length; dIdx += 10) {
+              const dateBatch = uniqueDates.slice(dIdx, dIdx + 10);
+              const dateSnap = await adminDb.collection('expenses')
+                .where('date', 'in', dateBatch)
+                .get();
+
+              dateSnap.forEach((docSnap) => {
+                const d = docSnap.data();
+                const key = `${d.date || ''}|${(d.title || '').trim().toLowerCase()}|${d.amount || 0}|${d.type || ''}|${Boolean(d.isThaiPlus)}`;
+                existingSet.add(key);
+              });
+            }
+          }
 
           // 2. Filter out items that already exist in Firestore
           const newItems = items.filter((item) => {
@@ -421,7 +425,7 @@ export async function POST(req: Request) {
             return !existingSet.has(key);
           });
 
-          console.log(`Auto-save deduplication: ${items.length} total items from sheet, ${newItems.length} new items to insert`);
+          console.log(`Auto-save deduplication: ${items.length} tail items from sheet, ${newItems.length} new items to insert (unique dates: ${uniqueDates.join(', ')})`);
 
           if (newItems.length === 0) {
             saveSuccess = true;
