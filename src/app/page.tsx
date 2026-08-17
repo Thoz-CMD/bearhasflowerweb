@@ -66,13 +66,14 @@ export default async function HomePage() {
       const badgeClass = 'product-badge' + (isSoldOut ? ' product-badge-soldout' : (badgeText.includes('พร้อมส่ง') ? ' product-badge-ready' : ''));
       const productNav = `window.location.href='${targetUrl}'`;
 
-      const imageSrc = idx < 4 ? p.coverImage : 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'; // transparent 1x1 gif
+      // Never embed base64 in SSR HTML — client hydration will load real images
+      const placeholderSrc = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
       
       return `
         <article class="product-card fade-in" style="animation-delay: ${0.05 + idx * 0.05}s;" data-product-id="${p.id}" data-product-type="${productType}">
           <div class="product-image-wrap" ${isSoldOut ? '' : `onclick="${productNav}"`} style="cursor:${isSoldOut ? 'default' : 'pointer'}; position:relative; overflow:hidden;">
             ${p.coverImage
-              ? `<img src="${imageSrc}" alt="${p.name}" class="product-image" loading="${idx < 2 ? 'eager' : 'lazy'}" decoding="async" style="width:100%; height:100%; object-fit:cover; position:absolute; top:0; left:0; border-radius:inherit;" />`
+              ? `<img src="${placeholderSrc}" data-real-src="${p.coverImage.startsWith('data:') ? '' : p.coverImage}" alt="${p.name}" class="product-image" loading="${idx < 2 ? 'eager' : 'lazy'}" decoding="async" style="width:100%; height:100%; object-fit:cover; position:absolute; top:0; left:0; border-radius:inherit; background:#f0e6ef;" />`
               : `<div class="product-placeholder">🌹</div>`
             }
             <span class="${badgeClass}">${badgeText}</span>
