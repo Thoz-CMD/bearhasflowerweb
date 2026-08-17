@@ -1,19 +1,38 @@
-import { db } from '@/lib/firebase';
-import { collection, getDocs, query, orderBy } from 'firebase/firestore';
 import ClientPage from './ClientPage';
 
 export const revalidate = 60; // Revalidate every 60 seconds for SSG cache
+
+const parseFirestoreValue = (val: any) => {
+  if ('stringValue' in val) return val.stringValue;
+  if ('integerValue' in val) return Number(val.integerValue);
+  if ('doubleValue' in val) return Number(val.doubleValue);
+  if ('booleanValue' in val) return val.booleanValue;
+  if ('timestampValue' in val) return new Date(val.timestampValue).getTime();
+  return null;
+};
 
 export default async function HomePage() {
   let initialProductHtml = '';
 
   try {
-    const q = query(collection(db, 'products'), orderBy('createdAt', 'desc'));
-    const snapshot = await getDocs(q);
-    const products: any[] = [];
-    snapshot.forEach(doc => {
-      products.push({ id: doc.id, ...doc.data() });
+    const res = await fetch('https://firestore.googleapis.com/v1/projects/bearhasflower/databases/(default)/documents/products?pageSize=100', {
+      next: { revalidate: 60 }
     });
+    const data = await res.json();
+    
+    let products: any[] = [];
+    if (data.documents) {
+      products = data.documents.map((doc: any) => {
+        const parsed: any = { id: doc.name.split('/').pop() };
+        for (const [key, val] of Object.entries(doc.fields || {})) {
+          parsed[key] = parseFirestoreValue(val);
+        }
+        return parsed;
+      });
+    }
+
+    // Sort by createdAt desc
+    products.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 
     initialProductHtml = products.map((p: any, idx: number) => {
       const currentLikes = Math.max(0, Number(p.likes || 0));
