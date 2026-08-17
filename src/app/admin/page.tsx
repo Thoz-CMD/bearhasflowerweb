@@ -224,7 +224,12 @@ function AdminPageContent() {
   const [isParsingReceipt, setIsParsingReceipt] = useState(false);
   const [receiptParseError, setReceiptParseError] = useState<string | null>(null);
   const [receiptFileNames, setReceiptFileNames] = useState<string[]>([]);
-  const [isSyncingGoogleSheets, setIsSyncingGoogleSheets] = useState(false);
+  const [isAutoSyncEnabled, setIsAutoSyncEnabled] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('autoSyncEnabled') !== 'false';
+    }
+    return true;
+  });
   const [ledgerTypeFilter, setLedgerTypeFilter] = useState<'all' | 'income' | 'expense' | 'thaiPlus'>('all');
   const [selectedMonth, setSelectedMonth] = useState(() => {
     const today = new Date();
@@ -876,41 +881,10 @@ function AdminPageContent() {
     }
   };
 
-  const handleSyncGoogleSheets = async () => {
-    setIsSyncingGoogleSheets(true);
-    try {
-      const res = await fetch('/api/google-sheets-sync', {
-        method: 'POST'
-      });
-
-      const data = await res.json();
-      console.log('Google Sheets sync response:', data);
-
-      if (!res.ok) {
-        throw new Error(data?.error || 'ไม่สามารถอ่าน Google Sheets ได้');
-      }
-
-      if (data.items && data.items.length > 0) {
-        const normalizedItems = data.items.map((item: any) => ({
-          id: crypto?.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random()),
-          title: String(item?.title || '').trim(),
-          amount: item?.amount !== undefined && item?.amount !== null ? String(item.amount) : '',
-          date: String(item?.date || expenseDate),
-          type: (item?.type === 'income' || item?.type === 'expense') ? item.type as 'income' | 'expense' : 'expense',
-          isThaiPlus: Boolean(item?.isThaiPlus)
-        }));
-        console.log('Normalized Google Sheets items:', normalizedItems);
-        setExpenseItems(normalizedItems);
-        await (window as any).showBeautifulAlert(`Sync ข้อมูลจาก Google Sheets สำเร็จ ${data.items.length} รายการค่ะ`, 'success', 'Sync สำเร็จ');
-      } else {
-        await (window as any).showBeautifulAlert('ไม่พบข้อมูลรายการใน Google Sheets ค่ะ', 'warning', 'ไม่พบข้อมูล');
-      }
-    } catch (err: any) {
-      const message = err?.message || 'Sync Google Sheets ไม่สำเร็จ กรุณาลองใหม่อีกครั้ง';
-      await (window as any).showBeautifulAlert(message, 'error', 'เกิดข้อผิดพลาด');
-    } finally {
-      setIsSyncingGoogleSheets(false);
-    }
+  const handleToggleAutoSync = () => {
+    const next = !isAutoSyncEnabled;
+    setIsAutoSyncEnabled(next);
+    localStorage.setItem('autoSyncEnabled', String(next));
   };
 
   const handleDeleteExpense = async (id: string, type?: string) => {
@@ -5493,20 +5467,54 @@ function AdminPageContent() {
 
                 <div className="ai-receipt-card" style={{ marginTop: '1rem' }}>
                   <div className="ai-receipt-title">
-                    <span></span> Sync จาก Google Sheets
+                    Auto Sync จาก Google Sheets
                   </div>
                   <p className="ai-receipt-subtitle">
-                    อ่านข้อมูลจาก Google Sheets โดยตรง
+                    {isAutoSyncEnabled
+                      ? 'ระบบกำลัง sync ข้อมูลอัตโนมัติจาก Google Sheets ทุก 1-5 นาที'
+                      : 'การ sync อัตโนมัติถูกปิดอยู่ (Google Apps Script ยังทำงานอยู่)'}
                   </p>
-                  <div className="ai-receipt-actions">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '10px' }}>
                     <button
+                      id="auto-sync-toggle-btn"
                       type="button"
-                      className="submit-btn"
-                      onClick={handleSyncGoogleSheets}
-                      disabled={isSyncingGoogleSheets}
+                      onClick={handleToggleAutoSync}
+                      style={{
+                        position: 'relative',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        width: '52px',
+                        height: '28px',
+                        borderRadius: '999px',
+                        border: 'none',
+                        background: isAutoSyncEnabled ? '#db8a9e' : '#d1cece',
+                        cursor: 'pointer',
+                        transition: 'background 0.25s ease',
+                        flexShrink: 0,
+                        padding: 0
+                      }}
+                      aria-pressed={isAutoSyncEnabled}
+                      title={isAutoSyncEnabled ? 'คลิกเพื่อปิด Auto Sync' : 'คลิกเพื่อเปิด Auto Sync'}
                     >
-                      {isSyncingGoogleSheets ? 'กำลัง Sync...' : 'Sync ข้อมูล'}
+                      <span style={{
+                        position: 'absolute',
+                        top: '3px',
+                        left: isAutoSyncEnabled ? '27px' : '3px',
+                        width: '22px',
+                        height: '22px',
+                        borderRadius: '50%',
+                        background: '#fff',
+                        boxShadow: '0 1px 4px rgba(0,0,0,0.18)',
+                        transition: 'left 0.25s ease'
+                      }} />
                     </button>
+                    <span style={{
+                      fontSize: '0.88rem',
+                      fontWeight: 600,
+                      color: isAutoSyncEnabled ? '#db8a9e' : '#a08a8e'
+                    }}>
+                      {isAutoSyncEnabled ? 'เปิดอยู่' : 'ปิดอยู่'}
+                    </span>
                   </div>
                 </div>
                 <form onSubmit={handleAddExpense}>

@@ -146,10 +146,19 @@ export async function POST(req: Request) {
     const sheetName = targetSheet?.properties?.title || 'Sheet1';
     console.log('Using sheet:', sheetName);
 
-    // อ่านข้อมูลจาก Google Sheets (รวม formatting)
+    // อ่านข้อมูลจาก Google Sheets (FORMATTED_VALUE สำหรับ columns B-F)
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
-      range: `${sheetName}!A:F`, // อ่าน column A-F ทั้งหมด
+      range: `${sheetName}!A:F`,
+      valueRenderOption: 'FORMATTED_VALUE',
+    });
+
+    // อ่านคอลัมน์ A แบบ UNFORMATTED_VALUE เพื่อดึงวันที่เป็น serial number โดยตรง
+    // (ไม่ขึ้นกับ locale หรือ format ของ sheet)
+    const dateColResponse = await sheets.spreadsheets.values.get({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${sheetName}!A:A`,
+      valueRenderOption: 'UNFORMATTED_VALUE',
     });
 
     // อ่าน cell formatting เพื่อตรวจสอบสีพื้นหลัง (สำหรับ Thai+) จาก column A-F
@@ -160,8 +169,10 @@ export async function POST(req: Request) {
     });
 
     const rows = response.data.values;
+    const dateColRaw = dateColResponse.data.values; // raw date values (serial numbers or strings)
 
-    console.log('Google Sheets rows:', rows);
+    console.log('Google Sheets rows count:', rows?.length);
+    console.log('Date column raw (first 15):', dateColRaw?.slice(0, 15));
 
     if (!rows || rows.length === 0) {
       return NextResponse.json({ error: 'ไม่พบข้อมูลใน Google Sheets' }, { status: 400 });
@@ -176,6 +187,76 @@ export async function POST(req: Request) {
       }
     }
 
+    // ---- ฟังก์ชัน parse วันที่จาก raw value (รองรับ serial number, string d/m/yyyy, ISO) ----
+    const parseDateRaw = (rawVal: any): string => {
+      if (rawVal === undefined || rawVal === null || rawVal === '') return '';
+
+      // number → Google Sheets serial number (days since Dec 30, 1899)
+      if (typeof rawVal === 'number') {
+        const ms = (rawVal - 25569) * 86400 * 1000;
+        const bkk = new Date(ms + 7 * 3600 * 1000);
+        if (isNaN(bkk.getTime())) return '';
+        return `${bkk.getUTCFullYear()}-${String(bkk.getUTCMonth()+1).padStart(2,'0')}-${String(bkk.getUTCDate()).padStart(2,'0')}`;
+      }
+
+      const s = String(rawVal).trim();
+      if (!s) return '';
+
+      // รูปแบบ d/m/yy หรือ d/m/yyyy (ไทย/ยุโรป)
+      const mDate = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);
+      if (mDate) {
+        let year = mDate[3];
+        if (year.length === 2) year = String(2500 + parseInt(year));
+        const yearNum = parseInt(year);
+        const ceYear = yearNum > 2500 ? yearNum - 543 : yearNum;
+        return `${ceYear}-${mDate[2].padStart(2,'0')}-${mDate[1].padStart(2,'0')}`;
+      }
+
+      // numeric string → serial number (เช่น "46383")
+      if (/^\d+(\.\d+)?$/.test(s)) {
+        const serial = parseFloat(s);
+        if (serial > 1000) {
+          const ms = (serial - 25569) * 86400 * 1000;
+          const bkk = new Date(ms + 7 * 3600 * 1000);
+          if (!isNaN(bkk.getTime())) {
+            return `${bkk.getUTCFullYear()}-${String(bkk.getUTCMonth()+1).padStart(2,'0')}-${String(bkk.getUTCDate()).padStart(2,'0')}`;
+          }
+        }
+      }
+
+      // ISO / รูปแบบอื่นๆ
+      const d = new Date(s);
+      if (!isNaN(d.getTime())) {
+        const bkk = new Date(d.getTime() + 7 * 3600 * 1000);
+        return `${bkk.getUTCFullYear()}-${String(bkk.getUTCMonth()+1).padStart(2,'0')}-${String(bkk.getUTCDate()).padStart(2,'0')}`;
+      }
+
+      return '';
+    };
+
+    // วันที่ปัจจุบัน Bangkok timezone (fallback กรณีไม่เจอวันที่เลย)
+    const todayBkk = (() => {
+      const bkk = new Date(Date.now() + 7 * 3600 * 1000);
+      return `${bkk.getUTCFullYear()}-${String(bkk.getUTCMonth()+1).padStart(2,'0')}-${String(bkk.getUTCDate()).padStart(2,'0')}`;
+    })();
+
+    // ---- Pass 1: Pre-compute วันที่ของทุกแถว โดย fill-down ----
+    // ใช้ข้อมูลจาก dateColRaw (UNFORMATTED_VALUE) ซึ่งส่ง date cells เป็น serial number โดยตรง
+    // ไม่ขึ้นกับ locale หรือ format ของ sheet เลย
+    const rowDates: string[] = new Array(rows.length).fill('');
+    let fillDate = '';
+    for (let ri = 0; ri < rows.length; ri++) {
+      // ดึงค่าจาก unformatted column A (ให้ serial number สำหรับ date cells)
+      const rawUnformatted = dateColRaw?.[ri]?.[0];
+      const parsed = parseDateRaw(rawUnformatted);
+      console.log(`Pass1 row[${ri}] unformatted="${rawUnformatted}" (${typeof rawUnformatted}) → parsed="${parsed}"`);
+      if (parsed) fillDate = parsed;
+      rowDates[ri] = fillDate;
+    }
+    console.log('Pre-computed row dates (first 15):', rowDates.slice(0, 15));
+
+
+    // ---- Pass 2: Process rows ใช้วันที่จาก rowDates ----
     const items: ExpenseItem[] = [];
 
     // Skip header row and process data rows - limit to 100 rows to reduce processing time
@@ -184,11 +265,13 @@ export async function POST(req: Request) {
       const row = rows[i];
       if (!row || row.length < 2) continue;
 
-      const dateRaw = row[0];
       const titleRaw = row[1];
       const incomeRaw = row[2];
       const expenseRaw = row[3];
-      const thaiPlusRaw = row[4];
+
+      // ใช้วันที่จาก pre-computed array (fill-down จากแถวก่อนหน้า)
+      const date = rowDates[i] || todayBkk;
+      console.log(`Row ${i} (${titleRaw}) → date: ${date} | raw dateCol: ${JSON.stringify(rows[i]?.[0])}`);
 
       // ตรวจสอบ Thai+ จากสีพื้นหลังของ คอลัมน์ F (Index 5) เท่านั้น
       // ถ้าสีฟ้า = true, ถ้าสีขาว/อื่นๆ = false
@@ -205,37 +288,6 @@ export async function POST(req: Request) {
         // สีขาว/เทาของ Google Sheets จะมี red >= 0.90
         if (red < 0.5 && blue > 0.7 && blue > green) {
           isThaiPlus = true;
-        }
-      }
-
-      console.log(`Row ${i} (${titleRaw}) Column F RGB:`, colFBgColor, `=> isThaiPlus: ${isThaiPlus}`);
-
-      // Parse date
-      let date = '';
-      if (dateRaw) {
-        const dateStr = String(dateRaw).trim();
-        // Try to parse Thai date format (d/m/yy or d/m/yyyy)
-        const thaiDateMatch = dateStr.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);
-        if (thaiDateMatch) {
-          const day = thaiDateMatch[1].padStart(2, '0');
-          const month = thaiDateMatch[2].padStart(2, '0');
-          let year = thaiDateMatch[3];
-
-          // Convert 2-digit year to 4-digit (assuming Buddhist Era)
-          if (year.length === 2) {
-            year = '25' + year;
-          }
-
-          // Convert Buddhist Era to Christian Era (only if year > 2500)
-          const yearNum = parseInt(year);
-          const ceYear = yearNum > 2500 ? yearNum - 543 : yearNum;
-          date = `${ceYear}-${month}-${day}`;
-        } else {
-          // Try standard date format
-          const standardDate = new Date(dateStr);
-          if (!isNaN(standardDate.getTime())) {
-            date = standardDate.toISOString().split('T')[0];
-          }
         }
       }
 
@@ -288,7 +340,7 @@ export async function POST(req: Request) {
       items.push({
         title,
         amount,
-        date: date || new Date().toISOString().split('T')[0],
+        date, // มาจาก rowDates[i] || todayBkk เสมอ ไม่มีทาง empty
         type,
         isThaiPlus
       });
