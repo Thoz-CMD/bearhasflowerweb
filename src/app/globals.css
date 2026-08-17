@@ -268,15 +268,15 @@ body::before {
 }
 
 .slide:nth-child(1) {
-  background: url('/images/brandner/ChatGPT%20Image%2030%20%E0%B8%9E.%E0%B8%84.%202569%2003_10_36.png') center/cover no-repeat;
+  background: url('/images/brandner/ChatGPT%20Image%2030%20%E0%B8%9E.%E0%B8%84.%202569%2003_10_36.webp') center/cover no-repeat;
 }
 
 .slide:nth-child(2) {
-  background: url('/images/brandner/ChatGPT%20Image%204%20%E0%B8%A1%E0%B8%B4.%E0%B8%A2.%202569%2017_07_25.png') center/cover no-repeat;
+  background: url('/images/brandner/ChatGPT%20Image%204%20%E0%B8%A1%E0%B8%B4.%E0%B8%A2.%202569%2017_07_25.webp') center/cover no-repeat;
 }
 
 .slide:nth-child(3) {
-  background: url('/images/brandner/ChatGPT%20Image%204%20%E0%B8%A1%E0%B8%B4.%E0%B8%A2.%202569%2018_04_35.png') center/cover no-repeat;
+  background: url('/images/brandner/ChatGPT%20Image%204%20%E0%B8%A1%E0%B8%B4.%E0%B8%A2.%202569%2018_04_35.webp') center/cover no-repeat;
 }
 
 @media (max-width: 768px) {
@@ -517,15 +517,15 @@ body::before {
 }
 
 .cat-bg-1 {
-  background: url('/images/กุหลาบกลิดเตอร์.jpg') center/cover no-repeat;
+  background: url('/images/กุหลาบกลิดเตอร์.webp') center/cover no-repeat;
 }
 
 .cat-bg-2 {
-  background: url('/images/ดอกไม้ลวดกำมะหยี่.jpg') center/cover no-repeat;
+  background: url('/images/ดอกไม้ลวดกำมะหยี่.webp') center/cover no-repeat;
 }
 
 .cat-bg-3 {
-  background: url('/images/ดอกไม้ประดิษฐ์.png') center/cover no-repeat;
+  background: url('/images/ดอกไม้ประดิษฐ์.webp') center/cover no-repeat;
 }
 
 .cat-deco {
