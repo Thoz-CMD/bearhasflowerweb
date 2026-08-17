@@ -7,6 +7,7 @@ const cormorant = Cormorant_Garamond({
   subsets: ["latin"],
   weight: ["300", "400", "500", "600"],
   style: ["normal", "italic"],
+  display: "swap",
   variable: '--font-cormorant'
 });
 
@@ -20,6 +21,7 @@ const notoSansThai = Noto_Sans_Thai({
 const italiana = Italiana({ 
   subsets: ["latin"],
   weight: ["400"],
+  display: "swap",
   variable: '--font-italiana'
 });
 

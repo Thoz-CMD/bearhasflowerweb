@@ -637,8 +637,10 @@ export default function Home() {
             return Number(a._originalIndex ?? 0) - Number(b._originalIndex ?? 0);
           });
 
-        renderProductCards(filteredProducts);
-        syncProductFilterUI(filteredProducts.length);
+        requestAnimationFrame(() => {
+          renderProductCards(filteredProducts);
+          syncProductFilterUI(filteredProducts.length);
+        });
       };
 
       (window as any).applyProductFilters = applyProductFilters;
