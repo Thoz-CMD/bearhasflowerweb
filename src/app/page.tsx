@@ -70,7 +70,6 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    if (loading) return;
 
     if (typeof window !== 'undefined') {
       (window as any).showBeautifulAlert = function (message: string, type: string = 'info', title: string = 'แจ้งเตือน') {

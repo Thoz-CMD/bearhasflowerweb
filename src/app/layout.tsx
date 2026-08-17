@@ -42,6 +42,14 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="th">
+      <head>
+        <link
+          rel="preload"
+          as="image"
+          href="/images/brandner/ChatGPT%20Image%2030%20%E0%B8%9E.%E0%B8%84.%202569%2003_10_36.webp"
+          type="image/webp"
+        />
+      </head>
       <body className={`${cormorant.variable} ${notoSansThai.variable} ${italiana.variable}`}>
         {children}
         <PresenceTracker />
