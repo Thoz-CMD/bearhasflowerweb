@@ -1,40 +1,82 @@
 'use client';
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import flatpickr from 'flatpickr';
 import 'flatpickr/dist/flatpickr.min.css';
 import { Thai } from 'flatpickr/dist/l10n/th';
 
-interface DateTimePickerProps {
+interface BasePickerProps {
   id?: string;
   placeholder?: string;
+  value?: string;
+  style?: React.CSSProperties;
+  disabled?: boolean;
+}
+
+interface DatePickerProps extends BasePickerProps {
+  minDate?: string | Date;
+  minDateTime?: string;
+  onChange?: (dateStr: string) => void;
+}
+
+interface TimePickerProps extends BasePickerProps {
+  selectedDate?: string;
+  minTime?: string;
+  minDateTime?: string;
+  onChange?: (timeStr: string) => void;
+}
+
+interface DateTimePickerProps extends BasePickerProps {
   value?: string;
   minDate?: string | Date;
   minTime?: string;
   minDateTime?: string;
   onChange?: (dateStr: string, timeStr: string) => void;
-  style?: React.CSSProperties;
 }
 
-/**
- * React wrapper component for Flatpickr date/time picker
- * ใช้ npm flatpickr แทน CDN script injection
- * รวม Rose Gold theme CSS ไว้ภายใน
- */
-export default function DateTimePicker({
-  id = 'ipt-date',
-  placeholder = 'เลือกวันที่และเวลา',
-  value,
-  minDate,
-  minTime,
-  minDateTime,
-  onChange,
-  style,
-}: DateTimePickerProps) {
-  const inputRef = useRef<HTMLInputElement>(null);
-  const fpRef = useRef<flatpickr.Instance | null>(null);
-  const overlayRef = useRef<HTMLDivElement | null>(null);
+function getTomorrowStr(): string {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
 
-  // Helper: show/hide overlay
+function formatDatePart(date: Date): string {
+  return (
+    date.getFullYear() +
+    '-' +
+    String(date.getMonth() + 1).padStart(2, '0') +
+    '-' +
+    String(date.getDate()).padStart(2, '0')
+  );
+}
+
+function formatTimePart(date: Date): string {
+  return String(date.getHours()).padStart(2, '0') + ':' + String(date.getMinutes()).padStart(2, '0');
+}
+
+export function getMinDeliveryTime(
+  selectedDate: string,
+  minDateTime?: string,
+  tomorrowStr: string = getTomorrowStr()
+): string {
+  if (minDateTime && selectedDate) {
+    const minDateTimeObj = new Date(minDateTime);
+    if (selectedDate === formatDatePart(minDateTimeObj)) {
+      return formatTimePart(minDateTimeObj);
+    }
+  }
+
+  if (selectedDate === tomorrowStr) {
+    return '09:00';
+  }
+
+  return '00:00';
+}
+
+function useFlatpickrOverlay() {
+  const overlayRef = useRef<HTMLDivElement | null>(null);
+  const fpRef = useRef<flatpickr.Instance | null>(null);
+
   const showOverlay = () => {
     if (!overlayRef.current) {
       const overlay = document.createElement('div');
@@ -62,17 +104,525 @@ export default function DateTimePicker({
     }
   };
 
+  return { fpRef, showOverlay, hideOverlay };
+}
+
+const defaultInputStyle: React.CSSProperties = {
+  fontSize: '16px',
+  backgroundColor: '#fff',
+  cursor: 'pointer',
+  width: '100%',
+};
+
+export function DatePicker({
+  id = 'ipt-date',
+  placeholder = 'เลือกวันที่',
+  value,
+  minDate,
+  minDateTime,
+  onChange,
+  style,
+  disabled = false,
+}: DatePickerProps) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const { fpRef, showOverlay, hideOverlay } = useFlatpickrOverlay();
+
+  useEffect(() => {
+    if (!inputRef.current) return;
+
+    const computedMinDate = minDate || getTomorrowStr();
+    const minDateTimeObj = minDateTime ? new Date(minDateTime) : undefined;
+
+    fpRef.current = flatpickr(inputRef.current, {
+      enableTime: false,
+      dateFormat: 'Y-m-d',
+      minDate: minDateTimeObj || computedMinDate,
+      locale: Thai,
+      disableMobile: true,
+      defaultDate: value || undefined,
+      onOpen() {
+        showOverlay();
+      },
+      onClose() {
+        hideOverlay();
+      },
+      onChange(selectedDates) {
+        if (selectedDates.length > 0) {
+          onChange?.(formatDatePart(selectedDates[0]));
+        }
+      },
+    });
+
+    return () => {
+      hideOverlay();
+      fpRef.current?.destroy();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [minDate, minDateTime]);
+
+  useEffect(() => {
+    if (!fpRef.current) return;
+    if (value) {
+      fpRef.current.setDate(value, false);
+    } else {
+      fpRef.current.clear();
+    }
+  }, [value, fpRef]);
+
+  useEffect(() => {
+    if (!inputRef.current) return;
+    inputRef.current.disabled = disabled;
+  }, [disabled]);
+
+  return (
+    <>
+      <FlatpickrThemeStyles />
+      <input
+        ref={inputRef}
+        type="text"
+        id={id}
+        placeholder={placeholder}
+        readOnly
+        disabled={disabled}
+        style={{ ...defaultInputStyle, ...style }}
+      />
+    </>
+  );
+}
+
+export function TimePicker({
+  id = 'ipt-time',
+  placeholder = 'เลือกเวลา',
+  value,
+  selectedDate,
+  minTime,
+  minDateTime,
+  onChange,
+  style,
+  disabled = false,
+}: TimePickerProps) {
+  const tomorrowStr = getTomorrowStr();
+  const effectiveMinTime =
+    minTime ||
+    (selectedDate ? getMinDeliveryTime(selectedDate, minDateTime, tomorrowStr) : '00:00');
+  const isDisabled = disabled || !selectedDate;
+  const [isOpen, setIsOpen] = useState(false);
+  const minParsed = useMemo(() => parseTimeString(effectiveMinTime), [effectiveMinTime]);
+  const initialTime = useMemo(() => {
+    if (value) {
+      const parsed = parseTimeString(value);
+      return clampTime(parsed.hour, parsed.minute, minParsed);
+    }
+    return clampTime(Math.max(minParsed.hour, 9), minParsed.hour === Math.max(minParsed.hour, 9) ? minParsed.minute : 0, minParsed);
+  }, [value, minParsed]);
+  const [draftHour, setDraftHour] = useState(initialTime.hour);
+  const [draftMinute, setDraftMinute] = useState(initialTime.minute);
+
+  useEffect(() => {
+    if (value) {
+      const parsed = parseTimeString(value);
+      const clamped = clampTime(parsed.hour, parsed.minute, minParsed);
+      setDraftHour(clamped.hour);
+      setDraftMinute(clamped.minute);
+    }
+  }, [value, minParsed]);
+
+  const hourOptions = useMemo(() => {
+    const hours: number[] = [];
+    for (let h = minParsed.hour; h <= 23; h += 1) {
+      if (getAllowedMinutes(h, minParsed).length > 0) hours.push(h);
+    }
+    return hours;
+  }, [minParsed]);
+
+  const minuteOptions = useMemo(
+    () => getAllowedMinutes(draftHour, minParsed),
+    [draftHour, minParsed]
+  );
+
+  useEffect(() => {
+    if (!minuteOptions.includes(draftMinute)) {
+      setDraftMinute(minuteOptions[0] ?? 0);
+    }
+  }, [minuteOptions, draftMinute]);
+
+  const openPicker = () => {
+    if (isDisabled) return;
+    const base = value ? parseTimeString(value) : initialTime;
+    const clamped = clampTime(base.hour, base.minute, minParsed);
+    setDraftHour(clamped.hour);
+    setDraftMinute(clamped.minute);
+    setIsOpen(true);
+  };
+
+  const closePicker = () => setIsOpen(false);
+
+  const confirmPicker = () => {
+    onChange?.(formatTimeParts(draftHour, draftMinute));
+    closePicker();
+  };
+
+  const displayValue = useMemo(() => {
+    if (!value) return '';
+    const parsed = parseTimeString(value);
+    return formatTimeParts(parsed.hour, parsed.minute);
+  }, [value]);
+
+  return (
+    <>
+      <ScrollTimePickerStyles />
+      <input
+        type="text"
+        id={id}
+        placeholder={selectedDate ? placeholder : 'กรุณาเลือกวันที่ก่อน'}
+        readOnly
+        disabled={isDisabled}
+        value={displayValue}
+        onClick={openPicker}
+        style={{
+          ...defaultInputStyle,
+          cursor: isDisabled ? 'not-allowed' : 'pointer',
+          opacity: isDisabled ? 0.7 : 1,
+          ...style,
+        }}
+      />
+
+      {isOpen &&
+        createPortal(
+          <>
+            <div className="scroll-time-overlay" onClick={closePicker} />
+            <div className="scroll-time-modal" role="dialog" aria-modal="true" aria-label="เลือกเวลา">
+              <div className="scroll-time-header">เลือกเวลา</div>
+              <div className="scroll-time-wheels">
+                <ScrollWheelColumn
+                  label="ชั่วโมง"
+                  items={hourOptions}
+                  value={draftHour}
+                  onChange={(hour) => setDraftHour(hour)}
+                />
+                <span className="scroll-time-separator">:</span>
+                <ScrollWheelColumn
+                  label="นาที"
+                  items={minuteOptions}
+                  value={draftMinute}
+                  onChange={(minute) => setDraftMinute(minute)}
+                  formatItem={(m) => String(m).padStart(2, '0')}
+                />
+              </div>
+              <div className="scroll-time-preview">{formatTimeParts(draftHour, draftMinute)} น.</div>
+              <div className="scroll-time-actions">
+                <button type="button" className="scroll-time-btn cancel" onClick={closePicker}>
+                  ยกเลิก
+                </button>
+                <button type="button" className="scroll-time-btn confirm" onClick={confirmPicker}>
+                  ยืนยัน
+                </button>
+              </div>
+            </div>
+          </>,
+          document.body
+        )}
+    </>
+  );
+}
+
+const WHEEL_ITEM_HEIGHT = 44;
+
+function parseTimeString(timeStr: string): { hour: number; minute: number } {
+  const [hourPart, minutePart] = timeStr.split(':');
+  return {
+    hour: Number.parseInt(hourPart || '0', 10) || 0,
+    minute: Number.parseInt(minutePart || '0', 10) || 0,
+  };
+}
+
+function formatTimeParts(hour: number, minute: number): string {
+  return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+}
+
+const MINUTE_OPTIONS = [0, 10, 20, 30, 40, 50];
+
+function roundToNearestMinute(minute: number) {
+  return MINUTE_OPTIONS.reduce((prev, curr) =>
+    Math.abs(curr - minute) < Math.abs(prev - minute) ? curr : prev
+  );
+}
+
+function getAllowedMinutes(hour: number, min: { hour: number; minute: number }) {
+  if (hour > min.hour) return MINUTE_OPTIONS;
+  if (hour < min.hour) return [];
+  return MINUTE_OPTIONS.filter((m) => m >= min.minute);
+}
+
+function clampTime(hour: number, minute: number, min: { hour: number; minute: number }) {
+  const roundedMinute = roundToNearestMinute(minute);
+
+  for (let h = hour; h <= 23; h += 1) {
+    const allowedMinutes = getAllowedMinutes(h, min);
+    if (allowedMinutes.length === 0) continue;
+
+    if (h > hour) {
+      return { hour: h, minute: allowedMinutes[0] };
+    }
+
+    const validMinute = allowedMinutes.find((m) => m >= roundedMinute) ?? allowedMinutes[0];
+    if (h > min.hour || validMinute >= min.minute) {
+      return { hour: h, minute: validMinute };
+    }
+  }
+
+  return { hour: min.hour, minute: getAllowedMinutes(min.hour, min)[0] ?? 0 };
+}
+
+interface ScrollWheelColumnProps {
+  label: string;
+  items: number[];
+  value: number;
+  onChange: (value: number) => void;
+  formatItem?: (value: number) => string;
+}
+
+function ScrollWheelColumn({ label, items, value, onChange, formatItem }: ScrollWheelColumnProps) {
+  const listRef = useRef<HTMLDivElement>(null);
+  const scrollTimerRef = useRef<number | null>(null);
+  const isProgrammaticScrollRef = useRef(false);
+
+  const format = formatItem || ((item: number) => String(item).padStart(2, '0'));
+
+  const scrollToValue = useCallback((targetValue: number, smooth = false) => {
+    const list = listRef.current;
+    if (!list) return;
+    const index = items.indexOf(targetValue);
+    if (index < 0) return;
+
+    isProgrammaticScrollRef.current = true;
+    list.scrollTo({
+      top: index * WHEEL_ITEM_HEIGHT,
+      behavior: smooth ? 'smooth' : 'auto',
+    });
+    window.setTimeout(() => {
+      isProgrammaticScrollRef.current = false;
+    }, smooth ? 220 : 0);
+  }, [items]);
+
+  useEffect(() => {
+    scrollToValue(value);
+  }, [value, items, scrollToValue]);
+
+  const handleScroll = () => {
+    if (isProgrammaticScrollRef.current) return;
+    if (scrollTimerRef.current) window.clearTimeout(scrollTimerRef.current);
+
+    scrollTimerRef.current = window.setTimeout(() => {
+      const list = listRef.current;
+      if (!list) return;
+      const index = Math.round(list.scrollTop / WHEEL_ITEM_HEIGHT);
+      const nextValue = items[Math.min(Math.max(index, 0), items.length - 1)];
+      if (nextValue !== undefined && nextValue !== value) {
+        onChange(nextValue);
+      } else {
+        scrollToValue(value, true);
+      }
+    }, 80);
+  };
+
+  const handleItemClick = (item: number) => {
+    onChange(item);
+    scrollToValue(item, true);
+  };
+
+  return (
+    <div className="scroll-wheel-column">
+      <div className="scroll-wheel-label">{label}</div>
+      <div className="scroll-wheel-shell">
+        <div className="scroll-wheel-highlight" />
+        <div className="scroll-wheel-list" ref={listRef} onScroll={handleScroll}>
+          <div className="scroll-wheel-spacer" />
+          {items.map((item) => (
+            <button
+              key={item}
+              type="button"
+              className={`scroll-wheel-item ${item === value ? 'selected' : ''}`}
+              onClick={() => handleItemClick(item)}
+            >
+              {format(item)}
+            </button>
+          ))}
+          <div className="scroll-wheel-spacer" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ScrollTimePickerStyles() {
+  return (
+    <style>{`
+      .scroll-time-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.4);
+        backdrop-filter: blur(3px);
+        z-index: 9998;
+        animation: fpFadeIn 0.2s ease-out;
+      }
+      .scroll-time-modal {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        z-index: 9999;
+        width: min(92vw, 320px);
+        background: rgba(255, 255, 255, 0.98);
+        border: 1px solid var(--glass-border);
+        border-radius: 20px;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+        padding: 18px 16px 16px;
+        animation: fpModalFadeIn 0.2s ease-out;
+      }
+      .scroll-time-header {
+        text-align: center;
+        font-size: 1rem;
+        font-weight: 700;
+        color: var(--deep-brown);
+        margin-bottom: 12px;
+      }
+      .scroll-time-wheels {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+      }
+      .scroll-time-separator {
+        font-size: 1.6rem;
+        font-weight: 700;
+        color: var(--rose-gold);
+        padding-top: 24px;
+      }
+      .scroll-wheel-column {
+        flex: 1;
+        min-width: 0;
+      }
+      .scroll-wheel-label {
+        text-align: center;
+        font-size: 0.72rem;
+        font-weight: 600;
+        color: var(--mid-brown);
+        margin-bottom: 6px;
+      }
+      .scroll-wheel-shell {
+        position: relative;
+        height: ${WHEEL_ITEM_HEIGHT * 5}px;
+        overflow: hidden;
+        border-radius: 14px;
+        background: rgba(255, 255, 255, 0.85);
+        border: 1px solid var(--glass-border);
+      }
+      .scroll-wheel-highlight {
+        position: absolute;
+        top: 50%;
+        left: 8px;
+        right: 8px;
+        height: ${WHEEL_ITEM_HEIGHT}px;
+        transform: translateY(-50%);
+        border-radius: 10px;
+        background: rgba(219, 138, 158, 0.14);
+        border: 1px solid rgba(219, 138, 158, 0.35);
+        pointer-events: none;
+        z-index: 1;
+      }
+      .scroll-wheel-list {
+        position: relative;
+        z-index: 2;
+        height: 100%;
+        overflow-y: auto;
+        scroll-snap-type: y mandatory;
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+      }
+      .scroll-wheel-list::-webkit-scrollbar {
+        display: none;
+      }
+      .scroll-wheel-spacer {
+        height: ${WHEEL_ITEM_HEIGHT * 2}px;
+        flex-shrink: 0;
+      }
+      .scroll-wheel-item {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        height: ${WHEEL_ITEM_HEIGHT}px;
+        border: none;
+        background: transparent;
+        font-family: inherit;
+        font-size: 1.15rem;
+        font-weight: 600;
+        color: #9a8b82;
+        scroll-snap-align: center;
+        cursor: pointer;
+        transition: color 0.15s ease, transform 0.15s ease;
+      }
+      .scroll-wheel-item.selected {
+        color: var(--deep-brown);
+        transform: scale(1.06);
+      }
+      .scroll-time-preview {
+        margin-top: 14px;
+        text-align: center;
+        font-size: 1.05rem;
+        font-weight: 700;
+        color: var(--rose-gold);
+      }
+      .scroll-time-actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+        margin-top: 16px;
+      }
+      .scroll-time-btn {
+        border: none;
+        border-radius: 999px;
+        padding: 12px 14px;
+        font-family: inherit;
+        font-size: 0.92rem;
+        font-weight: 700;
+        cursor: pointer;
+      }
+      .scroll-time-btn.cancel {
+        background: #fff;
+        color: var(--mid-brown);
+        border: 1px solid var(--glass-border);
+      }
+      .scroll-time-btn.confirm {
+        background: linear-gradient(135deg, var(--rose-gold), #db8a9e);
+        color: #fff;
+        box-shadow: 0 8px 18px rgba(219, 138, 158, 0.25);
+      }
+    `}</style>
+  );
+}
+
+/** @deprecated Use DatePicker + TimePicker instead */
+export default function DateTimePicker({
+  id = 'ipt-date',
+  placeholder = 'เลือกวันที่และเวลา',
+  value,
+  minDate,
+  minTime,
+  minDateTime,
+  onChange,
+  style,
+}: DateTimePickerProps) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const { fpRef, showOverlay, hideOverlay } = useFlatpickrOverlay();
+
   useEffect(() => {
     if (!inputRef.current) return;
 
     const computedMinDate = minDate || getTomorrowStr();
     const tomorrowStr = getTomorrowStr();
-
-    // Calculate minDateTime if provided
-    let minDateTimeObj: Date | undefined;
-    if (minDateTime) {
-      minDateTimeObj = new Date(minDateTime);
-    }
+    const minDateTimeObj = minDateTime ? new Date(minDateTime) : undefined;
 
     fpRef.current = flatpickr(inputRef.current, {
       enableTime: true,
@@ -94,30 +644,19 @@ export default function DateTimePicker({
       onChange(selectedDates, _dateStr, instance) {
         if (selectedDates.length > 0) {
           const d = selectedDates[0];
-          const dStr =
-            d.getFullYear() +
-            '-' +
-            String(d.getMonth() + 1).padStart(2, '0') +
-            '-' +
-            String(d.getDate()).padStart(2, '0');
+          const dStr = formatDatePart(d);
 
-          // If minDateTime is set, use it for minTime calculation
           if (minDateTimeObj) {
-            const minDStr =
-              minDateTimeObj.getFullYear() +
-              '-' +
-              String(minDateTimeObj.getMonth() + 1).padStart(2, '0') +
-              '-' +
-              String(minDateTimeObj.getDate()).padStart(2, '0');
-            const minTStr =
-              String(minDateTimeObj.getHours()).padStart(2, '0') +
-              ':' +
-              String(minDateTimeObj.getMinutes()).padStart(2, '0');
+            const minDStr = formatDatePart(minDateTimeObj);
+            const minTStr = formatTimePart(minDateTimeObj);
 
             if (dStr === minDStr) {
               instance.set('minTime', minTStr);
-              if (d.getHours() < minDateTimeObj.getHours() || 
-                  (d.getHours() === minDateTimeObj.getHours() && d.getMinutes() < minDateTimeObj.getMinutes())) {
+              if (
+                d.getHours() < minDateTimeObj.getHours() ||
+                (d.getHours() === minDateTimeObj.getHours() &&
+                  d.getMinutes() < minDateTimeObj.getMinutes())
+              ) {
                 d.setHours(minDateTimeObj.getHours(), minDateTimeObj.getMinutes(), 0, 0);
                 instance.setDate(d, false);
               }
@@ -135,18 +674,7 @@ export default function DateTimePicker({
           }
 
           const currentD = instance.selectedDates[0] || d;
-          const currentDStr =
-            currentD.getFullYear() +
-            '-' +
-            String(currentD.getMonth() + 1).padStart(2, '0') +
-            '-' +
-            String(currentD.getDate()).padStart(2, '0');
-          const tStr =
-            String(currentD.getHours()).padStart(2, '0') +
-            ':' +
-            String(currentD.getMinutes()).padStart(2, '0');
-
-          onChange?.(currentDStr, tStr);
+          onChange?.(formatDatePart(currentD), formatTimePart(currentD));
         }
       },
     });
@@ -167,89 +695,96 @@ export default function DateTimePicker({
         id={id}
         placeholder={placeholder}
         readOnly
-        style={{
-          fontSize: '16px',
-          backgroundColor: '#fff',
-          cursor: 'pointer',
-          ...style,
-        }}
+        style={{ ...defaultInputStyle, ...style }}
       />
     </>
   );
 }
 
-function getTomorrowStr(): string {
-  const d = new Date();
-  d.setDate(d.getDate() + 1);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
-/**
- * Parse delivery badge and calculate minimum delivery datetime
- * @param badge - Delivery badge string (e.g., "ส่งใน 1 ชั่วโมง", "ส่งใน 1 วัน")
- * @returns ISO string of minimum delivery datetime
- */
 export function getMinDateTimeFromBadge(badge: string): string {
   const now = new Date();
-  
-  // Parse hours
+
   const hourMatch = badge.match(/(\d+)\s*ชั่วโมง/);
   if (hourMatch) {
     const hours = parseInt(hourMatch[1], 10);
     now.setHours(now.getHours() + hours);
     return now.toISOString();
   }
-  
-  // Parse days
+
   const dayMatch = badge.match(/(\d+)\s*วัน/);
   if (dayMatch) {
     const days = parseInt(dayMatch[1], 10);
     now.setDate(now.getDate() + days);
     return now.toISOString();
   }
-  
-  // Default to tomorrow if no match
+
   now.setDate(now.getDate() + 1);
   return now.toISOString();
 }
 
-/**
- * Extract delivery time text from badge for display
- * @param badge - Delivery badge string (e.g., "ส่งใน 1 ชั่วโมง", "ส่งใน 1 วัน")
- * @returns Formatted time text (e.g., "1 ชั่วโมง", "1 วัน")
- */
 export function getDeliveryTimeText(badge: string): string {
   const hourMatch = badge.match(/(\d+)\s*ชั่วโมง/);
   if (hourMatch) {
     return `${hourMatch[1]} ชั่วโมง`;
   }
-  
+
   const dayMatch = badge.match(/(\d+)\s*วัน/);
   if (dayMatch) {
     return `${dayMatch[1]} วัน`;
   }
-  
+
   return badge;
 }
 
-/**
- * Format minimum delivery datetime for display
- * @param minDateTime - ISO string of minimum delivery datetime
- * @returns Formatted datetime string (e.g., "วันที่ 12 เวลา 23:00")
- */
+export function getDeliveryAdvanceWarningText(
+  badge: string,
+  options?: { prefix?: string }
+): string {
+  const deliveryTime = getDeliveryTimeText(badge);
+  const prefix = options?.prefix ?? '';
+  return `${prefix}สั่งล่วงหน้าอย่างน้อย ${deliveryTime}`;
+}
+
+export function roundMinutesToNearestTen(date: Date): Date {
+  const rounded = new Date(date);
+  const roundedMinutes = Math.round(rounded.getMinutes() / 10) * 10;
+  if (roundedMinutes === 60) {
+    rounded.setHours(rounded.getHours() + 1);
+    rounded.setMinutes(0);
+  } else {
+    rounded.setMinutes(roundedMinutes);
+  }
+  rounded.setSeconds(0, 0);
+  return rounded;
+}
+
 export function formatMinDeliveryDateTime(minDateTime: string): string {
-  const date = new Date(minDateTime);
+  const date = roundMinutesToNearestTen(new Date(minDateTime));
   const day = date.getDate();
   const hours = String(date.getHours()).padStart(2, '0');
   const minutes = String(date.getMinutes()).padStart(2, '0');
   return `วันที่ ${day} เวลา ${hours}:${minutes}`;
 }
 
-/**
- * Flatpickr custom theme CSS inline styles
- * Rose Gold / Deep Brown theme matching the app design
- */
-function FlatpickrThemeStyles() {
+export function buildDeliveryHelperText(badge: string, minDateTime?: string): string {
+  const deliveryTime = getDeliveryTimeText(badge);
+  const base = `เลือกวันที่และเวลาจัดส่งตามต้องการได้เลยค่ะ หากต้องการรับสินค้าเร็วที่สุด ช่อนี้ขอเวลาจัดประมาณ ${deliveryTime} นะคะ`;
+
+  if (!minDateTime) {
+    return `${base} สามารถติดตามสถานะการจัดดอกไม้ได้ที่หน้า ประวัติการสั่งซื้อ หรือทักมาสอบถามในไลน์ @145dmmit ได้เลยนะคะ`;
+  }
+
+  const date = roundMinutesToNearestTen(new Date(minDateTime));
+  const todayStr = formatDatePart(new Date());
+  const dateStr = formatDatePart(date);
+  const dateLabel = dateStr === todayStr ? 'วันนี้' : `วันที่ ${date.getDate()}`;
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+
+  return `${base} ลูกค้าสามารถรับสินค้าได้เร็วที่สุดใน${dateLabel} เวลา ${hours}:${minutes} โดยประมาณ หรืออาจเร็วกว่านั้น สามารถติดตามสถานะการจัดดอกไม้ได้ที่หน้า ประวัติการสั่งซื้อ หรือทักมาสอบถามในไลน์ @145dmmit ได้เลยนะคะ`;
+}
+
+function FlatpickrThemeStyles({ timeOnly = false }: { timeOnly?: boolean }) {
   return (
     <style>{`
       .flatpickr-calendar {
@@ -260,7 +795,7 @@ function FlatpickrThemeStyles() {
         font-family: inherit !important;
         padding: 10px !important;
         box-sizing: content-box !important;
-        width: 315px !important;
+        width: ${timeOnly ? 'auto' : '315px'} !important;
         position: fixed !important;
         top: 50% !important;
         left: 50% !important;

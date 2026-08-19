@@ -14,6 +14,8 @@ import {
   where
 } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
+import { useStoreHours } from '@/hooks/useStoreHours';
+import { STORE_CLOSED_TOAST } from '@/lib/storeHours';
 
 const STORAGE_CART = 'bear_flower_cart';
 
@@ -208,6 +210,7 @@ const BasketIcon = ({ colors = [], size = 46 }: { colors: string[], size?: numbe
 };
 
 export default function CartPage() {
+  const { isClosed: isStoreClosedNow } = useStoreHours();
   const [cartItems, setCartItems] = useState<any[]>([]);
   const [orders, setOrders] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState('cart');
@@ -324,6 +327,10 @@ export default function CartPage() {
 
   const handleCheckout = () => {
     if (cartItems.length === 0) return;
+    if (isStoreClosedNow) {
+      window.alert(STORE_CLOSED_TOAST);
+      return;
+    }
     window.location.href = '/checkout';
   };
 
@@ -937,7 +944,12 @@ export default function CartPage() {
             <span className="total-label">รวมทั้งหมด</span>
             <span className="total-value">{calculateTotal().toLocaleString()} ฿</span>
           </div>
-          <button className="checkout-btn" onClick={handleCheckout}>
+          <button
+            className="checkout-btn"
+            onClick={handleCheckout}
+            disabled={isStoreClosedNow}
+            style={{ opacity: isStoreClosedNow ? 0.5 : 1, cursor: isStoreClosedNow ? 'not-allowed' : 'pointer' }}
+          >
             สั่งซื้อสินค้า
           </button>
         </div>

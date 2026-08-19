@@ -6,12 +6,16 @@ import { collection, addDoc, serverTimestamp, doc, runTransaction, getDocs, quer
 import { onAuthStateChanged } from 'firebase/auth';
 import generatePayload from 'promptpay-qr';
 import { QRCodeSVG } from 'qrcode.react';
+import StoreClosedNotice from '@/components/StoreClosedNotice';
+import { useStoreHours } from '@/hooks/useStoreHours';
+import { STORE_CLOSED_TOAST } from '@/lib/storeHours';
 
 const STORAGE_CART = 'bear_flower_cart';
 // บัญชี PromptPay ของร้านค้า (สามารถเปลี่ยนเป็นเบอร์โทร หรือ เลขบัตรประชาชนได้)
 const PROMPTPAY_ID = '0656144703'; // TODO: เปลี่ยนเป็นเบอร์พร้อมเพย์ของคุณ
 
 export default function CheckoutPage() {
+  const { isClosed: isStoreClosedNow } = useStoreHours();
   const [cartItems, setCartItems] = useState<any[]>([]);
   const [total, setTotal] = useState(0);
   const [deposit, setDeposit] = useState(0);
@@ -265,6 +269,11 @@ export default function CheckoutPage() {
 
   const handleConfirmPayment = async () => {
     if (cartItems.length === 0 || isProcessing) return;
+
+    if (isStoreClosedNow) {
+      window.alert(STORE_CLOSED_TOAST);
+      return;
+    }
     
     // Require slip upload
     if (!slipFile) {
@@ -817,6 +826,7 @@ export default function CheckoutPage() {
         <div className="page-title">
           <h1>ชำระเงินมัดจำ (50%)</h1>
           <p>สแกน QR Code เพื่อชำระเงินผ่านแอปธนาคาร<br />ระบบจะระบุจำนวนเงินให้โดยอัตโนมัติ</p>
+          <StoreClosedNotice />
         </div>
 
 
@@ -965,7 +975,8 @@ export default function CheckoutPage() {
         <button
           className="confirm-btn"
           onClick={handleConfirmPayment}
-          disabled={isProcessing}
+          disabled={isProcessing || isStoreClosedNow}
+          style={{ opacity: isStoreClosedNow ? 0.5 : 1, cursor: isStoreClosedNow ? 'not-allowed' : 'pointer' }}
         >
           {isProcessing ? 'กำลังดำเนินการ...' : 'ชำระเงินแล้ว'}
         </button>

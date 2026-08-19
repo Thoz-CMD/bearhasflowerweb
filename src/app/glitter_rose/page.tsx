@@ -5,9 +5,13 @@ import { usePresetProduct } from '@/hooks/usePresetProduct';
 import { ToastProvider, useToast } from '@/components/Toast';
 import dynamic from 'next/dynamic';
 import GreetingCardAI from '@/components/GreetingCardAI';
-import { getMinDateTimeFromBadge, getDeliveryTimeText, formatMinDeliveryDateTime } from '@/components/DateTimePicker';
+import { getMinDateTimeFromBadge, buildDeliveryHelperText, getDeliveryAdvanceWarningText, getMinDeliveryTime } from '@/components/DateTimePicker';
+import StoreClosedNotice from '@/components/StoreClosedNotice';
+import { useStoreHours } from '@/hooks/useStoreHours';
+import { STORE_CLOSED_TOAST } from '@/lib/storeHours';
 
-const DateTimePicker = dynamic(() => import('@/components/DateTimePicker'), { ssr: false });
+const DatePicker = dynamic(() => import('@/components/DateTimePicker').then((mod) => mod.DatePicker), { ssr: false });
+const TimePicker = dynamic(() => import('@/components/DateTimePicker').then((mod) => mod.TimePicker), { ssr: false });
 
 // ===== Constants =====
 const ROSE_PRICES = [
@@ -181,6 +185,7 @@ function GlitterRoseContent() {
   const router = useRouter();
   const { showToast } = useToast();
   const { presetProduct, isLoading, error } = usePresetProduct();
+  const { isClosed: isStoreClosedNow } = useStoreHours();
   const presetLoadedRef = useRef(false);
 
   const [state, setState] = useState<GlitterState>(initialState);
@@ -459,13 +464,21 @@ function GlitterRoseContent() {
     updateField('selectedShape', id);
   };
 
-  const handleDateChange = (dateStr: string, timeStr: string) => {
-    setState(prev => ({ ...prev, deliveryDate: dateStr, deliveryTime: timeStr }));
+  const handleDeliveryDateChange = (dateStr: string) => {
+    setState(prev => ({ ...prev, deliveryDate: dateStr, deliveryTime: '' }));
+  };
+
+  const handleDeliveryTimeChange = (timeStr: string) => {
+    setState(prev => ({ ...prev, deliveryTime: timeStr }));
   };
 
   const jumpToTop = () => window.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
 
   const nextStep = () => {
+    if (isStoreClosedNow && state.current === STEPS.length - 1) {
+      showToast(STORE_CLOSED_TOAST);
+      return;
+    }
     if (state.current === 0) {
       if (state.selectedQty === null || state.selectedColors.length === 0) {
         showToast(state.selectedQty === null ? 'กรุณาเลือกจำนวนดอกกุหลาบ' : 'กรุณาเลือกสีดอกกุหลาบอย่างน้อย 1 สี');
@@ -517,6 +530,10 @@ function GlitterRoseContent() {
   };
 
   const saveToCartOnly = () => {
+    if (isStoreClosedNow) {
+      showToast(STORE_CLOSED_TOAST);
+      return;
+    }
     const editingId = window.localStorage.getItem('editing_cart_id');
     
     if (editingId) {
@@ -633,11 +650,19 @@ function GlitterRoseContent() {
 
   const deliveryHelperText = useMemo(() => {
     if (!presetProduct?.badge) return '';
-    const deliveryTime = getDeliveryTimeText(presetProduct.badge);
-    const minDateTimeStr = minDateTime ? formatMinDeliveryDateTime(minDateTime) : '';
-    return `เลือกวันที่และเวลาจัดส่งตามต้องการได้เลยค่ะ แต่หากต้องการรับสินค้าเร็วที่สุด ช่อนี้ขอเวลาทำ ${deliveryTime} นะคะ ลูกค้าสามารถรับสินค้าได้เร็วที่สุดตั้งแต่${minDateTimeStr} โดยประมาณ หรืออาจเร็วกว่านั้น สามารถติดตามสถานะการจัดดอกไม้ได้ที่หน้า ประวัติการสั่งซื้อ หรือทักมาสอบถามในไลน์ @145dmmit ได้เลยนะคะ`;
+    return buildDeliveryHelperText(presetProduct.badge, minDateTime);
   }, [presetProduct?.badge, minDateTime]);
-  const initialMinTime = state.deliveryDate === tomorrowStr ? '09:00' : '00:00';
+  const initialMinTime = getMinDeliveryTime(state.deliveryDate, minDateTime, tomorrowStr);
+
+  const deliveryInputStyle = {
+    width: '100%',
+    background: 'var(--glass-bg)',
+    border: '1px solid var(--glass-border)',
+    padding: '12px',
+    borderRadius: '12px',
+    color: 'var(--text-color)',
+    fontSize: '16px',
+  } as const;
 
   return (
     <>
@@ -659,6 +684,7 @@ function GlitterRoseContent() {
         <div className="page-heading">
           <h1>&quot;Glitter Rose&quot;</h1>
           <p className="subtitle">ออกแบบดอกกุหลาบกลิตเตอร์ของคุณ</p>
+          <StoreClosedNotice />
         </div>
 
         {/* Stepper */}
@@ -704,7 +730,15 @@ function GlitterRoseContent() {
           </div>
           <div className="btn-group">
             <button className="btn-back" style={{ visibility: state.current === 0 ? 'hidden' : 'visible' }} onClick={prevStep}>ก่อนหน้า</button>
-            <button className="btn-next" onClick={nextStep}>
+            <button
+              className="btn-next"
+              onClick={nextStep}
+              disabled={isStoreClosedNow && state.current === STEPS.length - 1}
+              style={{
+                opacity: isStoreClosedNow && state.current === STEPS.length - 1 ? 0.5 : 1,
+                cursor: isStoreClosedNow && state.current === STEPS.length - 1 ? 'not-allowed' : 'pointer',
+              }}
+            >
               {state.current === STEPS.length - 1 ? 'สั่งซื้อ' : 'ถัดไป'}
             </button>
           </div>
@@ -969,26 +1003,46 @@ function GlitterRoseContent() {
                 <div className="form-group">
                   <label>ที่อยู่จัดส่ง</label>
                   <textarea id="ipt-address" placeholder="ชื่อหอ.." value={state.customerAddress} onChange={e => updateField('customerAddress', e.target.value)} style={{ fontSize: '16px' }}></textarea>
-                  <div className="form-note">ส่งฟรีบริเวณกำแพงแสน</div>
+                  <div className="form-note">ส่งฟรีบริเวณหน้ามอ</div>
                 </div>
                 
-                <div className="form-group">
-                  <label>วันที่และเวลาที่ต้องการรับสินค้า</label>
-                  <DateTimePicker
-                    id="ipt-date"
-                    placeholder="เลือกวันที่และเวลาจัดส่ง"
-                    value={state.deliveryDate && state.deliveryTime ? `${state.deliveryDate} ${state.deliveryTime}` : undefined}
-                    minDate={minDelivery}
-                    minTime={initialMinTime}
-                    minDateTime={minDateTime}
-                    onChange={handleDateChange}
-                    style={{ width: '100%', background: 'var(--glass-bg)', border: '1px solid var(--glass-border)', padding: '12px', borderRadius: '12px', color: 'var(--text-color)', fontSize: '16px' }}
-                  />
+                <div className="delivery-datetime-row">
+                  <div className="form-group">
+                    <label>วันที่ที่ต้องการรับสินค้า</label>
+                    <DatePicker
+                      id="ipt-date"
+                      placeholder="เลือกวันที่"
+                      value={state.deliveryDate || undefined}
+                      minDate={minDelivery}
+                      minDateTime={minDateTime}
+                      onChange={handleDeliveryDateChange}
+                      style={deliveryInputStyle}
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label>เวลาที่ต้องการรับสินค้า</label>
+                    <TimePicker
+                      id="ipt-time"
+                      placeholder="เลือกเวลา"
+                      value={state.deliveryTime || undefined}
+                      selectedDate={state.deliveryDate}
+                      minTime={initialMinTime}
+                      minDateTime={minDateTime}
+                      onChange={handleDeliveryTimeChange}
+                      style={deliveryInputStyle}
+                    />
+                  </div>
+                </div>
+
+                <div className="delivery-datetime-notes">
                   <span id="delivery-warning" style={{ fontSize: '.75rem', color: 'red', marginTop: '6px', display: 'block', lineHeight: '1.4' }}>
                     {presetProduct?.readyToShip ? '' : (
-                      state.selectedQty && state.selectedQty >= 30 
-                        ? `* ต้องสั่งล่วงหน้าอย่างน้อย ${state.selectedQty >= 40 ? '3' : '2'} วัน (เนื่องจากดอกไม้มีจำนวน ${state.selectedQty} ดอก)` 
-                        : '* กรุณาสั่งล่วงหน้าอย่างน้อย 1 วัน'
+                    {presetProduct?.badge
+                      ? getDeliveryAdvanceWarningText(presetProduct.badge, { prefix: '* กรุณา' })
+                      : state.selectedQty && state.selectedQty >= 30
+                        ? `* ต้องสั่งล่วงหน้าอย่างน้อย ${state.selectedQty >= 40 ? '3' : '2'} วัน (เนื่องจากดอกไม้มีจำนวน ${state.selectedQty} ดอก)`
+                        : '* กรุณาสั่งล่วงหน้าอย่างน้อย 1 วัน'}
                     )}
                   </span>
                   {deliveryHelperText && (
@@ -1000,7 +1054,7 @@ function GlitterRoseContent() {
                 
                 <div className="form-group">
                   <label>รายละเอียดเพิ่มเติม (ถ้ามี)</label>
-                  <textarea id="ipt-note" placeholder="เช่น ข้อความฝากเขียนการ์ด..." value={state.additionalNote} onChange={e => updateField('additionalNote', e.target.value)} style={{ fontSize: '16px' }}></textarea>
+                  <textarea id="ipt-note" placeholder="เช่น ฝากเขียนการ์ด เขียนว่า..." value={state.additionalNote} onChange={e => updateField('additionalNote', e.target.value)} style={{ fontSize: '16px' }}></textarea>
                   <div style={{ marginTop: '16px' }}>
                     <GreetingCardAI onSelect={(text) => {
                       const currentNote = state.additionalNote.trim();
@@ -1023,7 +1077,15 @@ function GlitterRoseContent() {
         </div>
         <div className="sticky-btn-row">
           <button className="sticky-prev" style={{ visibility: state.current === 0 ? 'hidden' : 'visible' }} onClick={prevStep}>←</button>
-          <button className="sticky-next" onClick={nextStep}>
+          <button
+            className="sticky-next"
+            onClick={nextStep}
+            disabled={isStoreClosedNow && state.current === STEPS.length - 1}
+            style={{
+              opacity: isStoreClosedNow && state.current === STEPS.length - 1 ? 0.5 : 1,
+              cursor: isStoreClosedNow && state.current === STEPS.length - 1 ? 'not-allowed' : 'pointer',
+            }}
+          >
             {state.current === STEPS.length - 1 ? 'สั่งซื้อ' : 'ถัดไป'}
           </button>
         </div>
@@ -1112,7 +1174,14 @@ function GlitterRoseContent() {
               {state.additionalNote && <div style={{ marginTop: '10px', borderTop: '1px dashed #ddd', paddingTop: '10px' }}><i>หมายเหตุ: {state.additionalNote}</i></div>}
             </div>
 
-            <button className="btn-receipt" onClick={saveToCartOnly}>บันทึกลงตะกร้า</button>
+            <button
+              className="btn-receipt"
+              onClick={saveToCartOnly}
+              disabled={isStoreClosedNow}
+              style={{ opacity: isStoreClosedNow ? 0.5 : 1, cursor: isStoreClosedNow ? 'not-allowed' : 'pointer' }}
+            >
+              บันทึกลงตะกร้า
+            </button>
           </div>
         </div>
       )}

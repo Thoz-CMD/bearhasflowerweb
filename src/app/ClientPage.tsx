@@ -1,9 +1,38 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged, signOut, User } from 'firebase/auth';
 import { checkIsAdmin } from '@/lib/admin';
+import StoreClosedNotice from '@/components/StoreClosedNotice';
+
+function HeroStoreClosedNotice() {
+  const [mountNode, setMountNode] = useState<HTMLElement | null>(null);
+
+  useEffect(() => {
+    setMountNode(document.getElementById('store-closed-notice-mount'));
+  }, []);
+
+  if (!mountNode) return null;
+  return createPortal(<StoreClosedNotice />, mountNode);
+}
+
+const DELIVERY_FILTER_OPTIONS = [
+  { key: '1h', label: 'ส่งใน 1 ชั่วโมง' },
+  { key: '2h', label: 'ส่งใน 2 ชั่วโมง' },
+  { key: '3h', label: 'ส่งใน 3 ชั่วโมง' },
+  { key: '4h', label: 'ส่งใน 4 ชั่วโมง' },
+  { key: '1d', label: 'ส่งใน 1 วัน' },
+  { key: '4d', label: 'ส่งใน 4 วัน' },
+] as const;
+
+const DELIVERY_FILTER_KEYS = DELIVERY_FILTER_OPTIONS.map((option) => option.key);
+const DELIVERY_FILTER_HTML = DELIVERY_FILTER_OPTIONS.map((option, index) => `
+            <button type="button" class="delivery-filter-option" data-filter-type="${option.key}" onclick="setCombinedFilter('${option.key}')">
+              <span class="delivery-filter-option-label">ตัวเลือก ${index + 1}</span>
+              <span class="delivery-filter-option-text">${option.label}</span>
+            </button>`).join('');
 
 export default function ClientPage({ initialProductHtml }: { initialProductHtml?: string }) {
   const [user, setUser] = useState<User | null>(null);
@@ -217,9 +246,8 @@ export default function ClientPage({ initialProductHtml }: { initialProductHtml?
           type: 'all',
           minPrice: PRODUCT_PRICE_MIN,
           maxPrice: PRODUCT_PRICE_MAX,
-          shipping: 'all',
+          shipping: [] as string[],
           sort: 'latest',
-          combined: 'all'
         },
         ui: {
           filterOpen: false
@@ -228,6 +256,44 @@ export default function ClientPage({ initialProductHtml }: { initialProductHtml?
       (window as any).__homeProductsState = productState;
       if (!productState.ui) {
         productState.ui = { filterOpen: false };
+      }
+
+      const SHIPPING_FILTER_KEYS = ['ready', ...DELIVERY_FILTER_KEYS];
+
+      const normalizeShippingFilters = () => {
+        const shipping = productState.filters.shipping;
+        if (Array.isArray(shipping)) {
+          productState.filters.shipping = shipping.filter((key: string) => SHIPPING_FILTER_KEYS.includes(key));
+          return;
+        }
+        productState.filters.shipping = shipping && shipping !== 'all' && SHIPPING_FILTER_KEYS.includes(shipping)
+          ? [shipping]
+          : [];
+      };
+
+      const toggleShippingFilter = (key: string) => {
+        normalizeShippingFilters();
+        const selected = productState.filters.shipping as string[];
+        const index = selected.indexOf(key);
+        if (index >= 0) {
+          selected.splice(index, 1);
+        } else {
+          selected.push(key);
+        }
+      };
+
+      const isFilterActive = (filterType: string) => {
+        normalizeShippingFilters();
+        const selectedShipping = productState.filters.shipping as string[];
+        if (filterType === 'all') return selectedShipping.length === 0;
+        if (filterType === 'latest') return productState.filters.sort === 'latest';
+        if (filterType === 'likes') return productState.filters.sort === 'likes';
+        return selectedShipping.includes(filterType);
+      };
+
+      normalizeShippingFilters();
+      if ('combined' in productState.filters) {
+        delete productState.filters.combined;
       }
 
       const scrollToProductsSection = () => {
@@ -271,19 +337,23 @@ export default function ClientPage({ initialProductHtml }: { initialProductHtml?
         const hasReadyStock = Boolean(product.readyToShip) && Number(product.stockQuantity || 0) > 0;
         if (hasReadyStock) return 'ready';
         const badgeText = String(product.badge || '');
+        if (badgeText.includes('1 ชั่วโมง')) return '1h';
+        if (badgeText.includes('2 ชั่วโมง')) return '2h';
+        if (badgeText.includes('3 ชั่วโมง')) return '3h';
+        if (badgeText.includes('4 ชั่วโมง')) return '4h';
         if (badgeText.includes('1 วัน')) return '1d';
-        if (badgeText.includes('2 วัน')) return '2d';
-        if (badgeText.includes('3 วัน')) return '3d';
+        if (badgeText.includes('4 วัน')) return '4d';
         return 'other';
       };
 
       const formatPriceLabel = (value: number) => `${Number(value || 0).toLocaleString('th-TH')} บาท`;
 
       const getActiveFilterCount = () => {
+        normalizeShippingFilters();
         let count = 0;
         if (productState.filters.type !== 'all') count++;
         if (productState.filters.minPrice !== PRODUCT_PRICE_MIN || productState.filters.maxPrice !== PRODUCT_PRICE_MAX) count++;
-        if (productState.filters.shipping !== 'all') count++;
+        if ((productState.filters.shipping as string[]).length > 0) count++;
         if (productState.filters.sort !== 'latest') count++;
         return count;
       };
@@ -314,7 +384,7 @@ export default function ClientPage({ initialProductHtml }: { initialProductHtml?
         if (maxRange) maxRange.value = String(productState.filters.maxPrice);
 
         document.querySelectorAll('[data-filter-type]').forEach((button: any) => {
-          const isActive = button.dataset.filterType === productState.filters.combined;
+          const isActive = isFilterActive(button.dataset.filterType);
           button.classList.toggle('active', isActive);
         });
 
@@ -329,9 +399,12 @@ export default function ClientPage({ initialProductHtml }: { initialProductHtml?
           const shippingMap: Record<string, string> = {
             all: 'ทุกสถานะ',
             ready: 'ช่อพร้อมส่ง',
-            '1d': 'จัดส่งใน 1 วัน',
-            '2d': 'จัดส่งใน 2 วัน',
-            '3d': 'จัดส่งใน 3 วัน'
+            '1h': 'ส่งใน 1 ชั่วโมง',
+            '2h': 'ส่งใน 2 ชั่วโมง',
+            '3h': 'ส่งใน 3 ชั่วโมง',
+            '4h': 'ส่งใน 4 ชั่วโมง',
+            '1d': 'ส่งใน 1 วัน',
+            '4d': 'ส่งใน 4 วัน',
           };
           const typeMap: Record<string, string> = {
             all: 'สินค้าทั้งหมด',
@@ -340,7 +413,11 @@ export default function ClientPage({ initialProductHtml }: { initialProductHtml?
             artificial: 'ดอกไม้ประดิษฐ์'
           };
           const sortLabel = productState.filters.sort === 'likes' ? 'เรียงตามยอดถูกใจ' : 'เรียงตามสินค้าล่าสุด';
-          const summaryText = `${typeMap[productState.filters.type] || 'สินค้าทั้งหมด'} • ${formatPriceLabel(productState.filters.minPrice)} - ${formatPriceLabel(productState.filters.maxPrice)} • ${shippingMap[productState.filters.shipping] || 'ทุกสถานะ'} • ${sortLabel}`;
+          const selectedShipping = productState.filters.shipping as string[];
+          const shippingLabel = selectedShipping.length === 0
+            ? 'ทุกสถานะ'
+            : selectedShipping.map((key) => shippingMap[key] || key).join(', ');
+          const summaryText = `${typeMap[productState.filters.type] || 'สินค้าทั้งหมด'} • ${formatPriceLabel(productState.filters.minPrice)} - ${formatPriceLabel(productState.filters.maxPrice)} • ${shippingLabel} • ${sortLabel}`;
           activeFilterText.textContent = summaryText;
 
           if (toggleButton) {
@@ -620,7 +697,8 @@ export default function ClientPage({ initialProductHtml }: { initialProductHtml?
               || productType === productState.filters.type
               || (productState.filters.type === 'artificial' && isArtificialProduct(product));
             const matchPrice = priceValue >= productState.filters.minPrice && priceValue <= productState.filters.maxPrice;
-            const matchShipping = productState.filters.shipping === 'all' || shippingKey === productState.filters.shipping;
+            const selectedShipping = productState.filters.shipping as string[];
+            const matchShipping = selectedShipping.length === 0 || selectedShipping.includes(shippingKey);
 
             return matchType && matchPrice && matchShipping;
           })
@@ -678,37 +756,45 @@ export default function ClientPage({ initialProductHtml }: { initialProductHtml?
         applyProductFilters(false);
       };
       (window as any).setShippingFilter = function (shippingKey: string) {
-        productState.filters.shipping = ['all', 'ready', '1d', '2d', '3d'].includes(shippingKey) ? shippingKey : 'all';
+        if (shippingKey === 'all') {
+          productState.filters.shipping = [];
+        } else if (SHIPPING_FILTER_KEYS.includes(shippingKey)) {
+          toggleShippingFilter(shippingKey);
+        }
         applyProductFilters(false);
       };
       (window as any).setCombinedFilter = function (filterType: string) {
-        const validTypes = ['all', 'latest', 'likes', 'ready', '1d', '2d', '3d'];
-        if (!validTypes.includes(filterType)) return;
-
-        productState.filters.combined = filterType;
-
-        // Update sort and shipping filters based on combined selection
-        if (filterType === 'latest' || filterType === 'likes') {
-          productState.filters.sort = filterType;
-          productState.filters.shipping = 'all';
-        } else if (filterType === 'all') {
+        if (filterType === 'all') {
+          productState.filters.shipping = [];
           productState.filters.sort = 'latest';
-          productState.filters.shipping = 'all';
-        } else {
-          productState.filters.shipping = filterType;
-          productState.filters.sort = 'latest';
+          applyProductFilters(false);
+          return;
         }
 
-        applyProductFilters(false);
+        if (filterType === 'latest') {
+          productState.filters.sort = 'latest';
+          applyProductFilters(false);
+          return;
+        }
+
+        if (filterType === 'likes') {
+          productState.filters.sort = 'likes';
+          applyProductFilters(false);
+          return;
+        }
+
+        if (SHIPPING_FILTER_KEYS.includes(filterType)) {
+          toggleShippingFilter(filterType);
+          applyProductFilters(false);
+        }
       };
       (window as any).resetProductFilters = function () {
         productState.filters = {
           type: 'all',
           minPrice: PRODUCT_PRICE_MIN,
           maxPrice: PRODUCT_PRICE_MAX,
-          shipping: 'all',
+          shipping: [] as string[],
           sort: 'latest',
-          combined: 'all'
         };
         applyProductFilters(false);
       };
@@ -1042,8 +1128,10 @@ export default function ClientPage({ initialProductHtml }: { initialProductHtml?
     </div>
   );
 
-  return <div dangerouslySetInnerHTML={{
-    __html: `
+  return (
+    <>
+      <div dangerouslySetInnerHTML={{
+        __html: `
 
   <!-- Navbar -->
   <nav class="navbar">
@@ -1279,6 +1367,7 @@ export default function ClientPage({ initialProductHtml }: { initialProductHtml?
   <section class="hero">
     <h1 class="brand-title">Bear has flower</h1>
     <p class="brand-sub">- หมีมีดอกไม้ -</p>
+    <div id="store-closed-notice-mount"></div>
 
     <div class="banner-container">
       <div class="slides" id="slides">
@@ -1398,9 +1487,9 @@ export default function ClientPage({ initialProductHtml }: { initialProductHtml?
             <button type="button" class="filter-pill" data-filter-type="latest" onclick="setCombinedFilter('latest')">ล่าสุด</button>
             <button type="button" class="filter-pill" data-filter-type="likes" onclick="setCombinedFilter('likes')">ถูกใจเยอะสุด</button>
             <button type="button" class="filter-pill" data-filter-type="ready" onclick="setCombinedFilter('ready')">ช่อพร้อมส่ง</button>
-            <button type="button" class="filter-pill" data-filter-type="1d" onclick="setCombinedFilter('1d')">จัดส่งใน 1 วัน</button>
-            <button type="button" class="filter-pill" data-filter-type="2d" onclick="setCombinedFilter('2d')">จัดส่งใน 2 วัน</button>
-            <button type="button" class="filter-pill" data-filter-type="3d" onclick="setCombinedFilter('3d')">จัดส่งใน 3 วัน</button>
+          </div>
+          <div class="delivery-filter-grid">
+            ${DELIVERY_FILTER_HTML}
           </div>
         </div>
       </div>
@@ -1599,5 +1688,8 @@ export default function ClientPage({ initialProductHtml }: { initialProductHtml?
     }
   </style>
 
-  ` }} />;
+  ` }} />
+      <HeroStoreClosedNotice />
+    </>
+  );
 }

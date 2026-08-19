@@ -5,10 +5,13 @@ import { usePresetProduct } from '@/hooks/usePresetProduct';
 import { ToastProvider, useToast } from '@/components/Toast';
 import GreetingCardAI from '@/components/GreetingCardAI';
 import dynamic from 'next/dynamic';
-import { getMinDateTimeFromBadge, getDeliveryTimeText, formatMinDeliveryDateTime } from '@/components/DateTimePicker';
+import { getMinDateTimeFromBadge, buildDeliveryHelperText, getDeliveryAdvanceWarningText, getMinDeliveryTime } from '@/components/DateTimePicker';
+import StoreClosedNotice from '@/components/StoreClosedNotice';
+import { useStoreHours } from '@/hooks/useStoreHours';
+import { STORE_CLOSED_TOAST } from '@/lib/storeHours';
 
-// Dynamic import DateTimePicker เพื่อหลีกเลี่ยง SSR issues กับ flatpickr
-const DateTimePicker = dynamic(() => import('@/components/DateTimePicker'), { ssr: false });
+const DatePicker = dynamic(() => import('@/components/DateTimePicker').then((mod) => mod.DatePicker), { ssr: false });
+const TimePicker = dynamic(() => import('@/components/DateTimePicker').then((mod) => mod.TimePicker), { ssr: false });
 
 const STORAGE_KEY = 'bear_flower_velvet_v1';
 const CART_KEY = 'bear_flower_cart';
@@ -53,6 +56,7 @@ function VelvetWireContent() {
   const router = useRouter();
   const { showToast } = useToast();
   const { presetProduct, isLoading, error } = usePresetProduct();
+  const { isClosed: isStoreClosedNow } = useStoreHours();
 
   const [state, setState] = useState<VelvetState>(initialState);
   const [isHydrated, setIsHydrated] = useState(false);
@@ -154,8 +158,12 @@ function VelvetWireContent() {
     setState(prev => ({ ...prev, [field]: value }));
   }, []);
 
-  const handleDateChange = useCallback((dateStr: string, timeStr: string) => {
-    setState(prev => ({ ...prev, deliveryDate: dateStr, deliveryTime: timeStr }));
+  const handleDeliveryDateChange = useCallback((dateStr: string) => {
+    setState(prev => ({ ...prev, deliveryDate: dateStr, deliveryTime: '' }));
+  }, []);
+
+  const handleDeliveryTimeChange = useCallback((timeStr: string) => {
+    setState(prev => ({ ...prev, deliveryTime: timeStr }));
   }, []);
 
   const handleCardSelect = useCallback((cardId: string) => {
@@ -200,6 +208,10 @@ function VelvetWireContent() {
   }, []);
 
   const finishOrder = useCallback(() => {
+    if (isStoreClosedNow) {
+      showToast(STORE_CLOSED_TOAST);
+      return;
+    }
     if (!presetProduct) {
       showToast('ไม่พบข้อมูลสินค้า');
       return;
@@ -278,7 +290,7 @@ function VelvetWireContent() {
     }
     sessionStorage.setItem('order_success_toast', '1');
     router.push('/cart');
-  }, [presetProduct, state, basePrice, isPresetReadyToShip, showToast, router]);
+  }, [presetProduct, state, basePrice, isPresetReadyToShip, showToast, router, isStoreClosedNow]);
 
   const handleBack = useCallback(() => {
     if (window.history.length > 1) {
@@ -287,14 +299,6 @@ function VelvetWireContent() {
       router.push('/');
     }
   }, [router]);
-
-  // Date picker value for initialization
-  const datePickerValue = useMemo(() => {
-    if (state.deliveryDate && state.deliveryTime) {
-      return `${state.deliveryDate} ${state.deliveryTime}`;
-    }
-    return undefined;
-  }, [state.deliveryDate, state.deliveryTime]);
 
   const tomorrowStr = useMemo(() => getTomorrowStr(), []);
   const minDateTime = useMemo(() => {
@@ -306,14 +310,22 @@ function VelvetWireContent() {
 
   const deliveryHelperText = useMemo(() => {
     if (!presetProduct?.badge) return '';
-    const deliveryTime = getDeliveryTimeText(presetProduct.badge);
-    const minDateTimeStr = minDateTime ? formatMinDeliveryDateTime(minDateTime) : '';
-    return `เลือกวันที่และเวลาจัดส่งตามต้องการได้เลยค่ะ แต่หากต้องการรับสินค้าเร็วที่สุด ช่อนี้ขอเวลาทำ ${deliveryTime} นะคะ ลูกค้าสามารถรับสินค้าได้เร็วที่สุดตั้งแต่${minDateTimeStr} โดยประมาณ หรืออาจเร็วกว่านั้น สามารถติดตามสถานะการจัดดอกไม้ได้ที่หน้า ประวัติการสั่งซื้อ หรือทักมาสอบถามในไลน์ @145dmmit ได้เลยนะคะ`;
+    return buildDeliveryHelperText(presetProduct.badge, minDateTime);
   }, [presetProduct?.badge, minDateTime]);
   const initialMinTime = useMemo(
-    () => (state.deliveryDate === tomorrowStr ? '09:00' : '00:00'),
-    [state.deliveryDate, tomorrowStr]
+    () => getMinDeliveryTime(state.deliveryDate, minDateTime, tomorrowStr),
+    [state.deliveryDate, minDateTime, tomorrowStr]
   );
+
+  const deliveryInputStyle = {
+    width: '100%',
+    background: 'var(--glass-bg)',
+    border: '1px solid var(--glass-border)',
+    padding: '12px',
+    borderRadius: '12px',
+    color: 'var(--text-color)',
+    fontSize: '16px',
+  } as const;
 
   return (
     <>
@@ -336,6 +348,7 @@ function VelvetWireContent() {
         <div className="page-heading">
           <h1>&quot;Velvet Wire&quot;</h1>
           <p className="subtitle">ออกแบบดอกไม้ลวดกำมะหยี่ของคุณ</p>
+          <StoreClosedNotice />
         </div>
 
         {/* Order Summary */}
@@ -373,7 +386,12 @@ function VelvetWireContent() {
             บาท
           </div>
           <div className="btn-group">
-            <button className="btn-next" onClick={finishOrder} style={{ padding: '10px 30px' }}>
+            <button
+              className="btn-next"
+              onClick={finishOrder}
+              disabled={isStoreClosedNow}
+              style={{ padding: '10px 30px', opacity: isStoreClosedNow ? 0.5 : 1, cursor: isStoreClosedNow ? 'not-allowed' : 'pointer' }}
+            >
               เพิ่มลงตะกร้า
             </button>
           </div>
@@ -420,20 +438,39 @@ function VelvetWireContent() {
                 onChange={e => updateField('customerAddress', e.target.value)}
                 style={{ fontSize: '16px' }}
               />
-              <div className="form-note">ส่งฟรีบริเวณกำแพงแสน</div>
+              <div className="form-note">ส่งฟรีบริเวณหน้ามอ</div>
             </div>
 
-            <div className="form-group">
-              <label>วันที่และเวลาจัดส่ง</label>
-              <DateTimePicker
-                id="ipt-date"
-                placeholder="เลือกวันที่และเวลา"
-                value={datePickerValue}
-                minDate={tomorrowStr}
-                minTime={initialMinTime}
-                minDateTime={minDateTime}
-                onChange={handleDateChange}
-              />
+            <div className="delivery-datetime-row">
+              <div className="form-group">
+                <label>วันที่จัดส่ง</label>
+                <DatePicker
+                  id="ipt-date"
+                  placeholder="เลือกวันที่"
+                  value={state.deliveryDate || undefined}
+                  minDate={tomorrowStr}
+                  minDateTime={minDateTime}
+                  onChange={handleDeliveryDateChange}
+                  style={deliveryInputStyle}
+                />
+              </div>
+
+              <div className="form-group">
+                <label>เวลาจัดส่ง</label>
+                <TimePicker
+                  id="ipt-time"
+                  placeholder="เลือกเวลา"
+                  value={state.deliveryTime || undefined}
+                  selectedDate={state.deliveryDate}
+                  minTime={initialMinTime}
+                  minDateTime={minDateTime}
+                  onChange={handleDeliveryTimeChange}
+                  style={deliveryInputStyle}
+                />
+              </div>
+            </div>
+
+            <div className="delivery-datetime-notes">
               <span
                 id="delivery-warning"
                 style={{ fontSize: '.75rem', color: 'red', marginTop: '6px', display: 'block', lineHeight: '1.4' }}
@@ -454,7 +491,9 @@ function VelvetWireContent() {
                       <circle cx="12" cy="12" r="10" />
                       <path d="M12 8v4l3 3" />
                     </svg>
-                    สั่งล่วงหน้าอย่างน้อย 1 วัน
+                    {presetProduct?.badge
+                      ? getDeliveryAdvanceWarningText(presetProduct.badge)
+                      : 'สั่งล่วงหน้าอย่างน้อย 1 วัน'}
                   </>
                 )}
               </span>
@@ -533,7 +572,7 @@ function VelvetWireContent() {
               <label>รายละเอียดเพิ่มเติม (ถ้ามี)</label>
               <textarea
                 id="ipt-note"
-                placeholder="เช่น ขอการ์ดวันเกิด เขียนว่า..."
+                placeholder="เช่น ฝากเขียนการ์ด เขียนว่า..."
                 value={state.additionalNote}
                 onChange={e => updateField('additionalNote', e.target.value)}
                 style={{ fontSize: '16px' }}
@@ -551,7 +590,12 @@ function VelvetWireContent() {
           <small>บาท</small>
         </div>
         <div className="sticky-btn-row">
-          <button className="sticky-next" onClick={finishOrder} style={{ width: '100%' }}>
+          <button
+            className="sticky-next"
+            onClick={finishOrder}
+            disabled={isStoreClosedNow}
+            style={{ width: '100%', opacity: isStoreClosedNow ? 0.5 : 1, cursor: isStoreClosedNow ? 'not-allowed' : 'pointer' }}
+          >
             เพิ่มลงตะกร้า
           </button>
         </div>
