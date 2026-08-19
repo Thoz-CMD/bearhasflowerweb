@@ -255,6 +255,25 @@ export async function POST(req: Request) {
       const row = rows[i];
       if (!row || row.length < 2) continue;
 
+      // ✅ Check Column A (index 0) สี - ถ้าสีม่วง ให้ skip
+      const colACellFormat = rowFormats[i]?.[0];
+      const colABgColor = colACellFormat?.effectiveFormat?.backgroundColor;
+      
+      let isSkipped = false;
+      if (colABgColor) {
+        const red = colABgColor.red ?? 1;
+        const green = colABgColor.green ?? 1;
+        const blue = colABgColor.blue ?? 1;
+
+        // สีม่วง: R > 0.6, G < 0.5, B > 0.6
+        if (red > 0.6 && green < 0.5 && blue > 0.6) {
+          console.log(`Skipping row ${i}: Column A is purple color (skip marker)`);
+          isSkipped = true;
+        }
+      }
+
+      if (isSkipped) continue;
+
       const titleRaw = row[1];
       const incomeRaw = row[2];
       const expenseRaw = row[3];
