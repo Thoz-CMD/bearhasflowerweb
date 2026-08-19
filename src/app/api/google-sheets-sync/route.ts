@@ -178,6 +178,7 @@ export async function POST(req: Request) {
         rowFormats.push(row.values || []);
       }
     }
+    console.log('rowFormats[1] (Row 2 formats):', JSON.stringify(rowFormats[1]?.[0], null, 2));
 
     // ---- ฟังก์ชัน parse วันที่จาก raw value (รองรับ serial number, string d/m/yyyy, ISO) ----
     const parseDateRaw = (rawVal: any): string => {
