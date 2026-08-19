@@ -138,10 +138,8 @@ export async function POST(req: Request) {
 
     console.log('Spreadsheet sheets:', spreadsheet.data.sheets);
 
-    // หา sheet ที่มีชื่อ "หมีมีดอกไม้" หรือใช้ sheet แรก
-    const targetSheet = spreadsheet.data.sheets?.find((sheet: any) => 
-      sheet.properties?.title === 'หมีมีดอกไม้'
-    ) || spreadsheet.data.sheets?.[0];
+    // ใช้ sheet แรกเสมอ (dynamic - ไม่สนชื่อ)
+    const targetSheet = spreadsheet.data.sheets?.[0];
 
     const sheetName = targetSheet?.properties?.title || 'Sheet1';
     console.log('Using sheet:', sheetName);
@@ -248,14 +246,12 @@ export async function POST(req: Request) {
     console.log('Pre-computed row dates (first 15):', rowDates.slice(0, 15));
 
 
-    // ---- Pass 2: Process 100 แถวล่าสุดล่างสุดของ Sheet (Tail Reading) ----
+    // ---- Pass 2: Process ทั้ง Sheet ----
     const items: ExpenseItem[] = [];
-    const MAX_TAIL_ROWS = 100; // อ่านเฉพาะ 100 แถวล่าสุดของ Sheet
-    const startIndex = Math.max(1, rows.length - MAX_TAIL_ROWS);
+    
+    console.log(`Processing all rows: rows 1 to ${rows.length - 1} (total ${rows.length} rows in sheet)`);
 
-    console.log(`Processing sheet tail: rows ${startIndex} to ${rows.length - 1} (total ${rows.length} rows in sheet)`);
-
-    for (let i = startIndex; i < rows.length; i++) {
+    for (let i = 1; i < rows.length; i++) {  // i=0 คือ header
       const row = rows[i];
       if (!row || row.length < 2) continue;
 
@@ -265,7 +261,7 @@ export async function POST(req: Request) {
 
       // ใช้วันที่จาก pre-computed array (fill-down จากแถวก่อนหน้าตั้งแต่แถวแรก)
       const date = rowDates[i] || todayBkk;
-      console.log(`Row ${i} (${titleRaw}) → date: ${date} | raw dateCol: ${JSON.stringify(rows[i]?.[0])}`);
+      console.log(`Row ${i} title="${titleRaw}" income="${incomeRaw}" expense="${expenseRaw}" → date: ${date}`);
 
       // ตรวจสอบ Thai+ จากสีพื้นหลังของ คอลัมน์ F (Index 5) เท่านั้น
       // ถ้าสีฟ้า = true, ถ้าสีขาว/อื่นๆ = false

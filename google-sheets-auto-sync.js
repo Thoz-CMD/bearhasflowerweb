@@ -41,9 +41,15 @@ function syncToDatabase() {
     
     if (responseCode === 200) {
       const result = JSON.parse(responseBody);
-      Logger.log('Sync Successful: ' + result.count + ' items');
+      if (result.autoSaved) {
+        Logger.log('✓ AUTO-SAVE SUCCESS: ' + result.message);
+        Logger.log('  Items in sheet: ' + result.count + ', New items saved: ' + result.newCount);
+      } else {
+        Logger.log('⚠ AUTO-SAVE FAILED: ' + result.message);
+        if (result.warning) Logger.log('  Warning: ' + result.warning);
+      }
     } else {
-      Logger.log('Sync Failed: ' + responseCode + ' - ' + responseBody);
+      Logger.log('✗ SYNC FAILED: ' + responseCode + ' - ' + responseBody);
     }
   } catch (error) {
     Logger.log('Sync Error: ' + error.message);
