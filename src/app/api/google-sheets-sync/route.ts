@@ -319,6 +319,19 @@ export async function POST(req: Request) {
         continue;
       }
 
+      // Filter by current month only
+      const currentBkk = new Date(Date.now() + 7 * 3600 * 1000);
+      const currentYear = currentBkk.getUTCFullYear();
+      const currentMonth = String(currentBkk.getUTCMonth() + 1).padStart(2, '0');
+      const currentYearMonth = `${currentYear}-${currentMonth}`;
+      
+      const rowYearMonth = date.substring(0, 7); // "YYYY-MM" from "YYYY-MM-DD"
+      
+      if (rowYearMonth !== currentYearMonth) {
+        console.log(`Skipping row ${i}: date ${date} is not current month (current: ${currentYearMonth})`);
+        continue;
+      }
+
       // Parse title
       const title = String(titleRaw || 'รายการจาก Google Sheets').trim();
 
