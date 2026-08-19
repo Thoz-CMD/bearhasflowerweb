@@ -265,9 +265,11 @@ export async function POST(req: Request) {
         const green = colABgColor.green ?? 1;
         const blue = colABgColor.blue ?? 1;
 
+        console.log(`Row ${i} Column A color: R=${red}, G=${green}, B=${blue}`);
+
         // สีม่วง: R > 0.6, G < 0.5, B > 0.6
         if (red > 0.6 && green < 0.5 && blue > 0.6) {
-          console.log(`Skipping row ${i}: Column A is purple color (skip marker)`);
+          console.log(`✓ Skipping row ${i}: Column A is purple color (skip marker)`);
           isSkipped = true;
         }
       }
