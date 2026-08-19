@@ -268,8 +268,9 @@ export async function POST(req: Request) {
 
         console.log(`Row ${i} Column A color: R=${red}, G=${green}, B=${blue}`);
 
-        // สีม่วง: R > 0.6, G < 0.5, B > 0.6
-        if (red > 0.6 && green < 0.5 && blue > 0.6) {
+        // สีม่วง: Blue สูง (0.83+), Red-Green ปานกลาง (0.65-0.71)
+        // RGB ของสีม่วง: R≈0.706, G≈0.655, B≈0.839
+        if (blue > 0.75 && red >= 0.65 && green >= 0.60 && blue > red && blue - red > 0.1) {
           console.log(`✓ Skipping row ${i}: Column A is purple color (skip marker)`);
           isSkipped = true;
         }
