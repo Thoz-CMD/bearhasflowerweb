@@ -1037,13 +1037,13 @@ function GlitterRoseContent() {
 
                 <div className="delivery-datetime-notes">
                   <span id="delivery-warning" style={{ fontSize: '.75rem', color: 'red', marginTop: '6px', display: 'block', lineHeight: '1.4' }}>
-                    {presetProduct?.readyToShip ? '' : (
-                    {presetProduct?.badge
-                      ? getDeliveryAdvanceWarningText(presetProduct.badge, { prefix: '* กรุณา' })
-                      : state.selectedQty && state.selectedQty >= 30
-                        ? `* ต้องสั่งล่วงหน้าอย่างน้อย ${state.selectedQty >= 40 ? '3' : '2'} วัน (เนื่องจากดอกไม้มีจำนวน ${state.selectedQty} ดอก)`
-                        : '* กรุณาสั่งล่วงหน้าอย่างน้อย 1 วัน'}
-                    )}
+                    {presetProduct?.readyToShip
+                      ? ''
+                      : presetProduct?.badge
+                        ? getDeliveryAdvanceWarningText(presetProduct.badge, { prefix: '* กรุณา' })
+                        : state.selectedQty && state.selectedQty >= 30
+                          ? `* ต้องสั่งล่วงหน้าอย่างน้อย ${state.selectedQty >= 40 ? '3' : '2'} วัน (เนื่องจากดอกไม้มีจำนวน ${state.selectedQty} ดอก)`
+                          : '* กรุณาสั่งล่วงหน้าอย่างน้อย 1 วัน'}
                   </span>
                   {deliveryHelperText && (
                     <span style={{ fontSize: '.75rem', color: 'var(--mid-brown)', marginTop: '6px', display: 'block', lineHeight: '1.4' }}>

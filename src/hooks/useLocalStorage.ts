@@ -2,8 +2,8 @@
 import { useState, useEffect, useCallback } from 'react';
 
 /**
- * Custom hook สำหรับ sync state กับ localStorage
- * คืนค่า [value, setValue, removeValue]
+ * Custom hook for syncing state with localStorage.
+ * Returns [value, setValue, removeValue]
  */
 export function useLocalStorage<T>(key: string, initialValue: T): [T, (value: T | ((prev: T) => T)) => void, () => void] {
   const [storedValue, setStoredValue] = useState<T>(() => {
