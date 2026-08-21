@@ -34,7 +34,7 @@ const DELIVERY_FILTER_HTML = DELIVERY_FILTER_OPTIONS.map((option, index) => `
               <span class="delivery-filter-option-text">${option.label}</span>
             </button>`).join('');
 
-export default function ClientPage({ initialProductHtml }: { initialProductHtml?: string }) {
+export default function ClientPage({ initialProducts }: { initialProducts?: string }) {
   const [user, setUser] = useState<User | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -1505,7 +1505,59 @@ export default function ClientPage({ initialProductHtml }: { initialProductHtml?
 
   <section class="section-three">
     <div class="product-grid" id="main-product-grid">
-      ${initialProductHtml || ''}
+      ${initialProducts ? `<script>
+        (() => {
+          try {
+            const products = JSON.parse(${JSON.stringify(JSON.stringify(initialProducts))}); 
+            const container = document.getElementById('main-product-grid');
+            if (container && products.length > 0) {
+              container.innerHTML = products.map((p, idx) => {
+                const currentLikes = Math.max(0, Number(p.likes || 0));
+                const priceValue = Number(p.price || 0);
+                
+                const name = String(p.name || '').toLowerCase();
+                const description = String(p.description || '').toLowerCase();
+                let productType = 'all';
+                if (p.type === 'velvet_flower' || name.includes('กำมะหยี่') || description.includes('กำมะหยี่')) {
+                  productType = 'velvet';
+                } else if (p.type === 'glitter_rose' || name.includes('กลิตเตอร์') || description.includes('กลิตเตอร์')) {
+                  productType = 'glitter';
+                } else if (name.includes('ดอกไม้ประดิษฐ์') || description.includes('ดอกไม้ประดิษฐ์')) {
+                  productType = 'artificial';
+                }
+                
+                const isArtificial = p.type === 'artificial_flowers';
+                const isVelvet = productType === 'velvet';
+                const targetUrl = isArtificial ? '/artificial_flowers?preset=' + p.id : (isVelvet ? '/velvet_wire?preset=' + p.id : '/glitter_rose?preset=' + p.id);
+                
+                const isReadyToShip = Boolean(p.readyToShip);
+                const stockQuantity = Number(p.stockQuantity || 0);
+                const hasReadyStock = isReadyToShip && stockQuantity > 0;
+                const isSoldOut = hasReadyStock ? false : Boolean(p.soldOut) || (isReadyToShip && stockQuantity <= 0) || (!isReadyToShip && p.badge === 'หมดชั่วคราว');
+                
+                const readyStockLabel = stockQuantity > 0 ? \`พร้อมส่ง \${stockQuantity}\` : 'พร้อมส่ง';
+                const badgeText = hasReadyStock ? readyStockLabel : (isSoldOut ? 'หมดชั่วคราว' : (p.badge || 'แนะนำ'));
+                
+                return \`
+                  <article class="product-card fade-in" style="animation-delay: \${0.05 + idx * 0.05}s;" data-product-id="\${p.id}" data-product-type="\${productType}">
+                    <div class="product-image-wrap" style="position:relative; overflow:hidden; cursor:\${isSoldOut ? 'default' : 'pointer'};" onclick="\${isSoldOut ? '' : \`window.location.href='\${targetUrl}'\`}">
+                      \${p.coverImage ? \`<img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-real-src="\${p.coverImage}" alt="\${p.name}" class="product-image" loading="lazy" style="width:100%; height:100%; object-fit:cover; position:absolute; top:0; left:0; border-radius:inherit;" />\` : '<div class="product-placeholder">🌹</div>'}
+                      <span class="product-badge">\${badgeText}</span>
+                    </div>
+                    <div class="product-info">
+                      <div class="product-name" onclick="\${isSoldOut ? '' : \`window.location.href='\${targetUrl}'\`}">\${p.name}</div>
+                      <div class="product-desc" onclick="\${isSoldOut ? '' : \`window.location.href='\${targetUrl}'\`}">\${p.description}</div>
+                      <div class="product-footer">
+                        <div class="product-price">\${priceValue.toLocaleString('th-TH')} <span>บาท</span></div>
+                      </div>
+                    </div>
+                  </article>
+                \`;
+              }).join('');
+            }
+          } catch (e) { console.error('SSR product render:', e); }
+        })();
+      </script>` : ''}
     </div>
   </section>
 
