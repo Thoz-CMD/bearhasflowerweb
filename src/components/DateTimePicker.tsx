@@ -768,6 +768,22 @@ export function formatMinDeliveryDateTime(minDateTime: string): string {
 
 export function buildDeliveryHelperText(badge: string, minDateTime?: string): string {
   const deliveryTime = getDeliveryTimeText(badge);
+  
+  // Check if store is closed (01:00-08:59 Bangkok time)
+  const now = new Date();
+  const hourPart = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Bangkok',
+    hour: 'numeric',
+    hour12: false,
+  }).formatToParts(now).find((part) => part.type === 'hour');
+  const currentHour = Number(hourPart?.value ?? 0);
+  const isStoreClosed = currentHour >= 1 && currentHour < 9;
+
+  // During closed hours (01:00-08:59), don't show the delivery helper text
+  if (isStoreClosed) {
+    return '';
+  }
+
   const base = `เลือกวันที่และเวลาจัดส่งตามต้องการได้เลยค่ะ หากต้องการรับสินค้าเร็วที่สุด ช่อนี้ขอเวลาจัดประมาณ ${deliveryTime} นะคะ`;
 
   if (!minDateTime) {
