@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import React, { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -1504,17 +1504,6 @@ function AdminPageContent() {
     .reduce((acc, e) => acc + (e.amount || 0), 0);
   const currentNetProfit = currentSales - currentExpensesTotal;
 
-  // Calculate average daily revenue
-  const getDaysInMonth = (yearMonth: string) => {
-    const [year, month] = yearMonth.split('-').map(Number);
-    return new Date(year, month, 0).getDate();
-  };
-  
-  const currentDaysInMonth = getDaysInMonth(selectedMonth);
-  const averageDailyRevenue = financeViewMode === 'daily' 
-    ? currentSales // In daily mode, show the day's revenue
-    : Math.round(monthlySales / currentDaysInMonth); // In monthly mode, calculate average
-
   // Thai+ calculations
   const currentThaiPlusIncome = currentExpenses
     .filter(e => e.type === 'income' && e.isThaiPlus)
@@ -1536,6 +1525,17 @@ function AdminPageContent() {
     .filter(e => e.type === 'expense')
     .reduce((acc, e) => acc + (e.amount || 0), 0);
   const monthlyNetProfit = monthlySales - monthlyExpensesTotal;
+
+  // Calculate average daily revenue (must be after monthlyNetProfit is defined)
+  const getDaysInMonth = (yearMonth: string) => {
+    const [year, month] = yearMonth.split('-').map(Number);
+    return new Date(year, month, 0).getDate();
+  };
+  
+  const currentDaysInMonth = getDaysInMonth(selectedMonth);
+  const averageDailyRevenue = financeViewMode === 'daily' 
+    ? currentNetProfit // In daily mode, show the day's net profit
+    : Math.round(monthlyNetProfit / currentDaysInMonth); // In monthly mode, calculate average net profit per day
   const previousMonthFinance = getPreviousYearMonth(selectedMonth);
   const previousMonthSalesFinance = previousMonthFinance
     ? getSalesForYearMonth(orders, previousMonthFinance)
@@ -1544,9 +1544,30 @@ function AdminPageContent() {
     ? getExpensesForYearMonth(expenses, previousMonthFinance)
     : 0;
   const previousMonthNetProfitFinance = previousMonthSalesFinance - previousMonthExpensesFinance;
+  
+  // Calculate Thai+ metrics for previous month
+  const previousMonthExpensesFinanceList = previousMonthFinance
+    ? expenses.filter(e => e.date && e.date.substring(0, 7) === previousMonthFinance)
+    : [];
+  const previousMonthThaiPlusIncome = previousMonthExpensesFinanceList
+    .filter(e => e.type === 'income' && e.isThaiPlus)
+    .reduce((acc, e) => acc + (e.amount || 0), 0);
+  const previousMonthThaiPlusExpense = previousMonthExpensesFinanceList
+    .filter(e => e.type === 'expense' && e.isThaiPlus)
+    .reduce((acc, e) => acc + (e.amount || 0), 0);
+  const previousMonthThaiPlusTotal = previousMonthThaiPlusIncome + previousMonthThaiPlusExpense;
+  
+  // Calculate average daily profit for previous month
+  const previousMonthDaysInMonth = previousMonthFinance ? getDaysInMonth(previousMonthFinance) : 0;
+  const previousMonthAverageDailyProfit = previousMonthDaysInMonth > 0 
+    ? Math.round(previousMonthNetProfitFinance / previousMonthDaysInMonth)
+    : 0;
+  
   const salesFinanceGrowth = getGrowthMetrics(monthlySales, previousMonthSalesFinance);
   const expensesFinanceGrowth = getGrowthMetrics(monthlyExpensesTotal, previousMonthExpensesFinance);
   const netProfitFinanceGrowth = getGrowthMetrics(monthlyNetProfit, previousMonthNetProfitFinance);
+  const thaiPlusFinanceGrowth = getGrowthMetrics(currentThaiPlusTotal, previousMonthThaiPlusTotal);
+  const averageDailyProfitGrowth = getGrowthMetrics(averageDailyRevenue, previousMonthAverageDailyProfit);
   const previousMonthLabelFinance = previousMonthFinance ? formatMonthThai(previousMonthFinance) : 'เดือนที่แล้ว';
 
   // Format date for daily view
@@ -1614,28 +1635,28 @@ function AdminPageContent() {
       value: `${currentThaiPlusTotal.toLocaleString()} ฿`,
       detail: financeViewMode === 'daily'
         ? `วันที่ ${formatDateThai(selectedDate)}`
-        : `รายรับ ${currentThaiPlusIncome.toLocaleString()} ฿`,
+        : `${thaiPlusFinanceGrowth.detailLabel} ${thaiPlusFinanceGrowth.formattedPct}% จาก${previousMonthLabelFinance}`,
       accent: 'rgb(59, 130, 246)',
       cardClass: 'metric-thaiplus',
-      progressPct: 0,
-      ringLabelPct: 0,
-      ringPrefix: '',
-      detailPrefix: '•',
+      progressPct: financeViewMode === 'daily' ? 0 : thaiPlusFinanceGrowth.progressPct,
+      ringLabelPct: financeViewMode === 'daily' ? 0 : thaiPlusFinanceGrowth.ringLabelPct,
+      ringPrefix: financeViewMode === 'daily' ? '' : thaiPlusFinanceGrowth.ringPrefix,
+      detailPrefix: financeViewMode === 'daily' ? '•' : thaiPlusFinanceGrowth.detailPrefix,
       valueColor: '#1a1a1a',
     },
     {
       key: 'finance-avg-daily',
-      label: financeViewMode === 'daily' ? 'รายได้ของวันนี้' : 'รายได้เฉลี่ยต่อวัน',
+      label: financeViewMode === 'daily' ? 'กำไรสุทธิของวันนี้' : 'กำไรสุทธิเฉลี่ยต่อวัน',
       value: `${averageDailyRevenue.toLocaleString()} ฿`,
       detail: financeViewMode === 'daily'
         ? `วันที่ ${formatDateThai(selectedDate)}`
-        : `จาก ${currentDaysInMonth} วันในเดือนนี้`,
+        : `${averageDailyProfitGrowth.detailLabel} ${averageDailyProfitGrowth.formattedPct}% จาก${previousMonthLabelFinance}`,
       accent: 'rgb(139, 92, 246)',
       cardClass: 'metric-avg-daily',
-      progressPct: 0,
-      ringLabelPct: 0,
-      ringPrefix: '',
-      detailPrefix: '•',
+      progressPct: financeViewMode === 'daily' ? 0 : averageDailyProfitGrowth.progressPct,
+      ringLabelPct: financeViewMode === 'daily' ? 0 : averageDailyProfitGrowth.ringLabelPct,
+      ringPrefix: financeViewMode === 'daily' ? '' : averageDailyProfitGrowth.ringPrefix,
+      detailPrefix: financeViewMode === 'daily' ? '•' : averageDailyProfitGrowth.detailPrefix,
       valueColor: '#1a1a1a',
     },
   ];
@@ -5320,7 +5341,7 @@ function AdminPageContent() {
             {/* Salary & Profit Allocation Card */}
             <div className="salary-sharing-card">
               <h3 className="sharing-title">
-                <span>💰</span> การจัดสรรรายได้ & ส่วนแบ่งเงินเดือน
+                <span></span> การจัดสรรรายได้ & ส่วนแบ่งเงินเดือน
               </h3>
               <p className="sharing-subtitle">
                 ระบบคำนวณส่วนแบ่งอัตโนมัติจากกำไรสุทธิรอบบัญชี {formatMonthThai(selectedMonth)}
@@ -5338,11 +5359,8 @@ function AdminPageContent() {
                   {/* Visual Allocation Bar */}
                   <div className="allocation-bar-wrapper">
                     <div className="allocation-bar">
-                      <div className="bar-segment segment-materials" style={{ width: '30%' }}>
-                        <span>30%</span>
-                      </div>
-                      <div className="bar-segment segment-savings" style={{ width: '50%' }}>
-                        <span>50%</span>
+                      <div className="bar-segment segment-savings" style={{ width: '80%' }}>
+                        <span>80%</span>
                       </div>
                       <div className="bar-segment segment-admin1" style={{ width: '10%' }}>
                         <span>10%</span>
@@ -5354,8 +5372,7 @@ function AdminPageContent() {
 
                     {/* Allocation Legend */}
                     <div className="bar-legend">
-                      <span className="legend-item"><span className="legend-dot dot-materials"></span> ทุนซื้อของ (30%)</span>
-                      <span className="legend-item"><span className="legend-dot dot-savings"></span> เงินเก็บร้าน (50%)</span>
+                      <span className="legend-item"><span className="legend-dot dot-savings"></span> เงินเก็บสะสม (80%)</span>
                       <span className="legend-item"><span className="legend-dot dot-admin1"></span> แอดมินคนที่ 1 (10%)</span>
                       <span className="legend-item"><span className="legend-dot dot-admin2"></span> แอดมินคนที่ 2 (10%)</span>
                     </div>
@@ -5363,29 +5380,17 @@ function AdminPageContent() {
 
                   {/* Detailed Split Cards */}
                   <div className="split-cards-grid">
-                    {/* 1. Purchasing Fund Card */}
-                    <div className="split-card fund-card purchasing">
-                      <div className="card-header-row">
-                        <span className="card-badge badge-purchasing">📦 ทุนหมุนเวียน 30%</span>
-                      </div>
-                      <div className="card-body">
-                        <span className="split-label">หักเก็บสะสมทุนซื้อของ</span>
-                        <span className="split-value">{(monthlyNetProfit * 0.30).toLocaleString('th-TH', { maximumFractionDigits: 2 })} ฿</span>
-                      </div>
-                    </div>
-
-                    {/* 2. Shop Savings Card */}
+                    {/* 1. Shop Savings Card */}
                     <div className="split-card fund-card savings">
                       <div className="card-header-row">
-                        <span className="card-badge badge-savings">🏦 เงินเก็บร้าน 50%</span>
+                        <span className="card-badge badge-savings">🏦 เงินเก็บสะสม 80%</span>
                       </div>
                       <div className="card-body">
                         <span className="split-label">หักเก็บเป็นเงินเก็บสะสมร้าน</span>
-                        <span className="split-value">{(monthlyNetProfit * 0.50).toLocaleString('th-TH', { maximumFractionDigits: 2 })} ฿</span>
+                        <span className="split-value">{(monthlyNetProfit * 0.80).toLocaleString('th-TH', { maximumFractionDigits: 2 })} ฿</span>
                       </div>
                     </div>
-
-                    {/* 3. Admin 1 Salary Card */}
+                    {/* 2. Admin 1 Salary Card */}
                     <div className="split-card profile-card admin1">
                       <div className="card-header-row">
                         <span className="card-badge badge-admin1">👥 แอดมินคนที่ 1 (10%)</span>
@@ -5399,7 +5404,7 @@ function AdminPageContent() {
                       </div>
                     </div>
 
-                    {/* 4. Admin 2 Salary Card */}
+                    {/* 3. Admin 2 Salary Card */}
                     <div className="split-card profile-card admin2">
                       <div className="card-header-row">
                         <span className="card-badge badge-admin2">👥 แอดมินคนที่ 2 (10%)</span>
