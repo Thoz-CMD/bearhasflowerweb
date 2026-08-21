@@ -1895,6 +1895,14 @@ function AdminPageContent() {
           background: #fff;
         }
 
+        .metric-thaiplus {
+          background: #fff;
+        }
+
+        .metric-avg-daily {
+          background: #fff;
+        }
+
         .stat-info {
           display: flex;
           flex-direction: column;
