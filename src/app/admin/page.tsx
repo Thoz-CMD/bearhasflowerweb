@@ -4063,60 +4063,26 @@ function AdminPageContent() {
         .ledger-filter-bar {
           display: flex;
           flex-wrap: wrap;
-          gap: 12px;
+          gap: 10px;
           margin-top: 16px;
-          align-items: center;
         }
 
         .ledger-filter-btn {
-          border: 2px solid #e8cdd3;
-          background: #ffffff;
+          border: 1px solid rgba(219, 138, 158, 0.35);
+          background: #fff;
           color: #7a6352;
-          padding: 10px 18px;
-          border-radius: 10px;
+          padding: 10px 14px;
+          border-radius: 12px;
           font-weight: 600;
-          font-size: 0.95rem;
           cursor: pointer;
-          transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-          position: relative;
-          overflow: hidden;
-          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
+          transition: all 0.15s ease;
         }
 
-        .ledger-filter-btn::before {
-          content: '';
-          position: absolute;
-          top: 0;
-          left: -100%;
-          width: 100%;
-          height: 100%;
-          background: linear-gradient(135deg, rgba(219, 138, 158, 0.1) 0%, rgba(219, 138, 158, 0.05) 100%);
-          transition: left 0.3s ease;
-          z-index: -1;
-        }
-
-        .ledger-filter-btn:hover {
-          border-color: #db8a9e;
-          color: #8f5a6b;
-          box-shadow: 0 4px 8px rgba(219, 138, 158, 0.15);
-          transform: translateY(-2px);
-        }
-
-        .ledger-filter-btn:active {
-          transform: translateY(0);
-          box-shadow: 0 2px 4px rgba(219, 138, 158, 0.1);
-        }
-
+        .ledger-filter-btn:hover,
         .ledger-filter-btn.active {
-          background: linear-gradient(135deg, #db8a9e 0%, #c76a7b 100%);
-          border-color: #b85a6b;
-          color: #ffffff;
-          box-shadow: 0 4px 12px rgba(219, 138, 158, 0.3);
-          font-weight: 700;
-        }
-
-        .ledger-filter-btn.active::before {
-          left: 0;
+          background: #f9e7eb;
+          border-color: #db8a9e;
+          color: #ad344f;
         }
 
         .ledger-table {
@@ -4195,26 +4161,17 @@ function AdminPageContent() {
           height: 32px;
           border-radius: 50%;
           border: none;
-          background: transparent;
-          color: #a0a0a0;
+          background: #fdf5f6;
+          color: #e74c3c;
           display: flex;
           align-items: center;
           justify-content: center;
           cursor: pointer;
-          transition: all 0.2s ease;
-          font-size: 1.2rem;
-          font-weight: 600;
-          opacity: 0.7;
+          transition: all 0.2s;
         }
 
         .delete-btn-circle:hover {
-          background: transparent;
-          color: #e74c3c;
-          opacity: 1;
-          transform: scale(1.15);
-        }
-
-        .delete-btn-circle:active {
+          background: #fdedec;
           transform: scale(1.08);
         }
 
@@ -4445,51 +4402,6 @@ function AdminPageContent() {
 
         /* Mobile-first Responsive Adjustments for Finance Panel */
         @media (max-width: 767px) {
-          /* Ledger Filter Bar Mobile Styles */
-          .ledger-filter-bar {
-            gap: 8px;
-            margin-top: 12px;
-            justify-content: flex-start;
-            overflow-x: auto;
-            padding-bottom: 4px;
-            -webkit-overflow-scrolling: touch;
-            scroll-behavior: smooth;
-          }
-
-          .ledger-filter-bar::-webkit-scrollbar {
-            height: 3px;
-          }
-
-          .ledger-filter-bar::-webkit-scrollbar-track {
-            background: transparent;
-          }
-
-          .ledger-filter-bar::-webkit-scrollbar-thumb {
-            background: rgba(219, 138, 158, 0.3);
-            border-radius: 2px;
-          }
-
-          .ledger-filter-btn {
-            flex-shrink: 0;
-            padding: 8px 13px;
-            font-size: 0.82rem;
-            border-radius: 8px;
-            min-height: 34px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            white-space: nowrap;
-            border-width: 1.5px;
-          }
-
-          .ledger-filter-btn:hover {
-            transform: none;
-          }
-
-          .ledger-filter-btn.active {
-            box-shadow: 0 2px 6px rgba(219, 138, 158, 0.25);
-          }
-
           /* 1. Header & Title adjustments */
           .finance-section .dashboard-title {
             text-align: left !important;
@@ -5797,23 +5709,20 @@ function AdminPageContent() {
                     className="delete-all-btn"
                     onClick={handleDeleteAllExpenses}
                     style={{
-                      padding: '8px 16px',
-                      background: '#ffebee',
-                      border: '1px solid #ef9a9a',
-                      color: '#c62828',
-                      borderRadius: '8px',
+                      background: 'none',
+                      border: 'none',
+                      color: '#666',
                       fontSize: '0.85rem',
-                      fontWeight: '600',
+                      fontWeight: '500',
                       cursor: 'pointer',
-                      transition: 'all 0.2s ease'
+                      transition: 'color 0.2s ease',
+                      padding: '4px 8px'
                     }}
                     onMouseOver={(e) => {
-                      e.currentTarget.style.background = '#ffcdd2';
-                      e.currentTarget.style.borderColor = '#ef5350';
+                      e.currentTarget.style.color = '#ef5350';
                     }}
                     onMouseOut={(e) => {
-                      e.currentTarget.style.background = '#ffebee';
-                      e.currentTarget.style.borderColor = '#ef9a9a';
+                      e.currentTarget.style.color = '#666';
                     }}
                   >
                     ลบรายการทั้งหมด
