@@ -259,6 +259,15 @@ function AdminPageContent() {
   const [coAdditionalNote, setCoAdditionalNote] = useState<string>('');
   const [coIsSubmitting, setCoIsSubmitting] = useState<boolean>(false);
 
+  // System Closure Settings
+  const [isSystemClosed, setIsSystemClosed] = useState<boolean>(false);
+  const [closureStartDate, setClosureStartDate] = useState<string>('');
+  const [closureStartTime, setClosureStartTime] = useState<string>('');
+  const [closureEndDate, setClosureEndDate] = useState<string>('');
+  const [closureEndTime, setClosureEndTime] = useState<string>('');
+  const [closureMessage, setClosureMessage] = useState<string>('');
+  const [isSavingClosure, setIsSavingClosure] = useState<boolean>(false);
+
   const syncAdminViewMode = (nextMode: 'manager' | 'florist' | 'finance') => {
     setAdminViewMode(nextMode);
 
@@ -708,6 +717,59 @@ function AdminPageContent() {
 
     return () => unsubscribeExpenses();
   }, [isAdminUser]);
+
+  // Fetch system closure settings
+  useEffect(() => {
+    if (isAdminUser !== true) return;
+
+    const fetchClosure = async () => {
+      try {
+        const closureDoc = await getDoc(doc(db, 'settings', 'systemClosure'));
+        if (closureDoc.exists()) {
+          const data = closureDoc.data();
+          setIsSystemClosed(data.isSystemClosed || false);
+          setClosureStartDate(data.closureStartDate || '');
+          setClosureStartTime(data.closureStartTime || '');
+          setClosureEndDate(data.closureEndDate || '');
+          setClosureEndTime(data.closureEndTime || '');
+          setClosureMessage(data.closureMessage || '');
+        }
+      } catch (err) {
+        console.error("Error fetching closure settings:", err);
+      }
+    };
+
+    fetchClosure();
+  }, [isAdminUser]);
+
+  const handleSaveClosureSettings = async () => {
+    setIsSavingClosure(true);
+    try {
+      const closureData = {
+        isSystemClosed,
+        closureStartDate,
+        closureStartTime,
+        closureEndDate,
+        closureEndTime,
+        closureMessage,
+        updatedAt: serverTimestamp ? serverTimestamp() : new Date().toISOString(),
+        updatedBy: user?.phoneNumber || user?.email || 'Admin'
+      };
+
+      await updateDoc(doc(db, 'settings', 'systemClosure'), closureData).catch(async () => {
+        // If document doesn't exist, create it
+        const settingsRef = collection(db, 'settings');
+        await addDoc(settingsRef, { ...closureData, id: 'systemClosure' });
+      });
+
+      await (window as any).showBeautifulAlert('บันทึกการตั้งค่าปิดระบบสำเร็จ!', 'success', 'บันทึกสำเร็จ');
+    } catch (err) {
+      console.error("Failed to save closure settings:", err);
+      await (window as any).showBeautifulAlert('เกิดข้อผิดพลาดในการบันทึกการตั้งค่า', 'error', 'เกิดข้อผิดพลาด');
+    } finally {
+      setIsSavingClosure(false);
+    }
+  };
 
   const handleAddExpense = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -4702,6 +4764,203 @@ function AdminPageContent() {
 
         {adminViewMode === 'manager' && (
           <>
+            {/* System Closure Settings Card */}
+            <div style={{
+              background: '#fff',
+              borderRadius: '20px',
+              padding: '24px',
+              marginBottom: '24px',
+              boxShadow: '0 16px 34px rgba(80, 50, 57, 0.06)',
+              border: '1px solid rgba(219, 138, 158, 0.12)'
+            }}>
+              <h3 style={{
+                fontSize: '1.25rem',
+                fontWeight: '700',
+                color: '#2d2227',
+                marginBottom: '8px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px'
+              }}>
+                <span style={{ fontSize: '1.5rem' }}>🔒</span>
+                ตั้งค่าปิดระบบการสั่งซื้อ
+              </h3>
+              <p style={{ color: '#8f7d83', fontSize: '0.9rem', marginBottom: '20px' }}>
+                กำหนดช่วงเวลาที่ต้องการปิดระบบการสั่งซื้อชั่วคราว
+              </p>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px', marginBottom: '16px' }}>
+                {/* Enable/Disable Toggle */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', gridColumn: '1 / -1' }}>
+                  <label style={{ 
+                    position: 'relative', 
+                    display: 'inline-block', 
+                    width: '60px', 
+                    height: '34px',
+                    cursor: 'pointer'
+                  }}>
+                    <input
+                      type="checkbox"
+                      checked={isSystemClosed}
+                      onChange={(e) => setIsSystemClosed(e.target.checked)}
+                      style={{ opacity: 0, width: 0, height: 0 }}
+                    />
+                    <span style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      backgroundColor: isSystemClosed ? '#ea678f' : '#ccc',
+                      borderRadius: '34px',
+                      transition: 'all 0.3s',
+                      cursor: 'pointer'
+                    }}>
+                      <span style={{
+                        position: 'absolute',
+                        content: '',
+                        height: '26px',
+                        width: '26px',
+                        left: isSystemClosed ? '30px' : '4px',
+                        bottom: '4px',
+                        backgroundColor: 'white',
+                        borderRadius: '50%',
+                        transition: 'all 0.3s'
+                      }}></span>
+                    </span>
+                  </label>
+                  <span style={{ fontWeight: '600', color: isSystemClosed ? '#ea678f' : '#666' }}>
+                    {isSystemClosed ? 'เปิดใช้งานการปิดระบบ' : 'ปิดการใช้งานการปิดระบบ'}
+                  </span>
+                </div>
+
+                {/* Start Date & Time */}
+                <div>
+                  <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#5c4738', fontSize: '0.9rem' }}>
+                    วันเริ่มต้น
+                  </label>
+                  <input
+                    type="date"
+                    value={closureStartDate}
+                    onChange={(e) => setClosureStartDate(e.target.value)}
+                    disabled={!isSystemClosed}
+                    style={{
+                      width: '100%',
+                      padding: '10px 14px',
+                      borderRadius: '10px',
+                      border: '1px solid rgba(219, 138, 158, 0.2)',
+                      fontSize: '0.95rem',
+                      opacity: isSystemClosed ? 1 : 0.5
+                    }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#5c4738', fontSize: '0.9rem' }}>
+                    เวลาเริ่มต้น
+                  </label>
+                  <input
+                    type="time"
+                    value={closureStartTime}
+                    onChange={(e) => setClosureStartTime(e.target.value)}
+                    disabled={!isSystemClosed}
+                    style={{
+                      width: '100%',
+                      padding: '10px 14px',
+                      borderRadius: '10px',
+                      border: '1px solid rgba(219, 138, 158, 0.2)',
+                      fontSize: '0.95rem',
+                      opacity: isSystemClosed ? 1 : 0.5
+                    }}
+                  />
+                </div>
+
+                {/* End Date & Time */}
+                <div>
+                  <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#5c4738', fontSize: '0.9rem' }}>
+                    วันสิ้นสุด
+                  </label>
+                  <input
+                    type="date"
+                    value={closureEndDate}
+                    onChange={(e) => setClosureEndDate(e.target.value)}
+                    disabled={!isSystemClosed}
+                    style={{
+                      width: '100%',
+                      padding: '10px 14px',
+                      borderRadius: '10px',
+                      border: '1px solid rgba(219, 138, 158, 0.2)',
+                      fontSize: '0.95rem',
+                      opacity: isSystemClosed ? 1 : 0.5
+                    }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#5c4738', fontSize: '0.9rem' }}>
+                    เวลาสิ้นสุด
+                  </label>
+                  <input
+                    type="time"
+                    value={closureEndTime}
+                    onChange={(e) => setClosureEndTime(e.target.value)}
+                    disabled={!isSystemClosed}
+                    style={{
+                      width: '100%',
+                      padding: '10px 14px',
+                      borderRadius: '10px',
+                      border: '1px solid rgba(219, 138, 158, 0.2)',
+                      fontSize: '0.95rem',
+                      opacity: isSystemClosed ? 1 : 0.5
+                    }}
+                  />
+                </div>
+
+                {/* Message */}
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#5c4738', fontSize: '0.9rem' }}>
+                    ข้อความแจ้งเตือน
+                  </label>
+                  <textarea
+                    value={closureMessage}
+                    onChange={(e) => setClosureMessage(e.target.value)}
+                    disabled={!isSystemClosed}
+                    placeholder="ระบุข้อความที่ต้องการแจ้งให้ผู้ใช้ทราบ เช่น 'ระบบปิดปรับปรุงชั่วคราว'"
+                    rows={3}
+                    style={{
+                      width: '100%',
+                      padding: '10px 14px',
+                      borderRadius: '10px',
+                      border: '1px solid rgba(219, 138, 158, 0.2)',
+                      fontSize: '0.95rem',
+                      resize: 'vertical',
+                      fontFamily: 'inherit',
+                      opacity: isSystemClosed ? 1 : 0.5
+                    }}
+                  />
+                </div>
+              </div>
+
+              <button
+                onClick={handleSaveClosureSettings}
+                disabled={isSavingClosure || !isSystemClosed}
+                style={{
+                  padding: '12px 24px',
+                  background: isSystemClosed ? 'linear-gradient(135deg, #ea678f 0%, #d45578 100%)' : '#ccc',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '12px',
+                  fontSize: '0.95rem',
+                  fontWeight: '600',
+                  cursor: isSystemClosed ? 'pointer' : 'not-allowed',
+                  transition: 'all 0.2s',
+                  opacity: isSavingClosure ? 0.7 : 1
+                }}
+              >
+                {isSavingClosure ? 'กำลังบันทึก...' : 'บันทึกการตั้งค่า'}
+              </button>
+            </div>
+
             <div className="stats-grid main-stats-grid">
               {overviewCards.map((card) => (
                 <div key={card.key} className={`stat-card ${card.cardClass}`}>
