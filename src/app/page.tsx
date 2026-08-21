@@ -1,35 +1,19 @@
 import ClientPage from './ClientPage';
+import { adminDb } from '@/lib/firebaseAdmin';
 
 export const revalidate = 60; // Revalidate every 60 seconds for SSG cache
-
-const parseFirestoreValue = (val: any) => {
-  if ('stringValue' in val) return val.stringValue;
-  if ('integerValue' in val) return Number(val.integerValue);
-  if ('doubleValue' in val) return Number(val.doubleValue);
-  if ('booleanValue' in val) return val.booleanValue;
-  if ('timestampValue' in val) return new Date(val.timestampValue).getTime();
-  return null;
-};
 
 export default async function HomePage() {
   let initialProductHtml = '';
 
   try {
-    const res = await fetch('https://firestore.googleapis.com/v1/projects/bearhasflower/databases/(default)/documents/products?pageSize=100', {
-      next: { revalidate: 60 }
-    });
-    const data = await res.json();
+    // Use Firebase Admin SDK instead of REST API to avoid 2MB fetch cache limit
+    const snapshot = await adminDb.collection('products').get();
     
     let products: any[] = [];
-    if (data.documents) {
-      products = data.documents.map((doc: any) => {
-        const parsed: any = { id: doc.name.split('/').pop() };
-        for (const [key, val] of Object.entries(doc.fields || {})) {
-          parsed[key] = parseFirestoreValue(val);
-        }
-        return parsed;
-      });
-    }
+    snapshot.forEach(doc => {
+      products.push({ id: doc.id, ...doc.data() });
+    });
 
     // Sort by createdAt desc
     products.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
