@@ -116,10 +116,6 @@ export default function ClientPage({ initialProducts, initialProductsData }: { i
       grid.innerHTML = html;
     }
   }, [initialProductsData]);
-  const [user, setUser] = useState<User | null>(null);
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [showWelcomePopup, setShowWelcomePopup] = useState(false);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
