@@ -4195,17 +4195,26 @@ function AdminPageContent() {
           height: 32px;
           border-radius: 50%;
           border: none;
-          background: #fdf5f6;
-          color: #e74c3c;
+          background: transparent;
+          color: #a0a0a0;
           display: flex;
           align-items: center;
           justify-content: center;
           cursor: pointer;
-          transition: all 0.2s;
+          transition: all 0.2s ease;
+          font-size: 1.2rem;
+          font-weight: 600;
+          opacity: 0.7;
         }
 
         .delete-btn-circle:hover {
-          background: #fdedec;
+          background: transparent;
+          color: #e74c3c;
+          opacity: 1;
+          transform: scale(1.15);
+        }
+
+        .delete-btn-circle:active {
           transform: scale(1.08);
         }
 
