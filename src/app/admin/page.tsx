@@ -1504,6 +1504,17 @@ function AdminPageContent() {
     .reduce((acc, e) => acc + (e.amount || 0), 0);
   const currentNetProfit = currentSales - currentExpensesTotal;
 
+  // Calculate average daily revenue
+  const getDaysInMonth = (yearMonth: string) => {
+    const [year, month] = yearMonth.split('-').map(Number);
+    return new Date(year, month, 0).getDate();
+  };
+  
+  const currentDaysInMonth = getDaysInMonth(selectedMonth);
+  const averageDailyRevenue = financeViewMode === 'daily' 
+    ? currentSales // In daily mode, show the day's revenue
+    : Math.round(monthlySales / currentDaysInMonth); // In monthly mode, calculate average
+
   // Thai+ calculations
   const currentThaiPlusIncome = currentExpenses
     .filter(e => e.type === 'income' && e.isThaiPlus)
@@ -1606,6 +1617,21 @@ function AdminPageContent() {
         : `รายรับ ${currentThaiPlusIncome.toLocaleString()} ฿`,
       accent: 'rgb(59, 130, 246)',
       cardClass: 'metric-thaiplus',
+      progressPct: 0,
+      ringLabelPct: 0,
+      ringPrefix: '',
+      detailPrefix: '•',
+      valueColor: '#1a1a1a',
+    },
+    {
+      key: 'finance-avg-daily',
+      label: financeViewMode === 'daily' ? 'รายได้ของวันนี้' : 'รายได้เฉลี่ยต่อวัน',
+      value: `${averageDailyRevenue.toLocaleString()} ฿`,
+      detail: financeViewMode === 'daily'
+        ? `วันที่ ${formatDateThai(selectedDate)}`
+        : `จาก ${currentDaysInMonth} วันในเดือนนี้`,
+      accent: 'rgb(139, 92, 246)',
+      cardClass: 'metric-avg-daily',
       progressPct: 0,
       ringLabelPct: 0,
       ringPrefix: '',
