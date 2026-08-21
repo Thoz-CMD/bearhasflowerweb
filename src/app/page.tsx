@@ -21,6 +21,6 @@ export default async function HomePage() {
     console.error('Error pre-fetching products for SSR:', error);
   }
 
-  // Pass JSON string instead of HTML with Thai chars to avoid ByteString conversion error
-  return <ClientPage initialProducts={JSON.stringify(products)} />;
+  // Pass array directly - Next.js will serialize safely
+  return <ClientPage initialProductsData={products} />;
 }
