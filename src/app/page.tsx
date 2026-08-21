@@ -11,7 +11,14 @@ export default async function HomePage() {
     const snapshot = await adminDb.collection('products').get();
     
     snapshot.forEach(doc => {
-      products.push({ id: doc.id, ...doc.data() });
+      const data = doc.data();
+      // Convert Firestore Timestamps to plain numbers for serialization
+      products.push({ 
+        id: doc.id, 
+        ...data,
+        createdAt: data.createdAt?._seconds ? data.createdAt._seconds * 1000 : (data.createdAt || 0),
+        updatedAt: data.updatedAt?._seconds ? data.updatedAt._seconds * 1000 : (data.updatedAt || 0)
+      });
     });
 
     // Sort by createdAt desc
@@ -21,6 +28,6 @@ export default async function HomePage() {
     console.error('Error pre-fetching products for SSR:', error);
   }
 
-  // Pass array directly - Next.js will serialize safely
+  // Pass plain objects only (Next.js requirement)
   return <ClientPage initialProductsData={products} />;
 }
