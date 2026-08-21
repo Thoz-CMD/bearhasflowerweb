@@ -34,7 +34,7 @@ const DELIVERY_FILTER_HTML = DELIVERY_FILTER_OPTIONS.map((option, index) => `
               <span class="delivery-filter-option-text">${option.label}</span>
             </button>`).join('');
 
-export default function ClientPage({ initialProductHtml, initialProductsData }: { initialProductHtml?: string, initialProductsData?: any[] }) {
+export default function ClientPage({ initialProductHtml, initialProductsData }: { initialProductHtml?: string, initialProductsData?: any[] } = {}) {
   const [user, setUser] = useState<User | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -1507,7 +1507,7 @@ export default function ClientPage({ initialProductHtml, initialProductsData }: 
     <div class="product-grid" id="main-product-grid">
   <section class="section-three">
     <div class="product-grid" id="main-product-grid">
-      {initialProductHtml && <div dangerouslySetInnerHTML={{ __html: initialProductHtml }} />}
+      {/* Client will fetch and render products via fetchDynamicProductsHelper */}
     </div>
   </section>
 
