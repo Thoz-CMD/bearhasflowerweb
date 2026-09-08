@@ -1,0 +1,43 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // orders — ลูกค้าสร้างได้ (รวม guest), admin อ่าน/แก้ไขได้
+    match /orders/{orderId} {
+      allow read: if true;
+      allow create: if true; // รองรับ guest checkout
+      allow update: if request.auth != null;
+      allow delete: if request.auth != null;
+    }
+
+    // products — อ่านได้ทุกคน, แก้ไขได้เมื่อ login (admin)
+    match /products/{productId} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+
+    // stockReservations — ระบบจองสต็อก
+    match /stockReservations/{docId} {
+      allow read: if true;
+      allow write: if true; // checkout ต้องเขียนได้ก่อน login
+    }
+
+    // discounts / coupons
+    match /discounts/{docId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
+    }
+
+    // settings — systemClosure และการตั้งค่าร้าน อ่านได้ทุกคน, แก้ไขได้เมื่อ login (admin)
+    match /settings/{docId} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+
+    // ทุก collection อื่น — login แล้วอ่าน/เขียนได้
+    match /{document=**} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
+    }
+  }
+}

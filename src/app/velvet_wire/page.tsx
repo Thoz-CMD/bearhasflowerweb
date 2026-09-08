@@ -56,7 +56,7 @@ function VelvetWireContent() {
   const router = useRouter();
   const { showToast } = useToast();
   const { presetProduct, isLoading, error } = usePresetProduct();
-  const { isClosed: isStoreClosedNow } = useStoreHours();
+  const { isClosed: isStoreClosedNow, toast: storeClosedToast } = useStoreHours();
 
   const [state, setState] = useState<VelvetState>(initialState);
   const [isHydrated, setIsHydrated] = useState(false);
@@ -209,7 +209,7 @@ function VelvetWireContent() {
 
   const finishOrder = useCallback(() => {
     if (isStoreClosedNow) {
-      showToast(STORE_CLOSED_TOAST);
+      showToast(storeClosedToast || STORE_CLOSED_TOAST);
       return;
     }
     if (!presetProduct) {
@@ -406,7 +406,7 @@ function VelvetWireContent() {
 
           <div style={{ width: '100%', marginTop: '20px' }}>
             <div className="form-group">
-              <label>ชื่อผู้รับ</label>
+              <label>ชื่อผู้รับ <span style={{ color: '#e53935' }}>*</span></label>
               <input
                 type="text"
                 id="ipt-name"
@@ -418,7 +418,7 @@ function VelvetWireContent() {
             </div>
 
             <div className="form-group">
-              <label>เบอร์โทรติดต่อ</label>
+              <label>เบอร์โทรติดต่อ <span style={{ color: '#e53935' }}>*</span></label>
               <input
                 type="tel"
                 id="ipt-phone"
@@ -430,7 +430,7 @@ function VelvetWireContent() {
             </div>
 
             <div className="form-group">
-              <label>ที่อยู่จัดส่ง</label>
+              <label>ที่อยู่จัดส่ง <span style={{ color: '#e53935' }}>*</span></label>
               <textarea
                 id="ipt-address"
                 placeholder="ชื่อหอ.."
@@ -443,7 +443,7 @@ function VelvetWireContent() {
 
             <div className="delivery-datetime-row">
               <div className="form-group">
-                <label>วันที่จัดส่ง</label>
+                <label>วันที่จัดส่ง <span style={{ color: '#e53935' }}>*</span></label>
                 <DatePicker
                   id="ipt-date"
                   placeholder="เลือกวันที่"
@@ -456,7 +456,7 @@ function VelvetWireContent() {
               </div>
 
               <div className="form-group">
-                <label>เวลาจัดส่ง</label>
+                <label>เวลาจัดส่ง <span style={{ color: '#e53935' }}>*</span></label>
                 <TimePicker
                   id="ipt-time"
                   placeholder="เลือกเวลา"

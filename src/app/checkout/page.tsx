@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { db, auth } from '@/lib/firebase';
-import { collection, addDoc, serverTimestamp, doc, runTransaction, getDocs, query, where } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, doc, runTransaction, getDocs, query, where, updateDoc, increment } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 import generatePayload from 'promptpay-qr';
 import { QRCodeSVG } from 'qrcode.react';
@@ -14,11 +14,28 @@ const STORAGE_CART = 'bear_flower_cart';
 // บัญชี PromptPay ของร้านค้า (สามารถเปลี่ยนเป็นเบอร์โทร หรือ เลขบัตรประชาชนได้)
 const PROMPTPAY_ID = '0656144703'; // TODO: เปลี่ยนเป็นเบอร์พร้อมเพย์ของคุณ
 
+// ── Glitter Rose lookup maps ──
+const ROSE_COLORS_MAP: Record<string, string> = {
+  red: 'แดง', pink: 'ชมพู', blue: 'น้ำเงิน', white: 'ขาว', sky: 'ฟ้า', purple: 'ม่วง'
+};
+const ROSE_LAYERS_MAP: Record<string, string> = {
+  ramy_white: 'รามี่ขาว', pearl_net_white: 'ตาข่ายมุกขาว', sa_paper_white: 'กระดาษสาขาว',
+  ramy_black: 'รามี่ดำ', pearl_net_black: 'ตาข่ายมุกดำ', sa_paper_black: 'กระดาษสาดำ'
+};
+const ROSE_PAPERS_MAP: Record<string, string> = {
+  white_solid: 'ขาวทึบ', white_clear: 'ขาวใส', white_gold: 'ขาวขอบทอง',
+  black_solid: 'ดำทึบ', black_gold: 'ดำขอบทอง', pink: 'ชมพู'
+};
+const ROSE_SHAPES_MAP: Record<string, string> = {
+  triangle: 'สามเหลี่ยม', rectangle: 'สี่เหลี่ยม', open_front: 'เปิดหน้า'
+};
+
 export default function CheckoutPage() {
-  const { isClosed: isStoreClosedNow } = useStoreHours();
+  const { isClosed: isStoreClosedNow, toast: storeClosedToast } = useStoreHours();
   const [cartItems, setCartItems] = useState<any[]>([]);
   const [total, setTotal] = useState(0);
   const [deposit, setDeposit] = useState(0);
+  const [paymentOption, setPaymentOption] = useState<'deposit' | 'full'>('deposit');
   const [isClient, setIsClient] = useState(false);
   const [payload, setPayload] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
@@ -28,11 +45,12 @@ export default function CheckoutPage() {
   const [originalTotal, setOriginalTotal] = useState(0);
   const [discountCodeInput, setDiscountCodeInput] = useState('');
   const [appliedDiscountCode, setAppliedDiscountCode] = useState('');
+  const [appliedCoupon, setAppliedCoupon] = useState<any | null>(null);
   const [discountAmount, setDiscountAmount] = useState(0);
   const [discountError, setDiscountError] = useState('');
   const [discountSuccess, setDiscountSuccess] = useState('');
   const [isApplyingDiscount, setIsApplyingDiscount] = useState(false);
-  const [availableDiscounts, setAvailableDiscounts] = useState<{code: string, label: string}[]>([]);
+  const [availableDiscounts, setAvailableDiscounts] = useState<any[]>([]);
   const [checkingDiscounts, setCheckingDiscounts] = useState(true);
   const [slipFile, setSlipFile] = useState<File | null>(null);
   const [slipPreview, setSlipPreview] = useState<string | null>(null);
@@ -57,15 +75,35 @@ export default function CheckoutPage() {
       }
       setCheckingDiscounts(true);
       try {
-        const q = query(collection(db, 'orders'), where('userId', '==', userId));
-        const querySnapshot = await getDocs(q);
-        
-        const codes = [];
-        // หากยังไม่เคยสั่งซื้อเลย ให้มีโค้ด FIRST10
-        if (querySnapshot.empty) {
-          codes.push({ code: 'FIRST10', label: 'ส่วนลด 10% สำหรับการสั่งซื้อครั้งแรก' });
-        }
-        setAvailableDiscounts(codes);
+        const qOrders = query(collection(db, 'orders'), where('userId', '==', userId));
+        const orderSnapshot = await getDocs(qOrders);
+        const isNewUser = orderSnapshot.empty;
+
+        const qCoupons = query(collection(db, 'coupons'), where('isActive', '==', true));
+        const couponSnapshot = await getDocs(qCoupons);
+
+        const list: any[] = [];
+        const todayStr = new Date().toISOString().substring(0, 10);
+
+        couponSnapshot.forEach((docSnap) => {
+          const data = docSnap.data();
+          if (data.expiryDate && data.expiryDate < todayStr) return;
+          if (data.usageLimit && (data.usedCount || 0) >= data.usageLimit) return;
+          if (data.isForNewCustomerOnly && !isNewUser) return;
+
+          list.push({
+            id: docSnap.id,
+            code: data.code,
+            discountType: data.discountType || 'percent',
+            discountValue: data.discountValue || 0,
+            minSpend: data.minSpend || 0,
+            description: data.description || '',
+            isForNewCustomerOnly: Boolean(data.isForNewCustomerOnly),
+            label: data.description || (data.discountType === 'percent' ? `ลด ${data.discountValue}%` : `ลด ${data.discountValue} ฿`)
+          });
+        });
+
+        setAvailableDiscounts(list);
       } catch (err) {
         console.error('Error fetching discounts:', err);
       }
@@ -75,10 +113,10 @@ export default function CheckoutPage() {
   }, [userId]);
 
   useEffect(() => {
-    if (!checkingDiscounts && userId && originalTotal > 0 && availableDiscounts.some(d => d.code === 'FIRST10')) {
+    if (!checkingDiscounts && userId && originalTotal > 0 && availableDiscounts.length > 0) {
       const autoApply = localStorage.getItem('auto_apply_discount');
-      if (autoApply === 'FIRST10' && appliedDiscountCode !== 'FIRST10') {
-        handleToggleDiscount('FIRST10');
+      if (autoApply && appliedDiscountCode !== autoApply && availableDiscounts.some(d => d.code?.toUpperCase() === autoApply.toUpperCase())) {
+        handleToggleDiscount(autoApply);
         localStorage.removeItem('auto_apply_discount');
       }
     }
@@ -103,12 +141,20 @@ export default function CheckoutPage() {
       setDeposit(depositAmount);
 
       // สร้าง PromptPay QR Code Payload
-      const qrPayload = generatePayload(PROMPTPAY_ID, { amount: depositAmount });
+      const initialAmount = paymentOption === 'full' ? calculatedTotal : depositAmount;
+      const qrPayload = generatePayload(PROMPTPAY_ID, { amount: initialAmount });
       setPayload(qrPayload);
     } else {
       window.location.href = '/cart';
     }
   }, []);
+
+  const handlePaymentOptionChange = (option: 'deposit' | 'full') => {
+    setPaymentOption(option);
+    const amountToPay = option === 'full' ? total : deposit;
+    const qrPayload = generatePayload(PROMPTPAY_ID, { amount: amountToPay });
+    setPayload(qrPayload);
+  };
 
   const handleToggleDiscount = async (code: string) => {
     if (isApplyingDiscount) return;
@@ -125,33 +171,49 @@ export default function CheckoutPage() {
       return;
     }
 
-    if (code.toUpperCase() !== 'FIRST10') {
-      setDiscountError('โค้ดส่วนลดไม่ถูกต้อง');
+    const coupon = availableDiscounts.find(d => d.code?.toUpperCase() === code.toUpperCase());
+    if (!coupon) {
+      setDiscountError('ไม่พบคูปองส่วนลดนี้ หรือหมดสิทธิ์การใช้งานแล้ว');
+      return;
+    }
+
+    if (coupon.minSpend && originalTotal < coupon.minSpend) {
+      setDiscountError(`ยอดสั่งซื้อขั้นต่ำสำหรับคูปองนี้คือ ${coupon.minSpend.toLocaleString()} บาท`);
       return;
     }
 
     setIsApplyingDiscount(true);
     try {
-      const q = query(collection(db, 'orders'), where('userId', '==', userId));
-      const querySnapshot = await getDocs(q);
-      
-      if (!querySnapshot.empty) {
-        setDiscountError('โค้ดนี้สำหรับลูกค้าใหม่ที่สั่งซื้อครั้งแรกเท่านั้น');
-      } else {
-        const discount = Math.floor(originalTotal * 0.1);
-        const newTotal = originalTotal - discount;
-        const newDeposit = Math.ceil(newTotal * 0.5);
-        
-        setDiscountAmount(discount);
-        setTotal(newTotal);
-        setDeposit(newDeposit);
-        setAppliedDiscountCode('FIRST10');
-        setDiscountSuccess('ใช้คูปองส่วนลดสำเร็จ');
-        
-        // Update PromptPay QR
-        const qrPayload = generatePayload(PROMPTPAY_ID, { amount: newDeposit });
-        setPayload(qrPayload);
+      if (coupon.isForNewCustomerOnly) {
+        const q = query(collection(db, 'orders'), where('userId', '==', userId));
+        const querySnapshot = await getDocs(q);
+        if (!querySnapshot.empty) {
+          setDiscountError('โค้ดนี้สำหรับลูกค้าใหม่ที่สั่งซื้อครั้งแรกเท่านั้น');
+          setIsApplyingDiscount(false);
+          return;
+        }
       }
+
+      let discount = 0;
+      if (coupon.discountType === 'percent') {
+        discount = Math.floor(originalTotal * (coupon.discountValue / 100));
+      } else {
+        discount = Math.min(coupon.discountValue, originalTotal);
+      }
+
+      const newTotal = Math.max(0, originalTotal - discount);
+      const newDeposit = Math.ceil(newTotal * 0.5);
+
+      setDiscountAmount(discount);
+      setTotal(newTotal);
+      setDeposit(newDeposit);
+      setAppliedDiscountCode(coupon.code);
+      setAppliedCoupon(coupon);
+      setDiscountSuccess(`ใช้คูปองส่วนลด "${coupon.code}" สำเร็จ (ลด ${discount.toLocaleString()} ฿)`);
+
+      const amountToPay = paymentOption === 'full' ? newTotal : newDeposit;
+      const qrPayload = generatePayload(PROMPTPAY_ID, { amount: amountToPay });
+      setPayload(qrPayload);
     } catch (err) {
       console.error("Error verifying discount:", err);
       setDiscountError('เกิดข้อผิดพลาดในการตรวจสอบโค้ดส่วนลด');
@@ -165,10 +227,12 @@ export default function CheckoutPage() {
     const newDeposit = Math.ceil(originalTotal * 0.5);
     setDeposit(newDeposit);
     setAppliedDiscountCode('');
+    setAppliedCoupon(null);
     setDiscountCodeInput('');
     setDiscountSuccess('');
     setDiscountError('');
-    const qrPayload = generatePayload(PROMPTPAY_ID, { amount: newDeposit });
+    const amountToPay = paymentOption === 'full' ? originalTotal : newDeposit;
+    const qrPayload = generatePayload(PROMPTPAY_ID, { amount: amountToPay });
     setPayload(qrPayload);
   };
 
@@ -271,10 +335,10 @@ export default function CheckoutPage() {
     if (cartItems.length === 0 || isProcessing) return;
 
     if (isStoreClosedNow) {
-      window.alert(STORE_CLOSED_TOAST);
+      window.alert(storeClosedToast || STORE_CLOSED_TOAST);
       return;
     }
-    
+
     // Require slip upload
     if (!slipFile) {
       setShowSlipErrorPopup(true);
@@ -297,12 +361,15 @@ export default function CheckoutPage() {
         const itemOriginalTotal = itemTotal;
         let itemDiscount = 0;
 
-        if (appliedDiscountCode) {
-          itemDiscount = Math.floor(itemTotal * 0.1);
-          itemTotal = itemTotal - itemDiscount;
+        if (appliedDiscountCode && originalTotal > 0 && discountAmount > 0) {
+          // Proportionate discount per item
+          itemDiscount = Math.floor((itemOriginalTotal / originalTotal) * discountAmount);
+          itemTotal = Math.max(0, itemTotal - itemDiscount);
         }
 
         const itemDeposit = Math.ceil(itemTotal * 0.5);
+        const isFull = paymentOption === 'full';
+        const itemPayAmount = isFull ? itemTotal : itemDeposit;
 
         const orderData = {
           items: [{
@@ -323,7 +390,8 @@ export default function CheckoutPage() {
           originalTotal: itemOriginalTotal,
           discountCode: appliedDiscountCode || null,
           discountAmount: itemDiscount,
-          depositPaid: itemDeposit,
+          depositPaid: itemPayAmount,
+          paymentType: paymentOption, // 'full' or 'deposit'
           paymentSlipUrl: slipUrl,
           status: 'pending_verification', // รอตรวจสอบยอดเงิน
           createdAt: serverTimestamp(),
@@ -336,6 +404,17 @@ export default function CheckoutPage() {
 
       const orderResults = await Promise.all(orderPromises);
 
+      // If applied coupon is from Firestore, increment its usedCount
+      if (appliedCoupon?.id) {
+        try {
+          await updateDoc(doc(db, 'coupons', appliedCoupon.id), {
+            usedCount: increment(1)
+          });
+        } catch (couponErr) {
+          console.error("Failed to increment coupon usedCount:", couponErr);
+        }
+      }
+
       // Trigger LINE Notify for all orders in parallel (fire and forget)
       orderResults.forEach(({ orderData, orderId }) => {
         fetch('/api/line-notify', {
@@ -343,7 +422,7 @@ export default function CheckoutPage() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             orderData: { ...orderData, id: orderId },
-            paymentType: 'deposit'
+            paymentType: paymentOption
           })
         }).catch(err => console.error("Failed to notify LINE:", err));
       });
@@ -358,6 +437,8 @@ export default function CheckoutPage() {
     }
     setIsProcessing(false);
   };
+
+  const currentPayAmount = paymentOption === 'full' ? total : deposit;
 
   if (!isClient) return null;
 
@@ -433,6 +514,99 @@ export default function CheckoutPage() {
           font-size: 0.9rem;
           color: #a08a8e;
           line-height: 1.5;
+        }
+
+        /* Payment Options Selector */
+        .payment-options-group {
+          margin-bottom: 24px;
+        }
+        .payment-options-title {
+          font-size: 1rem;
+          font-weight: 700;
+          color: #db8a9e;
+          margin-bottom: 12px;
+          display: flex;
+          align-items: center;
+          gap: 6px;
+        }
+        .payment-options-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 12px;
+        }
+        @media (max-width: 520px) {
+          .payment-options-grid {
+            grid-template-columns: 1fr;
+          }
+        }
+        .payment-option-card {
+          background: #fff;
+          border: 2px solid #f2e5e8;
+          border-radius: 18px;
+          padding: 16px;
+          cursor: pointer;
+          transition: all 0.25s ease;
+          display: flex;
+          flex-direction: column;
+          justify-content: space-between;
+          text-align: left;
+          position: relative;
+          box-shadow: 0 2px 8px rgba(219, 138, 158, 0.04);
+        }
+        .payment-option-card:hover {
+          border-color: #e59db0;
+          transform: translateY(-2px);
+          box-shadow: 0 6px 16px rgba(219, 138, 158, 0.12);
+        }
+        .payment-option-card.selected {
+          border-color: #db8a9e;
+          background: #fffafb;
+          box-shadow: 0 6px 20px rgba(219, 138, 158, 0.18);
+        }
+        .payment-option-header {
+          display: flex;
+          align-items: flex-start;
+          gap: 10px;
+          margin-bottom: 0;
+        }
+        .payment-option-radio {
+          width: 22px;
+          height: 22px;
+          border-radius: 50%;
+          border: 2px solid #db8a9e;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          margin-top: 1px;
+          flex-shrink: 0;
+          background: #fff;
+          transition: all 0.2s ease;
+        }
+        .payment-option-card.selected .payment-option-radio {
+          background: #db8a9e;
+        }
+        .payment-option-radio-dot {
+          width: 8px;
+          height: 8px;
+          border-radius: 50%;
+          background: #fff;
+        }
+        .payment-option-label-wrap {
+          flex: 1;
+        }
+        .payment-option-name {
+          font-weight: 700;
+          font-size: 0.95rem;
+          color: #5c4738;
+          margin-bottom: 3px;
+        }
+        .payment-option-card.selected .payment-option-name {
+          color: #db8a9e;
+        }
+        .payment-option-desc {
+          font-size: 0.76rem;
+          color: #a08a8e;
+          line-height: 1.35;
         }
 
         .payment-card {
@@ -824,12 +998,48 @@ export default function CheckoutPage() {
 
       <div className="content-wrap">
         <div className="page-title">
-          <h1>ชำระเงินมัดจำ (50%)</h1>
+          <h1>{paymentOption === 'full' ? 'ชำระเงินเต็มจำนวน (100%)' : 'ชำระเงินมัดจำ (50%)'}</h1>
           <p>สแกน QR Code เพื่อชำระเงินผ่านแอปธนาคาร<br />ระบบจะระบุจำนวนเงินให้โดยอัตโนมัติ</p>
           <StoreClosedNotice />
         </div>
 
+        {/* Payment Option Selector */}
+        <div className="payment-options-group">
+          <div className="payment-options-title">
+            เลือกรูปแบบการชำระเงิน
+          </div>
+          <div className="payment-options-grid">
+            <div
+              className={`payment-option-card ${paymentOption === 'deposit' ? 'selected' : ''}`}
+              onClick={() => handlePaymentOptionChange('deposit')}
+            >
+              <div className="payment-option-header">
+                <div className="payment-option-radio">
+                  {paymentOption === 'deposit' && <div className="payment-option-radio-dot" />}
+                </div>
+                <div className="payment-option-label-wrap">
+                  <div className="payment-option-name">ชำระเงินมัดจำ (50%)</div>
+                  <div className="payment-option-desc">ชำระมัดจำเพื่อเริ่มจัดดอกไม้ ส่วนที่เหลือจ่ายเมื่อจัดเสร็จ</div>
+                </div>
+              </div>
+            </div>
 
+            <div
+              className={`payment-option-card ${paymentOption === 'full' ? 'selected' : ''}`}
+              onClick={() => handlePaymentOptionChange('full')}
+            >
+              <div className="payment-option-header">
+                <div className="payment-option-radio">
+                  {paymentOption === 'full' && <div className="payment-option-radio-dot" />}
+                </div>
+                <div className="payment-option-label-wrap">
+                  <div className="payment-option-name">ชำระเต็มจำนวน (100%)</div>
+                  <div className="payment-option-desc">ชำระครั้งเดียวครบถ้วน ไม่ต้องโอนรอบสอง สะดวก รวดเร็ว</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
 
         <div className="payment-card">
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '12px', gap: '4px' }}>
@@ -846,16 +1056,22 @@ export default function CheckoutPage() {
           </div>
 
           <div className="amount-display">
-            <div className="amount-label">ยอดชำระมัดจำ</div>
-            <div className="amount-value">{deposit.toLocaleString()} ฿</div>
+            <div className="amount-label">{paymentOption === 'full' ? 'ยอดชำระเต็มจำนวน' : 'ยอดชำระมัดจำ'}</div>
+            <div className="amount-value">{currentPayAmount.toLocaleString()} ฿</div>
           </div>
 
           <div className="info-box">
             <h3><span style={{ fontSize: '1.2rem' }}>✨</span> เงื่อนไขการชำระเงิน</h3>
-            <p>
-              กรุณาชำระเงินมัดจำล่วงหน้า <strong>50%</strong> เพื่อเป็นการยืนยันออเดอร์ให้ทางร้านเริ่มจัดเตรียมดอกไม้ของคุณ
-              และหลังจากดอกไม้จัดเสร็จเรียบร้อยแล้ว คุณสามารถชำระส่วนที่เหลืออีก <strong>{(total - deposit).toLocaleString()} บาท</strong> ได้ในภายหลังค่ะ
-            </p>
+            {paymentOption === 'full' ? (
+              <p>
+                ชำระเงินเต็มจำนวน <strong>100% ({total.toLocaleString()} บาท)</strong> เพื่อยืนยันออเดอร์ให้ทางร้านเริ่มจัดเตรียมดอกไม้ของคุณทันที โดยหลังจากดอกไม้จัดเสร็จและพร้อมจัดส่งจะไม่มีค่าใช้จ่ายเพิ่มเติมค่ะ
+              </p>
+            ) : (
+              <p>
+                กรุณาชำระเงินมัดจำล่วงหน้า <strong>50%</strong> เพื่อเป็นการยืนยันออเดอร์ให้ทางร้านเริ่มจัดเตรียมดอกไม้ของคุณ
+                และหลังจากดอกไม้จัดเสร็จเรียบร้อยแล้ว คุณสามารถชำระส่วนที่เหลืออีก <strong>{(total - deposit).toLocaleString()} บาท</strong> ได้ในภายหลังค่ะ
+              </p>
+            )}
           </div>
         </div>
 
@@ -868,8 +1084,8 @@ export default function CheckoutPage() {
             availableDiscounts.map(d => {
               const isApplied = appliedDiscountCode === d.code;
               return (
-                <div 
-                  key={d.code} 
+                <div
+                  key={d.code}
                   className={`coupon-ticket ${isApplied ? 'selected' : ''} ${isApplyingDiscount ? 'disabled' : ''}`}
                   onClick={() => handleToggleDiscount(d.code)}
                 >
@@ -880,16 +1096,26 @@ export default function CheckoutPage() {
                         <line x1="7" y1="7" x2="7.01" y2="7"></line>
                       </svg>
                     </div>
-                    <div className="coupon-type">คูปองส่วนลด</div>
+                    <div className="coupon-type">
+                      {d.discountType === 'percent' ? 'ส่วนลด %' : 'ส่วนลดเงินสด'}
+                    </div>
                   </div>
                   <div className="coupon-middle">
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
-                      <span className="coupon-badge">NEW</span>
-                      <span style={{ fontSize: '0.7rem', color: '#a08a8e' }}>จาก Bear has flower</span>
+                      <span className="coupon-badge">{d.code}</span>
+                      {d.isForNewCustomerOnly && (
+                        <span style={{ fontSize: '0.68rem', color: '#ea678f', background: '#fff', padding: '1px 6px', borderRadius: '10px', border: '1px solid #f9d8e2', fontWeight: 600 }}>
+                          ลูกค้าใหม่
+                        </span>
+                      )}
                     </div>
-                    <div className="coupon-title">ลด 10%</div>
-                    <div className="coupon-subtitle">ไม่มีขั้นต่ำ</div>
-                    <div className="coupon-desc">สำหรับลูกค้าใหม่ สั่งซื้อครั้งแรก</div>
+                    <div className="coupon-title">
+                      {d.discountType === 'percent' ? `ลด ${d.discountValue}%` : `ลด ${d.discountValue?.toLocaleString()} บาท`}
+                    </div>
+                    <div className="coupon-subtitle">
+                      {d.minSpend ? `ขั้นต่ำ ${d.minSpend.toLocaleString()} บาท` : 'ไม่มีขั้นต่ำ'}
+                    </div>
+                    {d.description && <div className="coupon-desc">{d.description}</div>}
                   </div>
                   <div className="coupon-right">
                     <div className="coupon-checkbox">
@@ -911,29 +1137,63 @@ export default function CheckoutPage() {
         </div>
 
         <div className="summary-card">
+          {/* Cart items list with glitter_rose config details */}
+          {cartItems.map((item: any, idx: number) => {
+            const cfg = item.config || null;
+            const isGlitterRose = item.type === 'glitter_rose' || (cfg && (cfg.selectedColors || cfg.selectedLayers || cfg.selectedShape));
+            const colors = isGlitterRose && cfg ? (cfg.selectedColors || []).map((id: string) => ROSE_COLORS_MAP[id] || id).join(', ') : '';
+            const layers = isGlitterRose && cfg ? (cfg.selectedLayers || []).map((id: string) => ROSE_LAYERS_MAP[id] || id).join(', ') : '';
+            const paper = isGlitterRose && cfg ? (ROSE_PAPERS_MAP[cfg.selectedPaper] || cfg.selectedPaper || '') : '';
+            const shape = isGlitterRose && cfg ? (ROSE_SHAPES_MAP[cfg.selectedShape] || cfg.selectedShape || '') : '';
+            return (
+              <div key={idx} style={{ marginBottom: '12px', paddingBottom: '12px', borderBottom: '1px dashed #f2e5e8' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
+                  <span style={{ fontWeight: 600, color: '#5c4738', fontSize: '0.95rem', flex: 1 }}>{item.name}</span>
+                  <span style={{ color: '#db8a9e', fontWeight: 700, whiteSpace: 'nowrap' }}>{(item.price * (item.qty || 1)).toLocaleString()} ฿</span>
+                </div>
+                {isGlitterRose && cfg && (
+                  <div style={{ marginTop: '6px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                    {(cfg.selectedQty || 0) > 0 && (
+                      <span style={{ fontSize: '0.8rem', color: '#a08a8e' }}>🌹 จำนวน: {cfg.selectedQty} ดอก</span>
+                    )}
+                    {colors && <span style={{ fontSize: '0.8rem', color: '#a08a8e' }}>🎨 สี: {colors}</span>}
+                    {layers && <span style={{ fontSize: '0.8rem', color: '#a08a8e' }}>🌿 รองช่อ: {layers}</span>}
+                    {paper && <span style={{ fontSize: '0.8rem', color: '#a08a8e' }}>📄 กระดาษห่อ: {paper}</span>}
+                    {shape && <span style={{ fontSize: '0.8rem', color: '#a08a8e' }}>📦 รูปทรง: {shape}</span>}
+                  </div>
+                )}
+              </div>
+            );
+          })}
           <div className="summary-row">
             <span>ยอดรวมสินค้า</span>
             <span>{originalTotal.toLocaleString()} บาท</span>
           </div>
           {discountAmount > 0 && (
             <div className="summary-row" style={{ color: '#4caf50' }}>
-              <span>ส่วนลดโค้ด FIRST10</span>
+              <span>ส่วนลดโค้ด {appliedDiscountCode}</span>
               <span>- {discountAmount.toLocaleString()} บาท</span>
             </div>
           )}
-          <div className="summary-row row-highlight">
-            <span>ยอดมัดจำ (50%)</span>
-            <span>{deposit.toLocaleString()} บาท</span>
+          <div className="summary-row">
+            <span>รูปแบบการชำระเงิน</span>
+            <span style={{ fontWeight: 600, color: '#db8a9e' }}>
+              {paymentOption === 'full' ? 'ชำระเต็มจำนวน (100%)' : 'ชำระเงินมัดจำ (50%)'}
+            </span>
           </div>
-          <div className="summary-row" style={{ color: '#a08a8e', fontSize: '0.85rem' }}>
-            <span>ค้างชำระ (จ่ายเมื่อเสร็จ)</span>
-            <span>{(total - deposit).toLocaleString()} บาท</span>
+          <div className="summary-row row-highlight">
+            <span>{paymentOption === 'full' ? 'ยอดชำระตอนนี้ (100%)' : 'ยอดมัดจำที่ชำระ (50%)'}</span>
+            <span>{currentPayAmount.toLocaleString()} บาท</span>
+          </div>
+          <div className="summary-row" style={{ color: paymentOption === 'full' ? '#4caf50' : '#a08a8e', fontSize: '0.85rem' }}>
+            <span>ยอดค้างชำระ (จ่ายเมื่อเสร็จ)</span>
+            <span>{paymentOption === 'full' ? '0 บาท' : `${(total - deposit).toLocaleString()} บาท`}</span>
           </div>
         </div>
 
         <div className="slip-upload-section">
           <div className="slip-upload-label">
-            <span style={{ fontSize: '1.2rem' }}>📷</span> อัปโหลดสลิปการโอนเงิน
+            อัปโหลดสลิปการโอนเงิน
           </div>
           <input
             type="file"
@@ -996,7 +1256,7 @@ export default function CheckoutPage() {
             <h2 className="modal-title">ขอบคุณสำหรับคำสั่งซื้อ</h2>
             <p className="modal-desc">
               ได้รับออร์เดอร์ของคุณแล้ว!<br />
-              รอแอดมินตรวจสอบยอดมัดจำ<br />
+              {paymentOption === 'full' ? 'รอแอดมินตรวจสอบยอดเงิน' : 'รอแอดมินตรวจสอบยอดมัดจำ'}<br />
               เมื่อยืนยันแล้วจะเริ่มจัดช่อดอกไม้ให้ทันที
             </p>
             <button className="modal-btn" onClick={() => window.location.href = '/cart?tab=history'}>

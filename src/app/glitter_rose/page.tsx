@@ -185,7 +185,7 @@ function GlitterRoseContent() {
   const router = useRouter();
   const { showToast } = useToast();
   const { presetProduct, isLoading, error } = usePresetProduct();
-  const { isClosed: isStoreClosedNow } = useStoreHours();
+  const { isClosed: isStoreClosedNow, toast: storeClosedToast } = useStoreHours();
   const presetLoadedRef = useRef(false);
 
   const [state, setState] = useState<GlitterState>(initialState);
@@ -476,7 +476,7 @@ function GlitterRoseContent() {
 
   const nextStep = () => {
     if (isStoreClosedNow && state.current === STEPS.length - 1) {
-      showToast(STORE_CLOSED_TOAST);
+      showToast(storeClosedToast || STORE_CLOSED_TOAST);
       return;
     }
     if (state.current === 0) {
@@ -531,7 +531,7 @@ function GlitterRoseContent() {
 
   const saveToCartOnly = () => {
     if (isStoreClosedNow) {
-      showToast(STORE_CLOSED_TOAST);
+      showToast(storeClosedToast || STORE_CLOSED_TOAST);
       return;
     }
     const editingId = window.localStorage.getItem('editing_cart_id');
@@ -991,24 +991,24 @@ function GlitterRoseContent() {
               
               <div style={{ width: '100%', marginTop: '20px' }}>
                 <div className="form-group">
-                  <label>ชื่อผู้รับ</label>
+                  <label>ชื่อผู้รับ <span style={{ color: '#e53935' }}>*</span></label>
                   <input type="text" id="ipt-name" placeholder="ชื่อเล่นหรือนามแฝง" value={state.customerName} onChange={e => updateField('customerName', e.target.value)} style={{ fontSize: '16px' }} />
                 </div>
                 
                 <div className="form-group">
-                  <label>เบอร์โทรติดต่อ</label>
+                  <label>เบอร์โทรติดต่อ <span style={{ color: '#e53935' }}>*</span></label>
                   <input type="tel" id="ipt-phone" placeholder="06X-XXX-XXXX" value={state.customerPhone} onChange={e => updateField('customerPhone', e.target.value)} style={{ fontSize: '16px' }} />
                 </div>
                 
                 <div className="form-group">
-                  <label>ที่อยู่จัดส่ง</label>
+                  <label>ที่อยู่จัดส่ง <span style={{ color: '#e53935' }}>*</span></label>
                   <textarea id="ipt-address" placeholder="ชื่อหอ.." value={state.customerAddress} onChange={e => updateField('customerAddress', e.target.value)} style={{ fontSize: '16px' }}></textarea>
                   <div className="form-note">ส่งฟรีบริเวณหน้ามอ</div>
                 </div>
                 
                 <div className="delivery-datetime-row">
                   <div className="form-group">
-                    <label>วันที่ที่ต้องการรับสินค้า</label>
+                    <label>วันที่ที่ต้องการรับสินค้า <span style={{ color: '#e53935' }}>*</span></label>
                     <DatePicker
                       id="ipt-date"
                       placeholder="เลือกวันที่"
@@ -1021,7 +1021,7 @@ function GlitterRoseContent() {
                   </div>
 
                   <div className="form-group">
-                    <label>เวลาที่ต้องการรับสินค้า</label>
+                    <label>เวลาที่ต้องการรับสินค้า <span style={{ color: '#e53935' }}>*</span></label>
                     <TimePicker
                       id="ipt-time"
                       placeholder="เลือกเวลา"

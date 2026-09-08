@@ -1,22 +1,73 @@
 import ClientPage from './ClientPage';
-import { adminDb } from '@/lib/firebaseAdmin';
 
 export const revalidate = 60; // Revalidate every 60 seconds for SSG cache
+
+function parseFirestoreFields(fields: any): any {
+  const result: any = {};
+  if (!fields) return result;
+  for (const [key, valueObj] of Object.entries(fields as Record<string, any>)) {
+    const [valType] = Object.keys(valueObj || {});
+    const val = valueObj[valType];
+    if (valType === 'integerValue') result[key] = parseInt(val, 10);
+    else if (valType === 'doubleValue') result[key] = parseFloat(val);
+    else if (valType === 'booleanValue') result[key] = Boolean(val);
+    else if (valType === 'stringValue') result[key] = val;
+    else if (valType === 'timestampValue') result[key] = new Date(val).getTime();
+    else if (valType === 'arrayValue') result[key] = (val.values || []).map((v: any) => Object.values(v)[0]);
+    else if (valType === 'mapValue') result[key] = parseFirestoreFields(val.fields);
+    else result[key] = val;
+  }
+  return result;
+}
+
+async function getSSRProducts(): Promise<any[]> {
+  try {
+    const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'bearhasflower';
+    const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY || 'AIzaSyCDJdBc2FkZTwsQw_gy7sBKRD056IgkM34';
+    const requiredFields = ['name', 'price', 'description', 'type', 'createdAt', 'likes', 'badge', 'readyToShip', 'stockQuantity', 'soldOut', 'coverImage'];
+    const maskQuery = requiredFields.map((f) => `mask.fieldPaths=${f}`).join('&');
+    const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/products?key=${apiKey}&pageSize=100&${maskQuery}`;
+
+    const res = await fetch(url, {
+      cache: 'no-store',
+    });
+
+    if (!res.ok) {
+      return [];
+    }
+
+    const data = await res.json();
+    if (!data.documents || !Array.isArray(data.documents)) {
+      return [];
+    }
+
+    const products = data.documents.map((doc: any) => {
+      const id = doc.name ? doc.name.split('/').pop() : '';
+      return {
+        id,
+        ...parseFirestoreFields(doc.fields),
+      };
+    });
+
+    return products;
+  } catch (err) {
+    console.warn('SSR product pre-fetch skipped (client hydration will load products):', (err as Error)?.message);
+    return [];
+  }
+}
 
 export default async function HomePage() {
   let initialProductHtml = '';
 
   try {
-    // Use Firebase Admin SDK (now has Firestore permissions)
-    const snapshot = await adminDb.collection('products').get();
-    
-    let products: any[] = [];
-    snapshot.forEach(doc => {
-      products.push({ id: doc.id, ...doc.data() });
-    });
+    const products = await getSSRProducts();
 
     // Sort by createdAt desc
-    products.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    products.sort((a, b) => {
+      const timeA = typeof a.createdAt === 'number' ? a.createdAt : new Date(a.createdAt || 0).getTime();
+      const timeB = typeof b.createdAt === 'number' ? b.createdAt : new Date(b.createdAt || 0).getTime();
+      return (timeB || 0) - (timeA || 0);
+    });
 
     initialProductHtml = products.map((p: any, idx: number) => {
       const currentLikes = Math.max(0, Number(p.likes || 0));
@@ -88,8 +139,9 @@ export default async function HomePage() {
     }).join('');
 
   } catch (error) {
-    console.error('Error pre-fetching products for SSR:', error);
+    console.error('Error in SSR products render:', error);
   }
 
   return <ClientPage initialProductHtml={initialProductHtml} />;
 }
+

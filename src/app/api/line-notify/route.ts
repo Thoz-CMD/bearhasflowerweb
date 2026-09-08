@@ -10,6 +10,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'LINE_CHANNEL_ACCESS_TOKEN is not configured' }, { status: 500 });
     }
 
+    const isFull = paymentType === 'full';
     const isDeposit = paymentType === 'deposit';
     const isFinal = paymentType === 'final';
 
@@ -19,7 +20,13 @@ export async function POST(req: Request) {
     let headerBgColor: string;
     let headerTextColor: string;
 
-    if (isDeposit) {
+    if (isFull) {
+      amountToPay = orderData.total || orderData.depositPaid || 0;
+      alertTitle = '🌸 ออเดอร์ใหม่! (ชำระเต็มจำนวน)';
+      labelToPay = 'ยอดชำระเต็มจำนวน (100%)';
+      headerBgColor = '#E91E8C';
+      headerTextColor = '#FFD6E7';
+    } else if (isDeposit) {
       amountToPay = orderData.depositPaid || 0;
       alertTitle = '🌸 ออเดอร์ใหม่! (มัดจำ)';
       labelToPay = 'ยอดมัดจำที่ชำระ (50%)';

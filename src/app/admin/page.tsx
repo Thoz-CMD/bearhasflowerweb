@@ -1,12 +1,16 @@
-﻿'use client';
+'use client';
 
 import React, { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { auth, db, storage } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
-import { collection, query, orderBy, onSnapshot, doc, updateDoc, addDoc, deleteDoc, serverTimestamp, getDoc, getDocs, writeBatch } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, doc, updateDoc, addDoc, deleteDoc, serverTimestamp, getDoc, getDocs, writeBatch, setDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { checkIsAdmin } from '@/lib/admin';
+import dynamic from 'next/dynamic';
+
+const DatePicker = dynamic(() => import('@/components/DateTimePicker').then((mod) => mod.DatePicker), { ssr: false });
+const TimePicker = dynamic(() => import('@/components/DateTimePicker').then((mod) => mod.TimePicker), { ssr: false });
 
 const ROSE_COLORS_MAP: Record<string, string> = {
   red: 'แดง', pink: 'ชมพู', blue: 'น้ำเงิน', white: 'ขาว', sky: 'ฟ้า', purple: 'ม่วง'
@@ -185,7 +189,7 @@ function AdminPageContent() {
   const [finishedImageFiles, setFinishedImageFiles] = useState<Record<string, File>>({});
   const [finishedImagePreviews, setFinishedImagePreviews] = useState<Record<string, string>>({});
   const [isUploadingImage, setIsUploadingImage] = useState(false);
-  const [adminViewMode, setAdminViewMode] = useState<'manager' | 'florist' | 'finance' | 'create-order'>('manager');
+  const [adminViewMode, setAdminViewMode] = useState<'manager' | 'florist' | 'finance' | 'create-order' | 'coupon'>('manager');
   const [recipientSearch, setRecipientSearch] = useState('');
   const [registeredUsersCount, setRegisteredUsersCount] = useState(0);
   const [previousMonthRegisteredUsersCount, setPreviousMonthRegisteredUsersCount] = useState(0);
@@ -268,7 +272,23 @@ function AdminPageContent() {
   const [closureMessage, setClosureMessage] = useState<string>('');
   const [isSavingClosure, setIsSavingClosure] = useState<boolean>(false);
 
-  const syncAdminViewMode = (nextMode: 'manager' | 'florist' | 'finance') => {
+  // Coupon Management
+  const [coupons, setCoupons] = useState<any[]>([]);
+  const [couponLoading, setCouponLoading] = useState(false);
+  const [newCouponCode, setNewCouponCode] = useState('');
+  const [newCouponType, setNewCouponType] = useState<'percent' | 'fixed'>('percent');
+  const [newCouponValue, setNewCouponValue] = useState('');
+  const [newCouponMinSpend, setNewCouponMinSpend] = useState('');
+  const [newCouponLimit, setNewCouponLimit] = useState('');
+  const [newCouponExpiry, setNewCouponExpiry] = useState('');
+  const [newCouponDesc, setNewCouponDesc] = useState('');
+  const [newCouponForNewUser, setNewCouponForNewUser] = useState(false);
+  const [isSavingCoupon, setIsSavingCoupon] = useState(false);
+  const [couponSearch, setCouponSearch] = useState('');
+  const [couponFilterStatus, setCouponFilterStatus] = useState<'all' | 'active' | 'inactive' | 'expired'>('all');
+  const [editingCouponId, setEditingCouponId] = useState<string | null>(null);
+
+  const syncAdminViewMode = (nextMode: 'manager' | 'florist' | 'finance' | 'coupon') => {
     setAdminViewMode(nextMode);
 
     const params = new URLSearchParams(searchParams.toString());
@@ -482,8 +502,8 @@ function AdminPageContent() {
 
   useEffect(() => {
     const view = searchParams.get('view');
-    if (view === 'florist' || view === 'finance') {
-      setAdminViewMode(view);
+    if (view === 'florist' || view === 'finance' || view === 'coupon') {
+      setAdminViewMode(view as any);
       return;
     }
     setAdminViewMode('manager');
@@ -620,6 +640,29 @@ function AdminPageContent() {
     return () => unsubscribeOrders();
   }, [isAdminUser]);
 
+  // Fetch coupons in real-time if user is verified as admin
+  useEffect(() => {
+    if (isAdminUser !== true) return;
+    setCouponLoading(true);
+    const couponsQuery = query(collection(db, 'coupons'), orderBy('createdAt', 'desc'));
+    const unsubscribeCoupons = onSnapshot(couponsQuery, (snapshot) => {
+      const fetched: any[] = [];
+      snapshot.forEach((docSnap) => {
+        fetched.push({
+          id: docSnap.id,
+          ...docSnap.data()
+        });
+      });
+      setCoupons(fetched);
+      setCouponLoading(false);
+    }, (err) => {
+      console.error("Error fetching live coupons:", err);
+      setCouponLoading(false);
+    });
+
+    return () => unsubscribeCoupons();
+  }, [isAdminUser]);
+
   useEffect(() => {
     if (registeredUsersCount > 0 && previousMonthRegisteredUsersCount === 0) {
       setPreviousMonthRegisteredUsersCount(registeredUsersCount);
@@ -643,12 +686,16 @@ function AdminPageContent() {
             Authorization: `Bearer ${token}`,
           },
         });
-        if (!res.ok) throw new Error(`auth-user-count ${res.status}`);
+        if (!res.ok) {
+          console.warn(`auth-user-count API returned status ${res.status}`);
+          return;
+        }
         const data = (await res.json()) as { count?: number };
-        if (!disposed) setRegisteredUsersCount(Number(data.count || 0));
-
+        if (!disposed && typeof data.count === 'number') {
+          setRegisteredUsersCount(Number(data.count || 0));
+        }
       } catch (err) {
-        console.error('Error fetching auth user count:', err);
+        console.warn('Could not fetch auth user count:', (err as Error)?.message || err);
       }
     };
 
@@ -722,52 +769,221 @@ function AdminPageContent() {
   useEffect(() => {
     if (isAdminUser !== true) return;
 
-    const fetchClosure = async () => {
-      try {
-        const closureDoc = await getDoc(doc(db, 'settings', 'systemClosure'));
-        if (closureDoc.exists()) {
-          const data = closureDoc.data();
-          setIsSystemClosed(data.isSystemClosed || false);
-          setClosureStartDate(data.closureStartDate || '');
-          setClosureStartTime(data.closureStartTime || '');
-          setClosureEndDate(data.closureEndDate || '');
-          setClosureEndTime(data.closureEndTime || '');
-          setClosureMessage(data.closureMessage || '');
-        }
-      } catch (err) {
-        console.error("Error fetching closure settings:", err);
+    const unsubscribe = onSnapshot(doc(db, 'settings', 'systemClosure'), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        setIsSystemClosed(data.isSystemClosed === true);
+        setClosureStartDate(data.closureStartDate || '');
+        setClosureStartTime(data.closureStartTime || '');
+        setClosureEndDate(data.closureEndDate || '');
+        setClosureEndTime(data.closureEndTime || '');
+        setClosureMessage(data.closureMessage || '');
       }
-    };
+    }, (err) => {
+      console.warn("Error listening to closure settings:", err);
+    });
 
-    fetchClosure();
+    return () => unsubscribe();
   }, [isAdminUser]);
 
-  const handleSaveClosureSettings = async () => {
+  const resetClosureFields = () => {
+    setClosureStartDate('');
+    setClosureStartTime('');
+    setClosureEndDate('');
+    setClosureEndTime('');
+    setClosureMessage('');
+  };
+
+  const saveClosureSettings = async (nextIsSystemClosed: boolean) => {
     setIsSavingClosure(true);
     try {
       const closureData = {
-        isSystemClosed,
-        closureStartDate,
-        closureStartTime,
-        closureEndDate,
-        closureEndTime,
-        closureMessage,
+        isSystemClosed: nextIsSystemClosed,
+        closureStartDate: nextIsSystemClosed ? closureStartDate : '',
+        closureStartTime: nextIsSystemClosed ? closureStartTime : '',
+        closureEndDate: nextIsSystemClosed ? closureEndDate : '',
+        closureEndTime: nextIsSystemClosed ? closureEndTime : '',
+        closureMessage: nextIsSystemClosed ? closureMessage : '',
         updatedAt: serverTimestamp ? serverTimestamp() : new Date().toISOString(),
         updatedBy: user?.phoneNumber || user?.email || 'Admin'
       };
 
-      await updateDoc(doc(db, 'settings', 'systemClosure'), closureData).catch(async () => {
-        // If document doesn't exist, create it
-        const settingsRef = collection(db, 'settings');
-        await addDoc(settingsRef, { ...closureData, id: 'systemClosure' });
-      });
+      await setDoc(doc(db, 'settings', 'systemClosure'), closureData, { merge: true });
 
-      await (window as any).showBeautifulAlert('บันทึกการตั้งค่าปิดระบบสำเร็จ!', 'success', 'บันทึกสำเร็จ');
+      if (!nextIsSystemClosed) {
+        resetClosureFields();
+      }
+
+      const alertMsg = nextIsSystemClosed
+        ? 'เปิดใช้งานการปิดระบบการสั่งซื้อเรียบร้อยแล้ว!'
+        : 'เปิดระบบรับคำสั่งซื้อตามปกติเรียบร้อยแล้ว!';
+      await (window as any).showBeautifulAlert(alertMsg, 'success', 'บันทึกสำเร็จ');
     } catch (err) {
       console.error("Failed to save closure settings:", err);
       await (window as any).showBeautifulAlert('เกิดข้อผิดพลาดในการบันทึกการตั้งค่า', 'error', 'เกิดข้อผิดพลาด');
     } finally {
       setIsSavingClosure(false);
+    }
+  };
+
+  const handleToggleSystemClosure = () => {
+    const nextIsSystemClosed = !isSystemClosed;
+    setIsSystemClosed(nextIsSystemClosed);
+    if (!nextIsSystemClosed) {
+      void saveClosureSettings(false);
+    }
+  };
+
+  const handleSaveClosureSettings = async () => {
+    await saveClosureSettings(isSystemClosed);
+  };
+
+  // Coupon CRUD Operations
+  const handleSaveCoupon = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const cleanCode = newCouponCode.trim().toUpperCase().replace(/\s+/g, '');
+    if (!cleanCode) {
+      await (window as any).showBeautifulAlert?.('กรุณาระบุรหัสโค้ดคูปอง', 'warning', 'ข้อมูลไม่ครบถ้วน');
+      return;
+    }
+
+    const numValue = parseFloat(newCouponValue);
+    if (isNaN(numValue) || numValue <= 0) {
+      await (window as any).showBeautifulAlert?.('กรุณาระบุมูลค่าส่วนลดที่ถูกต้อง (มากกว่า 0)', 'warning', 'ข้อมูลไม่ถูกต้อง');
+      return;
+    }
+
+    if (newCouponType === 'percent' && numValue > 100) {
+      await (window as any).showBeautifulAlert?.('ส่วนลดเปอร์เซ็นต์ต้องไม่เกิน 100%', 'warning', 'ข้อมูลไม่ถูกต้อง');
+      return;
+    }
+
+    const minSpend = newCouponMinSpend ? parseFloat(newCouponMinSpend) : 0;
+    const usageLimit = newCouponLimit ? parseInt(newCouponLimit, 10) : null;
+
+    setIsSavingCoupon(true);
+    try {
+      const couponData = {
+        code: cleanCode,
+        discountType: newCouponType,
+        discountValue: numValue,
+        minSpend: isNaN(minSpend) ? 0 : minSpend,
+        usageLimit: usageLimit && !isNaN(usageLimit) ? usageLimit : null,
+        usedCount: editingCouponId ? (coupons.find(c => c.id === editingCouponId)?.usedCount || 0) : 0,
+        expiryDate: newCouponExpiry || null,
+        description: newCouponDesc.trim() || (newCouponType === 'percent' ? `ส่วนลด ${numValue}%` : `ส่วนลด ${numValue} บาท`),
+        isForNewCustomerOnly: newCouponForNewUser,
+        isActive: true,
+        createdAt: serverTimestamp ? serverTimestamp() : new Date().toISOString(),
+        createdBy: user?.displayName || user?.email || 'Admin'
+      };
+
+      if (editingCouponId) {
+        await updateDoc(doc(db, 'coupons', editingCouponId), {
+          ...couponData,
+          updatedAt: serverTimestamp ? serverTimestamp() : new Date().toISOString()
+        });
+        await (window as any).showBeautifulAlert?.(`อัปเดตคูปอง "${cleanCode}" เรียบร้อยแล้วค่ะ!`, 'success', 'อัปเดตสำเร็จ');
+        setEditingCouponId(null);
+      } else {
+        const existing = coupons.find(c => c.code?.toUpperCase() === cleanCode);
+        if (existing) {
+          await (window as any).showBeautifulAlert?.(`รหัสคูปอง "${cleanCode}" มีอยู่ในระบบแล้ว กรุณาใช้รหัสอื่น`, 'warning', 'รหัสคูปองซ้ำ');
+          setIsSavingCoupon(false);
+          return;
+        }
+
+        await addDoc(collection(db, 'coupons'), couponData);
+        await (window as any).showBeautifulAlert?.(`สร้างคูปองส่วนลด "${cleanCode}" สำเร็จแล้วค่ะ!`, 'success', 'สร้างสำเร็จ');
+      }
+
+      setNewCouponCode('');
+      setNewCouponType('percent');
+      setNewCouponValue('');
+      setNewCouponMinSpend('');
+      setNewCouponLimit('');
+      setNewCouponExpiry('');
+      setNewCouponDesc('');
+      setNewCouponForNewUser(false);
+    } catch (err) {
+      console.error('Error saving coupon:', err);
+      await (window as any).showBeautifulAlert?.('เกิดข้อผิดพลาดในการบันทึกคูปอง', 'error', 'เกิดข้อผิดพลาด');
+    } finally {
+      setIsSavingCoupon(false);
+    }
+  };
+
+  const handleToggleCouponActive = async (coupon: any) => {
+    try {
+      const nextActive = coupon.isActive === false ? true : false;
+      await updateDoc(doc(db, 'coupons', coupon.id), {
+        isActive: nextActive,
+        updatedAt: serverTimestamp ? serverTimestamp() : new Date().toISOString()
+      });
+      await (window as any).showBeautifulAlert?.(
+        nextActive ? `เปิดใช้งานคูปอง "${coupon.code}" แล้ว` : `ปิดการใช้งานคูปอง "${coupon.code}" แล้ว`,
+        'success',
+        'สำเร็จ'
+      );
+    } catch (err) {
+      console.error('Error toggling coupon status:', err);
+      await (window as any).showBeautifulAlert?.('ไม่สามารถเปลี่ยนสถานะคูปองได้', 'error', 'เกิดข้อผิดพลาด');
+    }
+  };
+
+  const handleDeleteCoupon = async (coupon: any) => {
+    const confirmed = await (window as any).showBeautifulConfirm?.(
+      `คุณแน่ใจหรือไม่ว่าต้องการลบคูปอง "${coupon.code}"? การดำเนินการนี้ไม่สามารถย้อนกลับได้`,
+      'ยืนยันการลบคูปอง'
+    );
+    if (!confirmed) return;
+
+    try {
+      await deleteDoc(doc(db, 'coupons', coupon.id));
+      await (window as any).showBeautifulAlert?.(`ลบคูปอง "${coupon.code}" เรียบร้อยแล้ว`, 'success', 'ลบสำเร็จ');
+    } catch (err) {
+      console.error('Error deleting coupon:', err);
+      await (window as any).showBeautifulAlert?.('เกิดข้อผิดพลาดในการลบคูปอง', 'error', 'เกิดข้อผิดพลาด');
+    }
+  };
+
+  const handleEditCoupon = (coupon: any) => {
+    setEditingCouponId(coupon.id);
+    setNewCouponCode(coupon.code || '');
+    setNewCouponType(coupon.discountType || 'percent');
+    setNewCouponValue(String(coupon.discountValue || ''));
+    setNewCouponMinSpend(coupon.minSpend ? String(coupon.minSpend) : '');
+    setNewCouponLimit(coupon.usageLimit ? String(coupon.usageLimit) : '');
+    setNewCouponExpiry(coupon.expiryDate || '');
+    setNewCouponDesc(coupon.description || '');
+    setNewCouponForNewUser(coupon.isForNewCustomerOnly === true);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleCancelEditCoupon = () => {
+    setEditingCouponId(null);
+    setNewCouponCode('');
+    setNewCouponType('percent');
+    setNewCouponValue('');
+    setNewCouponMinSpend('');
+    setNewCouponLimit('');
+    setNewCouponExpiry('');
+    setNewCouponDesc('');
+    setNewCouponForNewUser(false);
+  };
+
+  const handleCopyCouponCode = (code: string) => {
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText(code);
+      const toast = document.createElement('div');
+      toast.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#5c4738;color:#fff;padding:10px 20px;border-radius:30px;font-size:0.9rem;z-index:9999;box-shadow:0 6px 20px rgba(0,0,0,0.2);animation:fadeIn 0.2s ease;';
+      toast.innerText = `คัดลอกรหัส "${code}" แล้วค่ะ! 📋`;
+      document.body.appendChild(toast);
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transition = 'opacity 0.3s ease';
+        setTimeout(() => toast.remove(), 300);
+      }, 2000);
     }
   };
 
@@ -876,7 +1092,7 @@ function AdminPageContent() {
         amount: data?.amount,
         title: data?.title
       });
-      
+
       if (!res.ok) {
         const detailText = typeof data?.detail === 'string' ? data.detail : '';
         const trimmedDetail = detailText.length > 500 ? detailText.slice(0, 500) + '...' : detailText;
@@ -951,7 +1167,7 @@ function AdminPageContent() {
 
   const handleDeleteExpense = async (id: string, type?: string) => {
     const isSystemEntry = type === 'revenue';
-    const confirmMessage = isSystemEntry 
+    const confirmMessage = isSystemEntry
       ? 'คุณแน่ใจหรือไม่ว่าต้องการลบรายการระบบนี้? (รายการนี้มาจากออเดอร์)'
       : 'คุณแน่ใจหรือไม่ว่าต้องการลบรายการนี้?';
     const ok = await (window as any).showBeautifulConfirm(confirmMessage, 'ยืนยันการลบรายการ');
@@ -973,41 +1189,41 @@ function AdminPageContent() {
   };
 
   const handleDeleteAllExpenses = async () => {
-    const periodText = financeViewMode === 'daily' 
-      ? `วันที่ ${formatDateThai(selectedDate)}` 
+    const periodText = financeViewMode === 'daily'
+      ? `วันที่ ${formatDateThai(selectedDate)}`
       : `เดือน ${formatMonthThai(selectedMonth)}`;
     const ok = await (window as any).showBeautifulConfirm(`คุณแน่ใจหรือไม่ว่าต้องการลบรายการทั้งหมดใน${periodText}? รวมทั้งรายการที่บันทึกเองและรายการจากระบบ (ออเดอร์ที่เสร็จสิ้นและยกเลิก) การกระทำนี้ไม่สามารถย้อนกลับได้`, 'ยืนยันการลบรายการทั้งหมด');
     if (!ok) return;
     try {
       let deletedCount = 0;
-      
+
       // Delete only current period expenses
       const batchSize = 500;
       const totalDocs = currentExpenses.length;
-      
+
       // Process current expenses in batches
       for (let i = 0; i < totalDocs; i += batchSize) {
         const batch = writeBatch(db);
         const end = Math.min(i + batchSize, totalDocs);
-        
+
         for (let j = i; j < end; j++) {
           batch.delete(doc(db, 'expenses', currentExpenses[j].id));
         }
-        
+
         await batch.commit();
         deletedCount += (end - i);
       }
-      
+
       // Delete orders that are completed or cancelled in the current period (system entries in ledger)
-      const ordersToDelete = currentOrders.filter(o => 
+      const ordersToDelete = currentOrders.filter(o =>
         o.status === 'completed' || o.status === 'cancelled'
       );
-      
+
       for (const order of ordersToDelete) {
         await deleteDoc(doc(db, 'orders', order.id));
         deletedCount++;
       }
-      
+
       await (window as any).showBeautifulAlert(`ลบรายการทั้งหมด ${deletedCount} รายการสำเร็จเรียบร้อย!`, 'success', 'ลบรายการสำเร็จ');
     } catch (err) {
       console.error("Failed to delete all expenses:", err);
@@ -1080,11 +1296,11 @@ function AdminPageContent() {
         // Get product image: use coverImage first, then image, or fallback based on type
         // For custom orders, only use image if coverImage is explicitly set (not default ribbon)
         const isDefaultRibbonImage = primaryItem?.coverImage?.includes('ริบบิ้นแดง.jpg');
-        const itemImage = (!isDefaultRibbonImage && primaryItem?.coverImage) || 
-          primaryItem?.image || 
+        const itemImage = (!isDefaultRibbonImage && primaryItem?.coverImage) ||
+          primaryItem?.image ||
           (primaryItem?.type === 'glitter_rose' ? '/images/Glitter Rose/ริบบิ้นแดง.jpg' : '') ||
           '';
-        
+
         // Additional info for notification display logic
         const isPreset = primaryItem?.isPreset === true;
         const itemId = primaryItem?.id || '';
@@ -1327,8 +1543,8 @@ function AdminPageContent() {
     .filter(o => o.status !== 'cancelled')
     .reduce((acc, o) => acc + getOrderRevenue(o), 0) +
     expenses
-    .filter(e => e.type === 'income')
-    .reduce((acc, e) => acc + (e.amount || 0), 0);
+      .filter(e => e.type === 'income')
+      .reduce((acc, e) => acc + (e.amount || 0), 0);
   const pendingCount = orders.filter(o => o.status === 'pending_verification').length;
   const preparingCount = orders.filter(o => o.status === 'preparing').length;
   const completedCount = orders.filter(o => o.status === 'completed').length;
@@ -1434,12 +1650,14 @@ function AdminPageContent() {
     florist: 'ช่างจัดดอกไม้',
     finance: 'รายรับ-รายจ่าย',
     'create-order': 'สร้างออเดอร์',
+    coupon: 'จัดการคูปอง',
   } as const;
   const viewSubtitleMap = {
     manager: 'ภาพรวมการจัดการร้านดอกไม้',
     florist: 'ติดตามคิวงานและความพร้อมในการจัดช่อ',
     finance: 'ตรวจสอบรายการรายรับและรายจ่ายของร้าน',
     'create-order': 'สร้างออเดอร์พิเศษจากหลังบ้าน',
+    coupon: 'สร้าง แก้ไข และลบโค้ดส่วนลด',
   } as const;
   const overviewCards = [
     {
@@ -1558,8 +1776,8 @@ function AdminPageContent() {
     .filter(o => o.status !== 'cancelled')
     .reduce((acc, o) => acc + getOrderRevenue(o), 0) +
     currentExpenses
-    .filter(e => e.type === 'income')
-    .reduce((acc, e) => acc + (e.amount || 0), 0);
+      .filter(e => e.type === 'income')
+      .reduce((acc, e) => acc + (e.amount || 0), 0);
 
   const currentExpensesTotal = currentExpenses
     .filter(e => e.type === 'expense')
@@ -1580,8 +1798,8 @@ function AdminPageContent() {
     .filter(o => o.status !== 'cancelled')
     .reduce((acc, o) => acc + getOrderRevenue(o), 0) +
     monthlyExpenses
-    .filter(e => e.type === 'income')
-    .reduce((acc, e) => acc + (e.amount || 0), 0);
+      .filter(e => e.type === 'income')
+      .reduce((acc, e) => acc + (e.amount || 0), 0);
 
   const monthlyExpensesTotal = monthlyExpenses
     .filter(e => e.type === 'expense')
@@ -1593,9 +1811,9 @@ function AdminPageContent() {
     const [year, month] = yearMonth.split('-').map(Number);
     return new Date(year, month, 0).getDate();
   };
-  
+
   const currentDaysInMonth = getDaysInMonth(selectedMonth);
-  const averageDailyRevenue = financeViewMode === 'daily' 
+  const averageDailyRevenue = financeViewMode === 'daily'
     ? currentNetProfit // In daily mode, show the day's net profit
     : Math.round(monthlyNetProfit / currentDaysInMonth); // In monthly mode, calculate average net profit per day
   const previousMonthFinance = getPreviousYearMonth(selectedMonth);
@@ -1606,7 +1824,7 @@ function AdminPageContent() {
     ? getExpensesForYearMonth(expenses, previousMonthFinance)
     : 0;
   const previousMonthNetProfitFinance = previousMonthSalesFinance - previousMonthExpensesFinance;
-  
+
   // Calculate Thai+ metrics for previous month
   const previousMonthExpensesFinanceList = previousMonthFinance
     ? expenses.filter(e => e.date && e.date.substring(0, 7) === previousMonthFinance)
@@ -1618,13 +1836,13 @@ function AdminPageContent() {
     .filter(e => e.type === 'expense' && e.isThaiPlus)
     .reduce((acc, e) => acc + (e.amount || 0), 0);
   const previousMonthThaiPlusTotal = previousMonthThaiPlusIncome + previousMonthThaiPlusExpense;
-  
+
   // Calculate average daily profit for previous month
   const previousMonthDaysInMonth = previousMonthFinance ? getDaysInMonth(previousMonthFinance) : 0;
-  const previousMonthAverageDailyProfit = previousMonthDaysInMonth > 0 
+  const previousMonthAverageDailyProfit = previousMonthDaysInMonth > 0
     ? Math.round(previousMonthNetProfitFinance / previousMonthDaysInMonth)
     : 0;
-  
+
   const salesFinanceGrowth = getGrowthMetrics(monthlySales, previousMonthSalesFinance);
   const expensesFinanceGrowth = getGrowthMetrics(monthlyExpensesTotal, previousMonthExpensesFinance);
   const netProfitFinanceGrowth = getGrowthMetrics(monthlyNetProfit, previousMonthNetProfitFinance);
@@ -1650,7 +1868,7 @@ function AdminPageContent() {
       key: 'finance-net-profit',
       label: financeViewMode === 'daily' ? 'กำไรสุทธิประจำวัน' : 'กำไรสุทธิประจำเดือน',
       value: `${currentNetProfit.toLocaleString()} ฿`,
-      detail: financeViewMode === 'daily' 
+      detail: financeViewMode === 'daily'
         ? `วันที่ ${formatDateThai(selectedDate)}`
         : `${netProfitFinanceGrowth.detailLabel} ${netProfitFinanceGrowth.formattedPct}% จาก${previousMonthLabelFinance}`,
       accent: 'rgb(245, 159, 58)',
@@ -4729,13 +4947,552 @@ function AdminPageContent() {
               font-size: 0.7rem !important;
             }
           }
+
+          /* Coupon Management Section Styles */
+          .coupon-section {
+            animation: fadeIn 0.3s ease;
+          }
+          .coupon-overview-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 14px;
+            margin-bottom: 24px;
+          }
+          .coupon-stat-box {
+            position: relative;
+            overflow: hidden;
+            background: linear-gradient(180deg, #ffffff 0%, #fffafb 100%);
+            border-radius: 18px;
+            padding: 16px 18px 16px 20px;
+            display: flex;
+            align-items: center;
+            box-shadow: 0 8px 24px rgba(92, 71, 56, 0.05);
+            border: 1px solid rgba(219, 138, 158, 0.14);
+            transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+          }
+          .coupon-stat-box::before {
+            content: '';
+            position: absolute;
+            inset: 0 auto 0 0;
+            width: 4px;
+            background: var(--coupon-stat-accent);
+          }
+          .coupon-stat-box:hover {
+            transform: translateY(-2px);
+            border-color: var(--coupon-stat-border);
+            box-shadow: 0 12px 28px rgba(92, 71, 56, 0.08);
+          }
+          .coupon-stat-box--total {
+            --coupon-stat-accent: #ea678f;
+            --coupon-stat-border: rgba(234, 103, 143, 0.28);
+          }
+          .coupon-stat-box--active {
+            --coupon-stat-accent: #2f9e57;
+            --coupon-stat-border: rgba(47, 158, 87, 0.28);
+          }
+          .coupon-stat-box--inactive {
+            --coupon-stat-accent: #d64545;
+            --coupon-stat-border: rgba(214, 69, 69, 0.28);
+          }
+          .coupon-stat-box--used {
+            --coupon-stat-accent: #e08a1a;
+            --coupon-stat-border: rgba(224, 138, 26, 0.28);
+          }
+          .coupon-stat-info {
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+          }
+          .coupon-stat-title {
+            font-size: 0.95rem;
+            color: #3d2f28;
+            font-weight: 800;
+            letter-spacing: 0.01em;
+          }
+          .coupon-stat-number {
+            font-size: 1.42rem;
+            font-weight: 800;
+            color: var(--coupon-stat-accent, #5c4738);
+            line-height: 1.2;
+            display: flex;
+            align-items: baseline;
+            gap: 5px;
+          }
+          .coupon-stat-unit {
+            font-size: 0.78rem;
+            font-weight: 800;
+            color: #8f7d83;
+          }
+          @media (max-width: 1100px) {
+            .coupon-overview-grid {
+              grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+          }
+          @media (max-width: 560px) {
+            .coupon-overview-grid {
+              grid-template-columns: 1fr;
+            }
+          }
+          .coupon-main-grid {
+            display: grid;
+            grid-template-columns: 380px 1fr;
+            gap: 24px;
+            align-items: start;
+          }
+          @media (max-width: 1024px) {
+            .coupon-main-grid {
+              grid-template-columns: 1fr;
+            }
+          }
+          .coupon-form-card {
+            background: #fff;
+            border-radius: 24px;
+            padding: 24px;
+            box-shadow: 0 4px 25px rgba(219, 138, 158, 0.08);
+            border: 1px solid rgba(219, 138, 158, 0.2);
+            position: sticky;
+            top: 20px;
+          }
+          .coupon-form-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            padding-bottom: 12px;
+            border-bottom: 1px dashed #f5e4e8;
+          }
+          .coupon-form-title {
+            font-size: 1.15rem;
+            font-weight: 700;
+            color: #5c4738;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin: 0;
+          }
+          .coupon-form-group {
+            margin-bottom: 16px;
+          }
+          .coupon-form-label {
+            display: block;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: #5c4738;
+            margin-bottom: 6px;
+          }
+          .coupon-form-input, .coupon-form-select, .coupon-form-textarea {
+            width: 100%;
+            padding: 10px 14px;
+            border-radius: 12px;
+            border: 1.5px solid #ebd9de;
+            font-size: 0.92rem;
+            color: #5c4738;
+            background: #fdfafb;
+            font-family: inherit;
+            transition: all 0.2s;
+            outline: none;
+          }
+          .coupon-form-input:focus, .coupon-form-select:focus, .coupon-form-textarea:focus {
+            border-color: #ea678f;
+            background: #fff;
+            box-shadow: 0 0 0 3px rgba(234, 103, 143, 0.12);
+          }
+          .coupon-type-selector {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+          }
+          .coupon-type-btn {
+            padding: 10px;
+            border-radius: 12px;
+            border: 1.5px solid #ebd9de;
+            background: #fdfafb;
+            color: #7a6352;
+            font-weight: 600;
+            font-size: 0.85rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            transition: all 0.2s;
+          }
+          .coupon-type-btn.active {
+            border-color: #ea678f;
+            background: #fdf5f6;
+            color: #ea678f;
+            font-weight: 700;
+          }
+          .coupon-submit-btn {
+            width: 100%;
+            padding: 12px;
+            border-radius: 14px;
+            border: none;
+            background: linear-gradient(135deg, #ea678f 0%, #db8a9e 100%);
+            color: #fff;
+            font-size: 0.95rem;
+            font-weight: 700;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(234, 103, 143, 0.3);
+            transition: all 0.2s;
+          }
+          .coupon-submit-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(234, 103, 143, 0.4);
+          }
+          .coupon-submit-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+          }
+          .coupon-list-card {
+            background: #fff;
+            border-radius: 24px;
+            padding: 24px;
+            box-shadow: 0 4px 25px rgba(219, 138, 158, 0.08);
+            border: 1px solid rgba(219, 138, 158, 0.2);
+          }
+          .coupon-filter-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+          }
+          .coupon-search-input {
+            flex: 1;
+            min-width: 200px;
+            padding: 9px 14px;
+            border-radius: 12px;
+            border: 1.5px solid #ebd9de;
+            font-size: 0.88rem;
+            background: #fdfafb;
+            outline: none;
+          }
+          .coupon-search-input:focus {
+            border-color: #ea678f;
+            background: #fff;
+          }
+          .coupon-filter-tabs {
+            display: flex;
+            gap: 6px;
+            background: #fdf5f6;
+            padding: 4px;
+            border-radius: 12px;
+          }
+          .coupon-filter-tab {
+            padding: 6px 12px;
+            border-radius: 8px;
+            border: none;
+            background: transparent;
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: #8f7d83;
+            cursor: pointer;
+            transition: all 0.2s;
+          }
+          .coupon-filter-tab.active {
+            background: #fff;
+            color: #ea678f;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+          }
+          .coupon-ticket-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 16px;
+          }
+          .coupon-ticket-admin {
+            display: flex;
+            border: 1.5px solid #f0dde2;
+            border-radius: 18px;
+            background: #fff;
+            overflow: hidden;
+            position: relative;
+            box-shadow: 0 4px 15px rgba(219, 138, 158, 0.05);
+            transition: all 0.2s ease;
+          }
+          .coupon-ticket-admin:hover {
+            border-color: #ea678f;
+            box-shadow: 0 6px 20px rgba(234, 103, 143, 0.12);
+          }
+          .coupon-ticket-admin.inactive {
+            opacity: 0.6;
+            background: #faf8f9;
+          }
+          .coupon-ticket-left {
+            background: linear-gradient(135deg, #fdf5f6 0%, #fae6ec 100%);
+            padding: 18px 16px;
+            min-width: 110px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            border-right: 2px dashed #e8cbd4;
+          }
+          .coupon-ticket-left::before, .coupon-ticket-left::after {
+            content: '';
+            position: absolute;
+            right: -8px;
+            width: 14px;
+            height: 14px;
+            background: #fff;
+            border: 1.5px solid #f0dde2;
+            border-radius: 50%;
+            z-index: 2;
+          }
+          .coupon-ticket-left::before { top: -8px; }
+          .coupon-ticket-left::after { bottom: -8px; }
+          .coupon-ticket-value {
+            font-size: 1.3rem;
+            font-weight: 800;
+            color: #ea678f;
+            text-align: center;
+            line-height: 1.1;
+          }
+          .coupon-ticket-badge {
+            font-size: 0.68rem;
+            font-weight: 700;
+            padding: 2px 8px;
+            border-radius: 20px;
+            background: #ea678f;
+            color: #fff;
+            margin-top: 6px;
+            text-align: center;
+          }
+          .coupon-ticket-content {
+            flex: 1;
+            padding: 16px 20px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+          }
+          .coupon-ticket-top-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            gap: 10px;
+            flex-wrap: wrap;
+          }
+          .coupon-code-tag {
+            font-family: monospace;
+            font-size: 1.1rem;
+            font-weight: 800;
+            color: #5c4738;
+            background: #fdf0f4;
+            padding: 4px 10px;
+            border-radius: 8px;
+            border: 1px solid #f5c8d6;
+            letter-spacing: 0.5px;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+          }
+          .coupon-copy-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: #ea678f;
+            padding: 2px;
+            display: flex;
+            align-items: center;
+            transition: transform 0.15s;
+          }
+          .coupon-copy-btn:hover {
+            transform: scale(1.15);
+          }
+          .coupon-status-chip {
+            font-size: 0.72rem;
+            font-weight: 700;
+            padding: 3px 10px;
+            border-radius: 20px;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+          }
+          .coupon-status-chip.active {
+            background: #e8f5e9;
+            color: #2e7d32;
+          }
+          .coupon-status-chip.inactive {
+            background: #efebe9;
+            color: #795548;
+          }
+          .coupon-status-chip.expired {
+            background: #ffebee;
+            color: #c62828;
+          }
+          .coupon-ticket-code-wrap {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+          }
+          .coupon-new-customer-chip {
+            font-size: 0.72rem;
+            background: #fdf5f6;
+            color: #ea678f;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-weight: 700;
+            border: 1px solid #f9d8e2;
+          }
+          .coupon-ticket-desc {
+            font-size: 0.88rem;
+            color: #6d555c;
+            margin-bottom: 8px;
+            line-height: 1.4;
+          }
+          .coupon-ticket-meta {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            font-size: 0.78rem;
+            color: #8f7d83;
+            flex-wrap: wrap;
+          }
+          .coupon-meta-item {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+          }
+          .coupon-ticket-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 16px;
+            background: #fdfafb;
+            border-left: 1px solid #f7e8ec;
+            flex-direction: column;
+            justify-content: center;
+          }
+          .coupon-action-btn-circle {
+            width: 34px;
+            height: 34px;
+            border-radius: 50%;
+            border: 1px solid #ebd9de;
+            background: #fff;
+            color: #7a6352;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+          }
+          .coupon-action-btn-circle:hover {
+            border-color: #ea678f;
+            color: #ea678f;
+            transform: scale(1.08);
+          }
+          .coupon-action-btn-circle.delete:hover {
+            border-color: #ef5350;
+            color: #ef5350;
+            background: #ffebee;
+          }
+          @media (max-width: 600px) {
+            .coupon-list-card {
+              padding: 14px;
+              border-radius: 18px;
+            }
+            .coupon-ticket-grid {
+              gap: 10px;
+            }
+            .coupon-ticket-admin {
+              flex-direction: row;
+              align-items: stretch;
+              border-radius: 14px;
+            }
+            .coupon-ticket-left {
+              min-width: 72px;
+              width: 72px;
+              padding: 10px 8px;
+              border-right: 2px dashed #e8cbd4;
+              border-bottom: none;
+            }
+            .coupon-ticket-left::before,
+            .coupon-ticket-left::after {
+              display: block;
+              right: -7px;
+              width: 12px;
+              height: 12px;
+            }
+            .coupon-ticket-left::before { top: -7px; }
+            .coupon-ticket-left::after { bottom: -7px; }
+            .coupon-ticket-value {
+              font-size: 1.05rem;
+            }
+            .coupon-ticket-badge {
+              font-size: 0.56rem;
+              padding: 2px 6px;
+              margin-top: 4px;
+              line-height: 1.2;
+            }
+            .coupon-ticket-content {
+              min-width: 0;
+              padding: 10px 10px 10px 12px;
+            }
+            .coupon-ticket-top-row {
+              margin-bottom: 4px;
+              gap: 6px;
+            }
+            .coupon-ticket-code-wrap {
+              align-items: flex-start;
+              flex-direction: column;
+              gap: 4px;
+            }
+            .coupon-code-tag {
+              font-size: 0.88rem;
+              padding: 2px 6px;
+              gap: 4px;
+            }
+            .coupon-copy-btn svg {
+              width: 12px;
+              height: 12px;
+            }
+            .coupon-status-chip {
+              font-size: 0.62rem;
+              padding: 2px 7px;
+              flex-shrink: 0;
+            }
+            .coupon-new-customer-chip {
+              font-size: 0.68rem;
+              line-height: 1.2;
+            }
+            .coupon-ticket-desc {
+              font-size: 0.74rem;
+              margin-bottom: 4px;
+              display: -webkit-box;
+              -webkit-line-clamp: 2;
+              -webkit-box-orient: vertical;
+              overflow: hidden;
+            }
+            .coupon-ticket-meta {
+              display: none;
+            }
+            .coupon-ticket-actions {
+              border-left: 1px solid #f7e8ec;
+              border-top: none;
+              flex-direction: column;
+              justify-content: center;
+              gap: 6px;
+              padding: 8px;
+            }
+            .coupon-action-btn-circle {
+              width: 28px;
+              height: 28px;
+            }
+            .coupon-action-btn-circle svg {
+              width: 13px;
+              height: 13px;
+            }
+          }
       `}</style>
 
       <div className="dashboard-container">
         {adminViewMode !== 'finance' && adminViewMode !== 'florist' ? (
           <div className="dashboard-header">
             <div className="dashboard-title-block">
-              <span className="dashboard-chip">Admin Overview</span>
               <h1 className="dashboard-title">{viewTitleMap[adminViewMode]}</h1>
               <p className="dashboard-subtitle">{viewSubtitleMap[adminViewMode]}</p>
             </div>
@@ -4764,202 +5521,6 @@ function AdminPageContent() {
 
         {adminViewMode === 'manager' && (
           <>
-            {/* System Closure Settings Card */}
-            <div style={{
-              background: '#fff',
-              borderRadius: '20px',
-              padding: '24px',
-              marginBottom: '24px',
-              boxShadow: '0 16px 34px rgba(80, 50, 57, 0.06)',
-              border: '1px solid rgba(219, 138, 158, 0.12)'
-            }}>
-              <h3 style={{
-                fontSize: '1.25rem',
-                fontWeight: '700',
-                color: '#2d2227',
-                marginBottom: '8px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '10px'
-              }}>
-                <span style={{ fontSize: '1.5rem' }}>🔒</span>
-                ตั้งค่าปิดระบบการสั่งซื้อ
-              </h3>
-              <p style={{ color: '#8f7d83', fontSize: '0.9rem', marginBottom: '20px' }}>
-                กำหนดช่วงเวลาที่ต้องการปิดระบบการสั่งซื้อชั่วคราว
-              </p>
-
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px', marginBottom: '16px' }}>
-                {/* Enable/Disable Toggle */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', gridColumn: '1 / -1' }}>
-                  <label style={{ 
-                    position: 'relative', 
-                    display: 'inline-block', 
-                    width: '60px', 
-                    height: '34px',
-                    cursor: 'pointer'
-                  }}>
-                    <input
-                      type="checkbox"
-                      checked={isSystemClosed}
-                      onChange={(e) => setIsSystemClosed(e.target.checked)}
-                      style={{ opacity: 0, width: 0, height: 0 }}
-                    />
-                    <span style={{
-                      position: 'absolute',
-                      top: 0,
-                      left: 0,
-                      right: 0,
-                      bottom: 0,
-                      backgroundColor: isSystemClosed ? '#ea678f' : '#ccc',
-                      borderRadius: '34px',
-                      transition: 'all 0.3s',
-                      cursor: 'pointer'
-                    }}>
-                      <span style={{
-                        position: 'absolute',
-                        content: '',
-                        height: '26px',
-                        width: '26px',
-                        left: isSystemClosed ? '30px' : '4px',
-                        bottom: '4px',
-                        backgroundColor: 'white',
-                        borderRadius: '50%',
-                        transition: 'all 0.3s'
-                      }}></span>
-                    </span>
-                  </label>
-                  <span style={{ fontWeight: '600', color: isSystemClosed ? '#ea678f' : '#666' }}>
-                    {isSystemClosed ? 'เปิดใช้งานการปิดระบบ' : 'ปิดการใช้งานการปิดระบบ'}
-                  </span>
-                </div>
-
-                {/* Start Date & Time */}
-                <div>
-                  <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#5c4738', fontSize: '0.9rem' }}>
-                    วันเริ่มต้น
-                  </label>
-                  <input
-                    type="date"
-                    value={closureStartDate}
-                    onChange={(e) => setClosureStartDate(e.target.value)}
-                    disabled={!isSystemClosed}
-                    style={{
-                      width: '100%',
-                      padding: '10px 14px',
-                      borderRadius: '10px',
-                      border: '1px solid rgba(219, 138, 158, 0.2)',
-                      fontSize: '0.95rem',
-                      opacity: isSystemClosed ? 1 : 0.5
-                    }}
-                  />
-                </div>
-
-                <div>
-                  <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#5c4738', fontSize: '0.9rem' }}>
-                    เวลาเริ่มต้น
-                  </label>
-                  <input
-                    type="time"
-                    value={closureStartTime}
-                    onChange={(e) => setClosureStartTime(e.target.value)}
-                    disabled={!isSystemClosed}
-                    style={{
-                      width: '100%',
-                      padding: '10px 14px',
-                      borderRadius: '10px',
-                      border: '1px solid rgba(219, 138, 158, 0.2)',
-                      fontSize: '0.95rem',
-                      opacity: isSystemClosed ? 1 : 0.5
-                    }}
-                  />
-                </div>
-
-                {/* End Date & Time */}
-                <div>
-                  <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#5c4738', fontSize: '0.9rem' }}>
-                    วันสิ้นสุด
-                  </label>
-                  <input
-                    type="date"
-                    value={closureEndDate}
-                    onChange={(e) => setClosureEndDate(e.target.value)}
-                    disabled={!isSystemClosed}
-                    style={{
-                      width: '100%',
-                      padding: '10px 14px',
-                      borderRadius: '10px',
-                      border: '1px solid rgba(219, 138, 158, 0.2)',
-                      fontSize: '0.95rem',
-                      opacity: isSystemClosed ? 1 : 0.5
-                    }}
-                  />
-                </div>
-
-                <div>
-                  <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#5c4738', fontSize: '0.9rem' }}>
-                    เวลาสิ้นสุด
-                  </label>
-                  <input
-                    type="time"
-                    value={closureEndTime}
-                    onChange={(e) => setClosureEndTime(e.target.value)}
-                    disabled={!isSystemClosed}
-                    style={{
-                      width: '100%',
-                      padding: '10px 14px',
-                      borderRadius: '10px',
-                      border: '1px solid rgba(219, 138, 158, 0.2)',
-                      fontSize: '0.95rem',
-                      opacity: isSystemClosed ? 1 : 0.5
-                    }}
-                  />
-                </div>
-
-                {/* Message */}
-                <div style={{ gridColumn: '1 / -1' }}>
-                  <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#5c4738', fontSize: '0.9rem' }}>
-                    ข้อความแจ้งเตือน
-                  </label>
-                  <textarea
-                    value={closureMessage}
-                    onChange={(e) => setClosureMessage(e.target.value)}
-                    disabled={!isSystemClosed}
-                    placeholder="ระบุข้อความที่ต้องการแจ้งให้ผู้ใช้ทราบ เช่น 'ระบบปิดปรับปรุงชั่วคราว'"
-                    rows={3}
-                    style={{
-                      width: '100%',
-                      padding: '10px 14px',
-                      borderRadius: '10px',
-                      border: '1px solid rgba(219, 138, 158, 0.2)',
-                      fontSize: '0.95rem',
-                      resize: 'vertical',
-                      fontFamily: 'inherit',
-                      opacity: isSystemClosed ? 1 : 0.5
-                    }}
-                  />
-                </div>
-              </div>
-
-              <button
-                onClick={handleSaveClosureSettings}
-                disabled={isSavingClosure || !isSystemClosed}
-                style={{
-                  padding: '12px 24px',
-                  background: isSystemClosed ? 'linear-gradient(135deg, #ea678f 0%, #d45578 100%)' : '#ccc',
-                  color: '#fff',
-                  border: 'none',
-                  borderRadius: '12px',
-                  fontSize: '0.95rem',
-                  fontWeight: '600',
-                  cursor: isSystemClosed ? 'pointer' : 'not-allowed',
-                  transition: 'all 0.2s',
-                  opacity: isSavingClosure ? 0.7 : 1
-                }}
-              >
-                {isSavingClosure ? 'กำลังบันทึก...' : 'บันทึกการตั้งค่า'}
-              </button>
-            </div>
 
             <div className="stats-grid main-stats-grid">
               {overviewCards.map((card) => (
@@ -5072,50 +5633,50 @@ function AdminPageContent() {
                         className="order-row"
                         onClick={() => setExpandedOrder(isExpanded ? null : order.id)}
                       >
-                      <div className="order-summary-row">
-                        <div className="order-main-info order-cell-order">
-                          <div className="order-avatar">
-                            {shouldShowCoverImage ? (
-                              <img src={customItem.coverImage} alt={customItem.name} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />
-                            ) : (
-                              <BasketIcon colors={itemColors} size={40} />
-                            )}
+                        <div className="order-summary-row">
+                          <div className="order-main-info order-cell-order">
+                            <div className="order-avatar">
+                              {shouldShowCoverImage ? (
+                                <img src={customItem.coverImage} alt={customItem.name} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />
+                              ) : (
+                                <BasketIcon colors={itemColors} size={40} />
+                              )}
+                            </div>
+                            <div className="order-meta">
+                              <span className="order-id">{primaryItem?.name || 'คำสั่งซื้อ'}</span>
+                              <span className="order-date">#{String(order.id).slice(0, 8).toUpperCase()}</span>
+                            </div>
                           </div>
-                          <div className="order-meta">
-                            <span className="order-id">{primaryItem?.name || 'คำสั่งซื้อ'}</span>
-                            <span className="order-date">#{String(order.id).slice(0, 8).toUpperCase()}</span>
+
+                          <div className="order-middle-meta">
+                            <span className="order-customer">{customerName}</span>
+                            <span className="order-phone">{customerPhone}</span>
+                          </div>
+
+                          <div className="order-delivery-meta">
+                            <span className="order-delivery-date">{deliveryDate}</span>
+                            <span className="order-delivery-time">{deliveryTime}</span>
+                          </div>
+
+                          <div className="order-right-meta">
+                            <span className="status-badge" style={{ color: status.color, background: status.bg }}>
+                              {status.label}
+                            </span>
+                            <span className="order-price">{order.total?.toLocaleString() || 0} ฿</span>
+                          </div>
+
+                          <div className={`order-expand-indicator ${isExpanded ? 'open' : ''}`}>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M6 9l6 6 6-6" />
+                            </svg>
                           </div>
                         </div>
 
-                        <div className="order-middle-meta">
-                          <span className="order-customer">{customerName}</span>
-                          <span className="order-phone">{customerPhone}</span>
+                        <div className="order-mobile-meta">
+                          <span>สถานะ: {status.label}</span>
+                          <span>ยอดรวม {order.total?.toLocaleString() || 0} ฿</span>
+                          <span>สร้างเมื่อ {formatOrderDate(order.createdAt)}</span>
                         </div>
-
-                        <div className="order-delivery-meta">
-                          <span className="order-delivery-date">{deliveryDate}</span>
-                          <span className="order-delivery-time">{deliveryTime}</span>
-                        </div>
-
-                        <div className="order-right-meta">
-                          <span className="status-badge" style={{ color: status.color, background: status.bg }}>
-                            {status.label}
-                          </span>
-                          <span className="order-price">{order.total?.toLocaleString() || 0} ฿</span>
-                        </div>
-
-                        <div className={`order-expand-indicator ${isExpanded ? 'open' : ''}`}>
-                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M6 9l6 6 6-6" />
-                          </svg>
-                        </div>
-                      </div>
-
-                      <div className="order-mobile-meta">
-                        <span>สถานะ: {status.label}</span>
-                        <span>ยอดรวม {order.total?.toLocaleString() || 0} ฿</span>
-                        <span>สร้างเมื่อ {formatOrderDate(order.createdAt)}</span>
-                      </div>
 
                         {/* Expanded details */}
                         <div className={`order-details-drawer ${isExpanded ? 'open' : ''}`} onClick={(e) => e.stopPropagation()}>
@@ -5138,7 +5699,13 @@ function AdminPageContent() {
                                 </span>
                               </div>
                               <div className="detail-status-line">
-                                <span className="detail-status-meta">ชำระแล้ว {order.status === 'delivering' || order.status === 'completed' ? order.total?.toLocaleString() : Math.round((order.total || 0) / 2).toLocaleString()} ฿</span>
+                                <span className="detail-status-meta">
+                                  {order.paymentType === 'full' ? (
+                                    <span style={{ color: '#27ae60', fontWeight: 700 }}>ชำระครบแล้ว ({(order.depositPaid ?? order.total ?? 0).toLocaleString()} ฿)</span>
+                                  ) : (
+                                    <>ชำระแล้ว {(order.depositPaid ?? Math.round((order.total || 0) / 2)).toLocaleString()} ฿</>
+                                  )}
+                                </span>
                                 <span className="detail-status-meta">รหัส #{String(order.id).slice(0, 8).toUpperCase()}</span>
                               </div>
                               <div className="control-panel">
@@ -5225,7 +5792,7 @@ function AdminPageContent() {
                                     style={{ background: '#27ae60' }}
                                     onClick={() => updateOrderStatus(order.id, 'delivering')}
                                   >
-                                    ลูกค้าชำระเงินครบแล้ว
+                                    {order.paymentType === 'full' ? '✅ ชำระครบแล้ว — เริ่มจัดส่งได้เลย' : 'ลูกค้าชำระเงินครบแล้ว'}
                                   </button>
                                 )}
 
@@ -5307,15 +5874,652 @@ function AdminPageContent() {
                 </div>
               )}
             </div>
+            {/* System Closure Settings Card — moved to bottom */}
+            <div style={{
+              background: '#fff',
+              borderRadius: '20px',
+              padding: '24px',
+              marginTop: '24px',
+              boxShadow: '0 16px 34px rgba(80, 50, 57, 0.06)',
+              border: '1px solid rgba(219, 138, 158, 0.12)'
+            }}>
+              <h3 style={{
+                fontSize: '1.25rem',
+                fontWeight: '700',
+                color: '#2d2227',
+                marginBottom: '8px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px'
+              }}>
+                ตั้งค่าปิดระบบการสั่งซื้อ
+              </h3>
+              <p style={{ color: '#8f7d83', fontSize: '0.9rem', marginBottom: '20px' }}>
+                กำหนดช่วงเวลาที่ต้องการปิดระบบการสั่งซื้อชั่วคราว
+              </p>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px', marginBottom: '16px' }}>
+                {/* Enable/Disable Toggle */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', gridColumn: '1 / -1' }}>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={isSystemClosed}
+                    aria-label="เปิดหรือปิดการตั้งค่าปิดระบบการสั่งซื้อ"
+                    onClick={handleToggleSystemClosure}
+                    disabled={isSavingClosure}
+                    style={{
+                    position: 'relative',
+                    display: 'inline-block',
+                    width: '60px',
+                    height: '34px',
+                    cursor: isSavingClosure ? 'not-allowed' : 'pointer',
+                    border: 'none',
+                    padding: 0,
+                    background: 'transparent',
+                    opacity: isSavingClosure ? 0.65 : 1
+                  }}
+                  >
+                    <span style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      backgroundColor: isSystemClosed ? '#ea678f' : '#ccc',
+                      borderRadius: '34px',
+                      transition: 'all 0.3s',
+                      cursor: 'pointer'
+                    }}>
+                      <span style={{
+                        position: 'absolute',
+                        content: '',
+                        height: '26px',
+                        width: '26px',
+                        left: isSystemClosed ? '30px' : '4px',
+                        bottom: '4px',
+                        backgroundColor: 'white',
+                        borderRadius: '50%',
+                        transition: 'all 0.3s'
+                      }}></span>
+                    </span>
+                  </button>
+                  <span style={{ fontWeight: '600', color: isSystemClosed ? '#ea678f' : '#666' }}>
+                    {isSystemClosed ? 'เปิดใช้งานการปิดระบบ' : 'ปิดการใช้งานการปิดระบบ'}
+                  </span>
+                </div>
+
+                {/* Start Date & Time */}
+                <div>
+                  <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#5c4738', fontSize: '0.9rem' }}>
+                    วันเริ่มต้น
+                  </label>
+                  <DatePicker
+                    id="closure-start-date"
+                    placeholder="เลือกวันเริ่มต้น"
+                    value={closureStartDate}
+                    minDate="2020-01-01"
+                    onChange={(dateStr) => setClosureStartDate(dateStr)}
+                    disabled={!isSystemClosed}
+                    style={{
+                      padding: '10px 14px',
+                      borderRadius: '10px',
+                      border: '1px solid rgba(219, 138, 158, 0.2)',
+                      fontSize: '0.95rem',
+                      opacity: isSystemClosed ? 1 : 0.5,
+                      background: '#fff'
+                    }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#5c4738', fontSize: '0.9rem' }}>
+                    เวลาเริ่มต้น
+                  </label>
+                  <TimePicker
+                    id="closure-start-time"
+                    placeholder="เลือกเวลาเริ่มต้น"
+                    value={closureStartTime}
+                    selectedDate={closureStartDate || new Date().toISOString().split('T')[0]}
+                    minTime="00:00"
+                    onChange={(timeStr) => setClosureStartTime(timeStr)}
+                    disabled={!isSystemClosed}
+                    style={{
+                      padding: '10px 14px',
+                      borderRadius: '10px',
+                      border: '1px solid rgba(219, 138, 158, 0.2)',
+                      fontSize: '0.95rem',
+                      opacity: isSystemClosed ? 1 : 0.5,
+                      background: '#fff'
+                    }}
+                  />
+                </div>
+
+                {/* End Date & Time */}
+                <div>
+                  <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#5c4738', fontSize: '0.9rem' }}>
+                    วันสิ้นสุด
+                  </label>
+                  <DatePicker
+                    id="closure-end-date"
+                    placeholder="เลือกวันสิ้นสุด"
+                    value={closureEndDate}
+                    minDate="2020-01-01"
+                    onChange={(dateStr) => setClosureEndDate(dateStr)}
+                    disabled={!isSystemClosed}
+                    style={{
+                      padding: '10px 14px',
+                      borderRadius: '10px',
+                      border: '1px solid rgba(219, 138, 158, 0.2)',
+                      fontSize: '0.95rem',
+                      opacity: isSystemClosed ? 1 : 0.5,
+                      background: '#fff'
+                    }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#5c4738', fontSize: '0.9rem' }}>
+                    เวลาสิ้นสุด
+                  </label>
+                  <TimePicker
+                    id="closure-end-time"
+                    placeholder="เลือกเวลาสิ้นสุด"
+                    value={closureEndTime}
+                    selectedDate={closureEndDate || new Date().toISOString().split('T')[0]}
+                    minTime="00:00"
+                    onChange={(timeStr) => setClosureEndTime(timeStr)}
+                    disabled={!isSystemClosed}
+                    style={{
+                      padding: '10px 14px',
+                      borderRadius: '10px',
+                      border: '1px solid rgba(219, 138, 158, 0.2)',
+                      fontSize: '0.95rem',
+                      opacity: isSystemClosed ? 1 : 0.5,
+                      background: '#fff'
+                    }}
+                  />
+                </div>
+
+                {/* Message */}
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#5c4738', fontSize: '0.9rem' }}>
+                    ข้อความแจ้งเตือน
+                  </label>
+                  <textarea
+                    value={closureMessage}
+                    onChange={(e) => setClosureMessage(e.target.value)}
+                    disabled={!isSystemClosed}
+                    placeholder="ระบุข้อความที่ต้องการแจ้งให้ผู้ใช้ทราบ เช่น 'ระบบปิดปรับปรุงชั่วคราว'"
+                    rows={3}
+                    style={{
+                      width: '100%',
+                      padding: '10px 14px',
+                      borderRadius: '10px',
+                      border: '1px solid rgba(219, 138, 158, 0.2)',
+                      fontSize: '0.95rem',
+                      resize: 'vertical',
+                      fontFamily: 'inherit',
+                      opacity: isSystemClosed ? 1 : 0.5
+                    }}
+                  />
+                </div>
+              </div>
+
+              <button
+                onClick={handleSaveClosureSettings}
+                disabled={isSavingClosure}
+                style={{
+                  padding: '12px 28px',
+                  background: 'linear-gradient(135deg, #ea678f 0%, #d45578 100%)',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '12px',
+                  fontSize: '0.95rem',
+                  fontWeight: '600',
+                  cursor: isSavingClosure ? 'not-allowed' : 'pointer',
+                  transition: 'all 0.2s',
+                  opacity: isSavingClosure ? 0.7 : 1,
+                  boxShadow: '0 4px 12px rgba(234, 103, 143, 0.25)'
+                }}
+              >
+                {isSavingClosure ? 'กำลังบันทึก...' : 'บันทึกการตั้งค่า'}
+              </button>
+            </div>
           </>
         )}
+
+        {adminViewMode === 'coupon' && (() => {
+          const todayStr = new Date().toISOString().substring(0, 10);
+          const activeCouponCount = coupons.filter((c) =>
+            c.isActive !== false && (!c.expiryDate || new Date(c.expiryDate) >= new Date(todayStr))
+          ).length;
+          const inactiveCouponCount = coupons.filter((c) =>
+            c.isActive === false || (c.expiryDate && new Date(c.expiryDate) < new Date(todayStr))
+          ).length;
+          const usedCouponCount = coupons.reduce((sum, c) => sum + (c.usedCount || 0), 0);
+
+          return (
+          <div className="coupon-section">
+            {/* Overview Stats */}
+            <div className="coupon-overview-grid">
+              <div className="coupon-stat-box coupon-stat-box--total">
+                <div className="coupon-stat-info">
+                  <span className="coupon-stat-title">คูปองทั้งหมด</span>
+                  <span className="coupon-stat-number">
+                    {coupons.length}
+                    <span className="coupon-stat-unit">ใบ</span>
+                  </span>
+                </div>
+              </div>
+
+              <div className="coupon-stat-box coupon-stat-box--active">
+                <div className="coupon-stat-info">
+                  <span className="coupon-stat-title">กำลังเปิดใช้งาน</span>
+                  <span className="coupon-stat-number">
+                    {activeCouponCount}
+                    <span className="coupon-stat-unit">ใบ</span>
+                  </span>
+                </div>
+              </div>
+
+              <div className="coupon-stat-box coupon-stat-box--inactive">
+                <div className="coupon-stat-info">
+                  <span className="coupon-stat-title">ปิดใช้ / หมดอายุ</span>
+                  <span className="coupon-stat-number">
+                    {inactiveCouponCount}
+                    <span className="coupon-stat-unit">ใบ</span>
+                  </span>
+                </div>
+              </div>
+
+              <div className="coupon-stat-box coupon-stat-box--used">
+                <div className="coupon-stat-info">
+                  <span className="coupon-stat-title">ใช้งานแล้วทั้งหมด</span>
+                  <span className="coupon-stat-number">
+                    {usedCouponCount}
+                    <span className="coupon-stat-unit">ครั้ง</span>
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Main Content Grid: Left Form + Right List */}
+            <div className="coupon-main-grid">
+              {/* Left Column: Form */}
+              <div className="coupon-form-card">
+                <div className="coupon-form-header">
+                  <h3 className="coupon-form-title">
+                    <span>{editingCouponId ? 'แก้ไขคูปองส่วนลด' : 'สร้างคูปองส่วนลดใหม่'}</span>
+                  </h3>
+                  {editingCouponId && (
+                    <button
+                      type="button"
+                      onClick={handleCancelEditCoupon}
+                      style={{ background: 'none', border: 'none', color: '#8f7d83', fontSize: '0.82rem', cursor: 'pointer', textDecoration: 'underline' }}
+                    >
+                      ยกเลิก
+                    </button>
+                  )}
+                </div>
+
+                <form onSubmit={handleSaveCoupon}>
+                  {/* Coupon Code */}
+                  <div className="coupon-form-group">
+                    <label className="coupon-form-label">
+                      รหัสคูปอง (Coupon Code) <span style={{ color: '#ea678f' }}>*</span>
+                    </label>
+                    <input
+                      type="text"
+                      className="coupon-form-input"
+                      placeholder="เช่น LOVE20, FIRST10, NEWYEAR"
+                      value={newCouponCode}
+                      onChange={(e) => setNewCouponCode(e.target.value.toUpperCase())}
+                      style={{ textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.5px' }}
+                      required
+                    />
+                  </div>
+
+                  {/* Discount Type */}
+                  <div className="coupon-form-group">
+                    <label className="coupon-form-label">ประเภทส่วนลด</label>
+                    <div className="coupon-type-selector">
+                      <button
+                        type="button"
+                        className={`coupon-type-btn ${newCouponType === 'percent' ? 'active' : ''}`}
+                        onClick={() => setNewCouponType('percent')}
+                      >
+                        <span>%</span> เปอร์เซ็นต์
+                      </button>
+                      <button
+                        type="button"
+                        className={`coupon-type-btn ${newCouponType === 'fixed' ? 'active' : ''}`}
+                        onClick={() => setNewCouponType('fixed')}
+                      >
+                        <span>฿</span> จำนวนเงินคงที่
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Discount Value */}
+                  <div className="coupon-form-group">
+                    <label className="coupon-form-label">
+                      มูลค่าส่วนลด ({newCouponType === 'percent' ? '%' : 'บาท'}) <span style={{ color: '#ea678f' }}>*</span>
+                    </label>
+                    <input
+                      type="number"
+                      className="coupon-form-input"
+                      placeholder={newCouponType === 'percent' ? 'เช่น 10 (ลด 10%)' : 'เช่น 50 (ลด 50 บาท)'}
+                      min="1"
+                      max={newCouponType === 'percent' ? '100' : undefined}
+                      step="any"
+                      value={newCouponValue}
+                      onChange={(e) => setNewCouponValue(e.target.value)}
+                      required
+                    />
+                  </div>
+
+                  {/* Minimum Spend */}
+                  <div className="coupon-form-group">
+                    <label className="coupon-form-label">
+                      ยอดสั่งซื้อขั้นต่ำ (บาท) <span style={{ fontSize: '0.75rem', color: '#a08a8e', fontWeight: 'normal' }}>(0 = ไม่มีขั้นต่ำ)</span>
+                    </label>
+                    <input
+                      type="number"
+                      className="coupon-form-input"
+                      placeholder="0"
+                      min="0"
+                      value={newCouponMinSpend}
+                      onChange={(e) => setNewCouponMinSpend(e.target.value)}
+                    />
+                  </div>
+
+                  {/* Usage Limit */}
+                  <div className="coupon-form-group">
+                    <label className="coupon-form-label">
+                      จำกัดจำนวนสิทธิ์ (ครั้ง) <span style={{ fontSize: '0.75rem', color: '#a08a8e', fontWeight: 'normal' }}>(ว่างไว้ = ไม่จำกัด)</span>
+                    </label>
+                    <input
+                      type="number"
+                      className="coupon-form-input"
+                      placeholder="ไม่จำกัดจำนวนสิทธิ์"
+                      min="1"
+                      value={newCouponLimit}
+                      onChange={(e) => setNewCouponLimit(e.target.value)}
+                    />
+                  </div>
+
+                  {/* Expiry Date */}
+                  <div className="coupon-form-group">
+                    <label className="coupon-form-label">
+                      วันหมดอายุ <span style={{ fontSize: '0.75rem', color: '#a08a8e', fontWeight: 'normal' }}>(ว่างไว้ = ไม่มีวันหมดอายุ)</span>
+                    </label>
+                    <DatePicker
+                      id="coupon-expiry-date"
+                      placeholder="เลือกวันหมดอายุ"
+                      value={newCouponExpiry}
+                      minDate="2020-01-01"
+                      onChange={(dateStr) => setNewCouponExpiry(dateStr)}
+                      style={{
+                        padding: '10px 14px',
+                        borderRadius: '10px',
+                        border: '1px solid rgba(219, 138, 158, 0.2)',
+                        fontSize: '0.95rem',
+                        background: '#fff'
+                      }}
+                    />
+                  </div>
+
+                  {/* New User Only Toggle */}
+                  <div className="coupon-form-group">
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', userSelect: 'none' }}>
+                      <input
+                        type="checkbox"
+                        checked={newCouponForNewUser}
+                        onChange={(e) => setNewCouponForNewUser(e.target.checked)}
+                        style={{ width: '18px', height: '18px', accentColor: '#ea678f', cursor: 'pointer' }}
+                      />
+                      <span style={{ fontSize: '0.88rem', fontWeight: 600, color: '#5c4738' }}>
+                        สำหรับลูกค้าใหม่ที่สั่งซื้อครั้งแรกเท่านั้น
+                      </span>
+                    </label>
+                  </div>
+
+                  {/* Description */}
+                  <div className="coupon-form-group">
+                    <label className="coupon-form-label">คำอธิบายคูปอง / เงื่อนไข</label>
+                    <textarea
+                      className="coupon-form-textarea"
+                      placeholder="เช่น สำหรับลูกค้าใหม่ ไม่มีขั้นต่ำ หรือ ลดพิเศษต้อนรับเทศกาล"
+                      rows={2}
+                      value={newCouponDesc}
+                      onChange={(e) => setNewCouponDesc(e.target.value)}
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="coupon-submit-btn"
+                    disabled={isSavingCoupon}
+                  >
+                    {isSavingCoupon ? 'กำลังบันทึกข้อมูล...' : (editingCouponId ? 'บันทึกการแก้ไข' : 'สร้างคูปองส่วนลด')}
+                  </button>
+                </form>
+              </div>
+
+              {/* Right Column: Coupon List */}
+              <div className="coupon-list-card">
+                <div className="coupon-filter-bar">
+                  <input
+                    type="text"
+                    className="coupon-search-input"
+                    placeholder="ค้นหารหัสคูปอง หรือ รายละเอียด..."
+                    value={couponSearch}
+                    onChange={(e) => setCouponSearch(e.target.value)}
+                  />
+
+                  <div className="coupon-filter-tabs">
+                    <button
+                      type="button"
+                      className={`coupon-filter-tab ${couponFilterStatus === 'all' ? 'active' : ''}`}
+                      onClick={() => setCouponFilterStatus('all')}
+                    >
+                      ทั้งหมด ({coupons.length})
+                    </button>
+                    <button
+                      type="button"
+                      className={`coupon-filter-tab ${couponFilterStatus === 'active' ? 'active' : ''}`}
+                      onClick={() => setCouponFilterStatus('active')}
+                    >
+                      เปิดใช้งาน
+                    </button>
+                    <button
+                      type="button"
+                      className={`coupon-filter-tab ${couponFilterStatus === 'inactive' ? 'active' : ''}`}
+                      onClick={() => setCouponFilterStatus('inactive')}
+                    >
+                      ปิดใช้งาน
+                    </button>
+                    <button
+                      type="button"
+                      className={`coupon-filter-tab ${couponFilterStatus === 'expired' ? 'active' : ''}`}
+                      onClick={() => setCouponFilterStatus('expired')}
+                    >
+                      หมดอายุ
+                    </button>
+                  </div>
+                </div>
+
+                {couponLoading ? (
+                  <div style={{ textAlign: 'center', padding: '60px 20px', color: '#a08a8e' }}>
+                    <div style={{ fontSize: '2rem', marginBottom: '10px' }}>⏳</div>
+                    <p>กำลังโหลดข้อมูลคูปอง...</p>
+                  </div>
+                ) : (
+                  (() => {
+                    const todayStr = new Date().toISOString().substring(0, 10);
+                    const filteredCoupons = coupons.filter((c) => {
+                      const isExpired = c.expiryDate && c.expiryDate < todayStr;
+                      const isActive = c.isActive !== false && !isExpired;
+
+                      if (couponFilterStatus === 'active' && !isActive) return false;
+                      if (couponFilterStatus === 'inactive' && c.isActive !== false) return false;
+                      if (couponFilterStatus === 'expired' && !isExpired) return false;
+
+                      if (couponSearch.trim()) {
+                        const q = couponSearch.toLowerCase().trim();
+                        const matchCode = (c.code || '').toLowerCase().includes(q);
+                        const matchDesc = (c.description || '').toLowerCase().includes(q);
+                        if (!matchCode && !matchDesc) return false;
+                      }
+
+                      return true;
+                    });
+
+                    if (filteredCoupons.length === 0) {
+                      return (
+                        <div style={{ textAlign: 'center', padding: '60px 20px', color: '#a08a8e', background: '#fff', borderRadius: '18px', border: '1.5px dashed #f5e4e8' }}>
+                          <img src="/images/Empty State Icon.png" alt="Empty" style={{ width: '100px', height: 'auto', display: 'block', margin: '0 auto 16px' }} />
+                          <h4 style={{ color: '#5c4738', margin: '0 0 6px 0', fontSize: '1.05rem' }}>ยังไม่พบคูปองส่วนลด</h4>
+                          <p style={{ fontSize: '0.85rem', margin: 0 }}>คุณสามารถสร้างคูปองส่วนลดใหม่จากแบบฟอร์มด้านซ้ายมือได้เลยค่ะ</p>
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div className="coupon-ticket-grid">
+                        {filteredCoupons.map((coupon) => {
+                          const isExpired = coupon.expiryDate && coupon.expiryDate < todayStr;
+                          const isInactive = coupon.isActive === false;
+                          const statusClass = isExpired ? 'expired' : isInactive ? 'inactive' : 'active';
+                          const statusText = isExpired ? 'หมดอายุ' : isInactive ? 'ปิดใช้งาน' : 'เปิดใช้งาน';
+
+                          return (
+                            <div key={coupon.id} className={`coupon-ticket-admin ${isInactive || isExpired ? 'inactive' : ''}`}>
+                              {/* Left Ticket Stub */}
+                              <div className="coupon-ticket-left">
+                                <div className="coupon-ticket-value">
+                                  {coupon.discountType === 'percent' ? `${coupon.discountValue}%` : `฿${coupon.discountValue}`}
+                                </div>
+                                <div className="coupon-ticket-badge">
+                                  {coupon.discountType === 'percent' ? 'ส่วนลด เปอร์เซ็นต์' : 'ส่วนลดเงินสด'}
+                                </div>
+                              </div>
+
+                              {/* Middle Ticket Info */}
+                              <div className="coupon-ticket-content">
+                                <div className="coupon-ticket-top-row">
+                                  <div className="coupon-ticket-code-wrap">
+                                    <span className="coupon-code-tag">
+                                      {coupon.code}
+                                      <button
+                                        type="button"
+                                        className="coupon-copy-btn"
+                                        title="คัดลอกรหัสคูปอง"
+                                        onClick={() => handleCopyCouponCode(coupon.code)}
+                                      >
+                                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                          <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                                          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                                        </svg>
+                                      </button>
+                                    </span>
+
+                                    {coupon.isForNewCustomerOnly && (
+                                      <span className="coupon-new-customer-chip">
+                                        เฉพาะลูกค้าใหม่
+                                      </span>
+                                    )}
+                                  </div>
+
+                                  <span className={`coupon-status-chip ${statusClass}`}>
+                                    {statusText}
+                                  </span>
+                                </div>
+
+                                <div className="coupon-ticket-desc">
+                                  {coupon.description || 'ไม่มีคำอธิบาย'}
+                                </div>
+
+                                <div className="coupon-ticket-meta">
+                                  <div className="coupon-meta-item">
+                                    <span>ขั้นต่ำ: <strong>{coupon.minSpend ? `${coupon.minSpend.toLocaleString()} ฿` : 'ไม่มีขั้นต่ำ'}</strong></span>
+                                  </div>
+
+                                  <div className="coupon-meta-item">
+                                    <span>สิทธิ์: <strong>{coupon.usedCount || 0}{coupon.usageLimit ? ` / ${coupon.usageLimit}` : ' (ไม่จำกัด)'}</strong></span>
+                                  </div>
+
+                                  <div className="coupon-meta-item">
+                                    <span>หมดอายุ: <strong>{coupon.expiryDate ? coupon.expiryDate : 'ไม่มีกำหนด'}</strong></span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Right Actions */}
+                              <div className="coupon-ticket-actions">
+                                <button
+                                  type="button"
+                                  className="coupon-action-btn-circle"
+                                  title={coupon.isActive === false ? 'เปิดใช้งานคูปองนี้' : 'ปิดใช้งานคูปองนี้'}
+                                  onClick={() => handleToggleCouponActive(coupon)}
+                                >
+                                  {coupon.isActive === false ? (
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+                                      <polygon points="5,3 19,12 5,21" />
+                                    </svg>
+                                  ) : (
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+                                      <rect x="5" y="3" width="4" height="18" rx="1" />
+                                      <rect x="15" y="3" width="4" height="18" rx="1" />
+                                    </svg>
+                                  )}
+                                </button>
+
+                                <button
+                                  type="button"
+                                  className="coupon-action-btn-circle"
+                                  title="แก้ไขคูปองนี้"
+                                  onClick={() => handleEditCoupon(coupon)}
+                                >
+                                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4Z" />
+                                  </svg>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  className="coupon-action-btn-circle delete"
+                                  title="ลบคูปองนี้"
+                                  onClick={() => handleDeleteCoupon(coupon)}
+                                >
+                                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                    <polyline points="3 6 5 6 21 6" />
+                                    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                                    <path d="M10 11v6M14 11v6" />
+                                    <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+                                  </svg>
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()
+                )}
+              </div>
+            </div>
+          </div>
+          );
+        })()}
 
         {adminViewMode === 'florist' && (
           /* Florist View Mode */
           <div className="florist-section">
             <div className="dashboard-header">
               <div className="dashboard-title-block">
-                <span className="dashboard-chip">Admin Overview</span>
                 <h1 className="dashboard-title">{viewTitleMap[adminViewMode]}</h1>
                 <p className="dashboard-subtitle">
                   รายการออเดอร์
@@ -5500,7 +6704,6 @@ function AdminPageContent() {
           <div className="finance-section">
             <div className="dashboard-header">
               <div className="dashboard-title-block">
-                <span className="dashboard-chip">Admin Overview</span>
                 <h1 className="dashboard-title">{viewTitleMap[adminViewMode]}</h1>
                 <p className="dashboard-subtitle">
                   บันทึกและรายงานงบการเงิน
@@ -5874,7 +7077,7 @@ function AdminPageContent() {
                       </div>
 
                       <div className="expense-item-subgrid">
-                        <div className="form-group" style={{ marginBottom: 0 }}>
+                        <div className="form-group" style={{ marginBottom: 0, marginTop: '12px' }}>
                           <label className="form-label">จำนวนเงิน</label>
                           <input
                             type="number"
@@ -5891,7 +7094,7 @@ function AdminPageContent() {
                             required
                           />
                         </div>
-                        <div className="form-group" style={{ marginBottom: 0 }}>
+                        <div className="form-group" style={{ marginBottom: 0, marginTop: '12px' }}>
                           <label className="form-label">วันที่ทำรายการ</label>
                           <div className="custom-date-container">
                             <input
@@ -6033,7 +7236,7 @@ function AdminPageContent() {
                       <img src="/images/Empty State Icon.png" alt="Empty State" style={{ width: '120px', height: 'auto', display: 'block', margin: '0 auto' }} />
                     </span>
                     <p style={{ marginTop: '10px', fontSize: '0.9rem' }}>
-                      {financeViewMode === 'daily' 
+                      {financeViewMode === 'daily'
                         ? `ยังไม่มีรายการทางการเงินในวันที่ ${formatDateThai(selectedDate)} เลยค่ะ`
                         : 'ยังไม่มีรายการทางการเงินในรอบบัญชีเดือนนี้เลยค่ะ'}
                     </p>

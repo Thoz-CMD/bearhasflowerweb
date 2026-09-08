@@ -89,16 +89,99 @@ const getDecorationLabel = (id: string, config: any) => {
   return name;
 };
 
+const getProductType = (item: any): 'glitter_rose' | 'velvet_flower' | 'artificial_flowers' | 'other' => {
+  if (item?.type === 'glitter_rose') return 'glitter_rose';
+  if (item?.type === 'velvet_flower' || item?.type === 'velvet_wire') return 'velvet_flower';
+  if (item?.type === 'artificial_flowers') return 'artificial_flowers';
+
+  const id = typeof item?.id === 'string' ? item.id : '';
+  if (id.startsWith('af_')) return 'artificial_flowers';
+  if (id.startsWith('vw_')) return 'velvet_flower';
+
+  const name = item?.name || '';
+  if (name.includes('ลวดกำมะหยี่') || name.includes('กำมะหยี่')) return 'velvet_flower';
+  if (name.includes('ประดิษฐ์')) return 'artificial_flowers';
+  if (name.includes('Glitter') || name.includes('กลิตเตอร์')) return 'glitter_rose';
+
+  if (item?.config?.selectedColors || item?.config?.selectedLayers || item?.config?.selectedShape) return 'glitter_rose';
+  if (item?.config?.selectedDiamondFlower || item?.config?.selectedDiamondLetter) return 'artificial_flowers';
+  if (item?.config) return 'velvet_flower';
+  return 'other';
+};
+
+const getProductBadge = (type: string) => {
+  switch (type) {
+    case 'glitter_rose': return 'Glitter Rose';
+    case 'velvet_flower': return 'Velvet Flower';
+    case 'artificial_flowers': return 'Artificial Flowers';
+    default: return null;
+  }
+};
+
 const renderDesktopConfig = (item: any) => {
-  if (item.type !== 'glitter_rose' || !item.config) return null;
+  if (!item?.config) return null;
   const config = item.config;
   const orderDate = item.orderDate;
+  const productType = getProductType(item);
 
-  const colors = (config.selectedColors || []).map((id: string) => ROSE_COLORS_MAP[id] || id).join(', ');
-  const layers = (config.selectedLayers || []).map((id: string) => ROSE_LAYERS_MAP[id] || id).join(', ');
-  const decorations = (config.selectedDecorations || []).map((id: string) => getDecorationLabel(id, config)).join(', ');
-  const paper = ROSE_PAPERS_MAP[config.selectedPaper] || config.selectedPaper;
-  const shape = ROSE_SHAPES_MAP[config.selectedShape] || config.selectedShape;
+  if (productType === 'glitter_rose') {
+    const colors = (config.selectedColors || []).map((id: string) => ROSE_COLORS_MAP[id] || id).join(', ');
+    const layers = (config.selectedLayers || []).map((id: string) => ROSE_LAYERS_MAP[id] || id).join(', ');
+    const decorations = (config.selectedDecorations || []).map((id: string) => getDecorationLabel(id, config)).join(', ');
+    const paper = ROSE_PAPERS_MAP[config.selectedPaper] || config.selectedPaper;
+    const shape = ROSE_SHAPES_MAP[config.selectedShape] || config.selectedShape;
+
+    return (
+      <div className="desktop-config-details" onClick={(e) => e.stopPropagation()}>
+        {orderDate && (
+          <div>
+            <div className="config-group-title">วันที่สั่งซื้อ</div>
+            <ul className="config-item-list"><li>{orderDate}</li></ul>
+          </div>
+        )}
+        <div>
+          <div className="config-group-title">ช่อดอกกุหลาบ</div>
+          <ul className="config-item-list">
+            <li>จำนวน: {config.selectedQty || 0} ดอก</li>
+            {colors && <li>สี: {colors}</li>}
+          </ul>
+        </div>
+        {(layers || paper || shape) && (
+          <div>
+            <div className="config-group-title">องค์ประกอบการห่อ</div>
+            <ul className="config-item-list">
+              {layers && <li>รองช่อ: {layers}</li>}
+              {paper && <li>กระดาษห่อ: {paper}</li>}
+              {shape && <li>รูปทรง: {shape}</li>}
+            </ul>
+          </div>
+        )}
+        <div>
+          <div className="config-group-title">ของตกแต่งเพิ่มเติม</div>
+          <ul className="config-item-list">
+            {decorations ? <li>{decorations}</li> : <li>ไม่มีของตกแต่ง</li>}
+          </ul>
+        </div>
+        {(config.customerName || config.deliveryDate) && (
+          <div>
+            <div className="config-group-title">ข้อมูลการจัดส่ง</div>
+            <ul className="config-item-list">
+              {config.customerName && <li>ผู้รับ: {config.customerName} ({config.customerPhone || 'ไม่ระบุเบอร์'})</li>}
+              {config.customerAddress && <li>ที่อยู่: {config.customerAddress}</li>}
+              {config.deliveryDate && <li>ส่ง: {config.deliveryDate} ({config.deliveryTime || 'ไม่ระบุเวลา'})</li>}
+              {config.additionalNote && <li>โน๊ต: "{config.additionalNote}"</li>}
+            </ul>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Non-glitter_rose (velvet_flower, artificial_flowers, etc.)
+  const cardName = config.selectedMessageCardVariant
+    ? (MESSAGE_CARD_VARIANTS_MAP[config.selectedMessageCardVariant] || config.selectedMessageCardVariant)
+    : (config.selectedCard ? `การ์ด ${config.selectedCard}` : '');
+  const hasAnyDecor = Boolean(cardName || config.selectedStick || config.selectedDiamondFlower || config.selectedDiamondLetter);
 
   return (
     <div className="desktop-config-details" onClick={(e) => e.stopPropagation()}>
@@ -109,26 +192,18 @@ const renderDesktopConfig = (item: any) => {
         </div>
       )}
       <div>
-        <div className="config-group-title">ช่อดอกกุหลาบ</div>
+        <div className="config-group-title">ของตกแต่ง</div>
         <ul className="config-item-list">
-          <li>จำนวน: {config.selectedQty || 0} ดอก</li>
-          {colors && <li>สี: {colors}</li>}
-        </ul>
-      </div>
-      {(layers || paper || shape) && (
-        <div>
-          <div className="config-group-title">องค์ประกอบการห่อ</div>
-          <ul className="config-item-list">
-            {layers && <li>รองช่อ: {layers}</li>}
-            {paper && <li>กระดาษห่อ: {paper}</li>}
-            {shape && <li>รูปทรง: {shape}</li>}
-          </ul>
-        </div>
-      )}
-      <div>
-        <div className="config-group-title">ของตกแต่งเพิ่มเติม</div>
-        <ul className="config-item-list">
-          {decorations ? <li>{decorations}</li> : <li>ไม่มีของตกแต่ง</li>}
+          {hasAnyDecor ? (
+            <>
+              {cardName && <li>การ์ด: {cardName}</li>}
+              {config.selectedStick && <li>มีก้านเสียบการ์ด</li>}
+              {config.selectedDiamondFlower && <li>ติดเพชรดอกไม้</li>}
+              {config.selectedDiamondLetter && <li>ติดตัวอักษรเพชร</li>}
+            </>
+          ) : (
+            <li>ไม่มีของตกแต่ง</li>
+          )}
         </ul>
       </div>
       {(config.customerName || config.deliveryDate) && (
@@ -210,7 +285,7 @@ const BasketIcon = ({ colors = [], size = 46 }: { colors: string[], size?: numbe
 };
 
 export default function CartPage() {
-  const { isClosed: isStoreClosedNow } = useStoreHours();
+  const { isClosed: isStoreClosedNow, toast: storeClosedToast } = useStoreHours();
   const [cartItems, setCartItems] = useState<any[]>([]);
   const [orders, setOrders] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState('cart');
@@ -328,7 +403,7 @@ export default function CartPage() {
   const handleCheckout = () => {
     if (cartItems.length === 0) return;
     if (isStoreClosedNow) {
-      window.alert(STORE_CLOSED_TOAST);
+      window.alert(storeClosedToast || STORE_CLOSED_TOAST);
       return;
     }
     window.location.href = '/checkout';
@@ -746,7 +821,7 @@ export default function CartPage() {
                         <div className="item-info">
                           <div className="item-name">
                             {item.name}
-                            {(item.type === 'glitter_rose' || item.type === 'velvet_flower') && <span className="edit-badge">แก้ไขรายการนี้</span>}
+                            {(item.type === 'glitter_rose' || item.type === 'velvet_flower' || item.type === 'artificial_flowers') && <span className="edit-badge">แก้ไขรายการนี้</span>}
                           </div>
                           {item.details && <div className="item-details">{item.details}</div>}
                           {renderDesktopConfig(item)}
@@ -789,7 +864,9 @@ export default function CartPage() {
                   {orders.map((order: any) => {
                     const statusInfo = getStatusLabel(order.status);
                     return (order.items || []).map((item: any, idx: number) => {
-                      const isGlitterRose = item.type === 'glitter_rose' || !!item.config;
+                      const productType = getProductType(item);
+                      const isGlitterRose = productType === 'glitter_rose';
+                      const badgeLabel = getProductBadge(productType);
                       const cfg = item.config || null;
                       // Check if coverImage is the default ribbon image (used for custom products)
                       const isDefaultRibbonImage = item.coverImage && item.coverImage.includes('ริบบิ้นแดง.jpg');
@@ -804,18 +881,24 @@ export default function CartPage() {
                       const cardKey = `${order.id}-${idx}`;
                       const isExpanded = expandedOrderKey === cardKey;
 
-                      // Build mobile detail sections
+                      // Build mobile detail sections for glitter rose
                       const mobileColors = cfg ? (cfg.selectedColors || []).map((id: string) => ROSE_COLORS_MAP[id] || id).join(', ') : '';
                       const mobileLayers = cfg ? (cfg.selectedLayers || []).map((id: string) => ROSE_LAYERS_MAP[id] || id).join(', ') : '';
                       const mobilePaper = cfg ? (ROSE_PAPERS_MAP[cfg.selectedPaper] || cfg.selectedPaper || '') : '';
                       const mobileShape = cfg ? (ROSE_SHAPES_MAP[cfg.selectedShape] || cfg.selectedShape || '') : '';
                       const mobileDecorations = cfg ? (cfg.selectedDecorations || []).map((id: string) => getDecorationLabel(id, cfg)).join(', ') : '';
 
+                      // Build mobile card name for other custom products
+                      const cardName = cfg ? (cfg.selectedMessageCardVariant
+                        ? (MESSAGE_CARD_VARIANTS_MAP[cfg.selectedMessageCardVariant] || cfg.selectedMessageCardVariant)
+                        : (cfg.selectedCard ? `การ์ด ${cfg.selectedCard}` : '')) : '';
+                      const hasCardOrExtras = Boolean(cardName || cfg?.selectedStick || cfg?.selectedDiamondFlower || cfg?.selectedDiamondLetter);
+
                       return (
                         <div
                           key={cardKey}
                           className="cart-item"
-                          data-type={isGlitterRose ? 'glitter_rose' : 'other'}
+                          data-type={productType}
                           data-status={order.status}
                           style={{ cursor: cfg ? 'pointer' : 'default', position: 'relative' }}
                           onClick={() => cfg && toggleExpand(cardKey)}
@@ -830,7 +913,7 @@ export default function CartPage() {
                           <div className="item-info">
                             <div className="item-name">
                               {item.name}
-                              {isGlitterRose && <span className="edit-badge">Glitter Rose</span>}
+                              {badgeLabel && <span className="edit-badge">{badgeLabel}</span>}
                             </div>
                             {cfg && (
                               <span className="history-card-tap-hint">
@@ -851,7 +934,7 @@ export default function CartPage() {
                               </span>
                             )}
                             {/* Desktop config grid (hidden on mobile) */}
-                            {item.config && renderDesktopConfig({ type: 'glitter_rose', config: item.config, orderDate: order.date })}
+                            {item.config && renderDesktopConfig({ ...item, config: item.config, orderDate: order.date })}
                             {/* Mobile expand panel */}
                             {cfg && (
                               <div className={`mobile-expand-panel${isExpanded ? ' open' : ''}`}>
@@ -862,27 +945,49 @@ export default function CartPage() {
                                       <ul className="mobile-detail-list"><li>{order.date}</li></ul>
                                     </div>
                                   )}
-                                  <div>
-                                    <div className="mobile-detail-group-title">ช่อดอกกุหลาบ</div>
-                                    <ul className="mobile-detail-list">
-                                      <li>จำนวน: {cfg.selectedQty || 0} ดอก</li>
-                                      {mobileColors && <li>สี: {mobileColors}</li>}
-                                    </ul>
-                                  </div>
-                                  {(mobileLayers || mobilePaper || mobileShape) && (
-                                    <div>
-                                      <div className="mobile-detail-group-title">องค์ประกอบการห่อ</div>
-                                      <ul className="mobile-detail-list">
-                                        {mobileLayers && <li>รองช่อ: {mobileLayers}</li>}
-                                        {mobilePaper && <li>กระดาษห่อ: {mobilePaper}</li>}
-                                        {mobileShape && <li>รูปทรง: {mobileShape}</li>}
-                                      </ul>
-                                    </div>
+                                  {isGlitterRose ? (
+                                    <>
+                                      <div>
+                                        <div className="mobile-detail-group-title">ช่อดอกกุหลาบ</div>
+                                        <ul className="mobile-detail-list">
+                                          <li>จำนวน: {cfg.selectedQty || 0} ดอก</li>
+                                          {mobileColors && <li>สี: {mobileColors}</li>}
+                                        </ul>
+                                      </div>
+                                      {(mobileLayers || mobilePaper || mobileShape) && (
+                                        <div>
+                                          <div className="mobile-detail-group-title">องค์ประกอบการห่อ</div>
+                                          <ul className="mobile-detail-list">
+                                            {mobileLayers && <li>รองช่อ: {mobileLayers}</li>}
+                                            {mobilePaper && <li>กระดาษห่อ: {mobilePaper}</li>}
+                                            {mobileShape && <li>รูปทรง: {mobileShape}</li>}
+                                          </ul>
+                                        </div>
+                                      )}
+                                      <div>
+                                        <div className="mobile-detail-group-title">ของตกแต่ง</div>
+                                        <ul className="mobile-detail-list"><li>{mobileDecorations || 'ไม่มีของตกแต่ง'}</li></ul>
+                                      </div>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <div>
+                                        <div className="mobile-detail-group-title">ของตกแต่ง</div>
+                                        <ul className="mobile-detail-list">
+                                          {hasCardOrExtras ? (
+                                            <>
+                                              {cardName && <li>การ์ด: {cardName}</li>}
+                                              {cfg.selectedStick && <li>มีก้านเสียบการ์ด</li>}
+                                              {cfg.selectedDiamondFlower && <li>ติดเพชรดอกไม้</li>}
+                                              {cfg.selectedDiamondLetter && <li>ติดตัวอักษรเพชร</li>}
+                                            </>
+                                          ) : (
+                                            <li>ไม่มีของตกแต่ง</li>
+                                          )}
+                                        </ul>
+                                      </div>
+                                    </>
                                   )}
-                                  <div>
-                                    <div className="mobile-detail-group-title">ของตกแต่ง</div>
-                                    <ul className="mobile-detail-list"><li>{mobileDecorations || 'ไม่มีของตกแต่ง'}</li></ul>
-                                  </div>
                                   {(cfg.customerName || cfg.deliveryDate) && (
                                     <div>
                                       <div className="mobile-detail-group-title">การจัดส่ง</div>
@@ -906,7 +1011,7 @@ export default function CartPage() {
                                 <span className="status-badge" style={{ color: statusInfo.color, background: statusInfo.bg }}>
                                   {statusInfo.text}
                                 </span>
-                                {order.status === 'shipping' && (
+                                {order.status === 'shipping' && ((order.total || 0) - (order.depositPaid || 0) > 0) && (
                                   <button
                                     onClick={(e) => { e.stopPropagation(); window.location.href = `/payment?orderId=${order.id}`; }}
                                     style={{

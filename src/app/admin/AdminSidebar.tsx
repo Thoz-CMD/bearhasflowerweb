@@ -10,6 +10,7 @@ import {
   PackagePlus,
   ReceiptText,
   ShoppingBag,
+  Ticket,
 } from 'lucide-react';
 import styles from './admin-shell.module.css';
 
@@ -60,6 +61,17 @@ const navItems: NavItem[] = [
     mobileOrder: 2,
   },
   {
+    href: '/admin?view=coupon',
+    label: 'จัดการคูปอง',
+    description: 'โปรโมชั่น & ส่วนลด',
+    icon: Ticket,
+    isActive: (pathname, searchParams) =>
+      pathname === '/admin' && searchParams.get('view') === 'coupon',
+    showInMobile: true,
+    mobileOrder: 5,
+    mobileLabel: 'คูปอง',
+  },
+  {
     href: '/admin/create-product',
     label: 'สร้างสินค้า',
     description: 'เพิ่มสินค้า',
@@ -78,7 +90,7 @@ const navItems: NavItem[] = [
       pathname === '/admin/manage-products' ||
       (pathname === '/admin/create-product' && searchParams.get('manage') === 'true'),
     showInMobile: true,
-    mobileOrder: 5,
+    mobileOrder: 6,
   },
   {
     href: '/admin/supplies',
@@ -87,7 +99,7 @@ const navItems: NavItem[] = [
     icon: ShoppingBag,
     isActive: (pathname) => pathname === '/admin/supplies',
     showInMobile: true,
-    mobileOrder: 6,
+    mobileOrder: 7,
     mobileLabel: 'อุปกรณ์',
   },
   {
@@ -96,9 +108,7 @@ const navItems: NavItem[] = [
     description: 'หน้าร้าน',
     icon: Home,
     isActive: () => false,
-    showInMobile: true,
-    mobileOrder: 7,
-    mobileLabel: 'หน้าหลัก',
+    showInMobile: false,
   },
 ];
 

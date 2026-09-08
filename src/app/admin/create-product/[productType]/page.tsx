@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation';
-import { ProductStudioPage } from '../page';
+import ProductStudioPage from '../ProductStudio';
 
 type ProductTypeRouteParams = {
   productType: string;

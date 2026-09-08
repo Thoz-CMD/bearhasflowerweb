@@ -1558,9 +1558,9 @@ export default function ClientPage({ initialProductHtml }: { initialProductHtml?
         </svg>
       </button>
       <div style="width: 100%; position: relative;">
-        <img src="/images/advert/ChatGPT Image 10 มิ.ย. 2569 21_10_52.webp" alt="Welcome Discount" loading="lazy" decoding="async" style="width: 100%; height: auto; display: block;" />
+        <img src="/images/advert/ChatGPT Image 10 มิ.ย. 2569 21_10_52.png" alt="Welcome Discount" loading="lazy" decoding="async" style="width: 100%; height: auto; display: block;" />
         <div style="position: absolute; bottom: 24px; left: 0; right: 0; display: flex; justify-content: center; padding: 0 24px; box-sizing: border-box;">
-          <button class="welcome-claim-btn" onclick="localStorage.setItem('auto_apply_discount', 'FIRST10'); navigator.clipboard.writeText('FIRST10'); document.getElementById('welcome-popup-overlay').style.display='none'; var t=document.createElement('div'); t.className='coupon-toast'; t.innerHTML='รับคูปองสำเร็จ'; document.body.appendChild(t); setTimeout(function(){t.classList.add('show')},10); setTimeout(function(){t.classList.remove('show'); setTimeout(function(){t.remove()},400)},2500);" style="max-width: 320px; width: 100%;">
+          <button class="welcome-claim-btn" onclick="localStorage.setItem('auto_apply_discount', 'BEAR05'); navigator.clipboard.writeText('BEAR05'); document.getElementById('welcome-popup-overlay').style.display='none'; var t=document.createElement('div'); t.className='coupon-toast'; t.innerHTML='รับคูปองสำเร็จ'; document.body.appendChild(t); setTimeout(function(){t.classList.add('show')},10); setTimeout(function(){t.classList.remove('show'); setTimeout(function(){t.remove()},400)},2500);" style="max-width: 320px; width: 100%;">
             กดรับคูปองส่วนลด
           </button>
         </div>
