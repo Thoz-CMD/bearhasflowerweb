@@ -3083,6 +3083,10 @@ body::before {
 }
 
 @media (max-width: 520px) {
+  .sticky-bottom {
+    display: flex !important;
+  }
+
   .delivery-datetime-row {
     grid-template-columns: 1fr 1fr;
     gap: 12px;
@@ -3272,7 +3276,7 @@ body::before {
 
   /* replaced by sticky-bottom */
   .sticky-bottom {
-    display: flex;
+    display: flex !important;
   }
 
   .page-wrap {
