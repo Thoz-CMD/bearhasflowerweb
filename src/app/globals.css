@@ -482,6 +482,10 @@ body::before {
 }
 
 @media (min-width: 768px) {
+  .sticky-bottom {
+    display: none !important;
+  }
+
   .section-two-content {
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 24px;
@@ -2606,7 +2610,7 @@ body::before {
 
 /* ===== Sticky Bottom Bar (Mobile) ===== */
 .sticky-bottom {
-  display: none;
+  display: flex;
   position: fixed;
   bottom: 0;
   left: 0;
