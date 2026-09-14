@@ -406,46 +406,11 @@ function ArtificialFlowersContent() {
                 ) : (
                   '🌸'
                 )}
-                <span>{presetProduct.name}</span>
+                <span>{presetProduct.description || presetProduct.name}</span>
               </span>
             )}
           </div>
         </div>
-
-        {/* Product Description */}
-        {presetProduct?.description && (
-          <div style={{
-            background: 'rgba(255, 252, 253, 0.9)',
-            borderRadius: '16px',
-            padding: '16px 20px',
-            marginTop: '16px',
-            border: '1px solid rgba(219, 138, 158, 0.15)',
-            boxShadow: '0 2px 8px rgba(80, 50, 57, 0.04)'
-          }}>
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              marginBottom: '8px'
-            }}>
-              <span style={{ fontSize: '1rem' }}>📝</span>
-              <span style={{
-                fontSize: '0.9rem',
-                fontWeight: '700',
-                color: '#5c4738'
-              }}>รายละเอียดสินค้า</span>
-            </div>
-            <p style={{
-              fontSize: '0.88rem',
-              color: '#6d5d63',
-              lineHeight: '1.6',
-              margin: 0,
-              whiteSpace: 'pre-wrap'
-            }}>
-              {presetProduct.description}
-            </p>
-          </div>
-        )}
 
         {/* Selection Bar (Desktop/iPad) */}
         <div className="selection-bar">
