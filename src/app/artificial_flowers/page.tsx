@@ -152,13 +152,13 @@ function ArtificialFlowersContent() {
     }
   }, [showToast]);
 
-  // Validate delivery date - reset if it's before tomorrow
+  // Validate delivery date - reset if it's before the minimum allowed date
   useEffect(() => {
-    const tmr = getTomorrowStr();
-    if (state.deliveryDate && state.deliveryDate < tmr) {
+    const minAllowedDate = isPresetReadyToShip ? getTodayStr() : getTomorrowStr();
+    if (state.deliveryDate && state.deliveryDate < minAllowedDate) {
       setState(prev => ({ ...prev, deliveryDate: '', deliveryTime: '' }));
     }
-  }, [state.deliveryDate]);
+  }, [state.deliveryDate, isPresetReadyToShip]);
 
   const updateField = useCallback((field: keyof ArtificialState, value: string) => {
     setState(prev => ({ ...prev, [field]: value }));
@@ -240,10 +240,25 @@ function ArtificialFlowersContent() {
       showToast('กรุณากรอกข้อมูลจัดส่งให้ครบถ้วน');
       return;
     }
+    const todayStr = getTodayStr();
     const tomorrowStr = getTomorrowStr();
+    const minAllowedDate = isPresetReadyToShip ? todayStr : tomorrowStr;
+    
     if (state.deliveryDate === tomorrowStr && state.deliveryTime < '09:00') {
       showToast('หากจัดส่งวันพรุ่งนี้ กรุณาเลือกเวลารับตั้งแต่ 09:00 น. เป็นต้นไป');
       return;
+    }
+    
+    // For same-day delivery (ready to ship products), check minimum time
+    if (isPresetReadyToShip && state.deliveryDate === todayStr) {
+      const now = new Date();
+      const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+      const minTimeForToday = minDateTime ? minDateTime.time : '09:00';
+      
+      if (state.deliveryTime < minTimeForToday) {
+        showToast(`หากจัดส่งวันนี้ กรุณาเลือกเวลารับตั้งแต่ ${minTimeForToday} น. เป็นต้นไป`);
+        return;
+      }
     }
 
     if (isPresetReadyToShip && Number(presetProduct.stockQuantity || 0) <= 0) {
@@ -317,6 +332,11 @@ function ArtificialFlowersContent() {
   }, [router]);
 
   const tomorrowStr = useMemo(() => getTomorrowStr(), []);
+  const todayStr = useMemo(() => getTodayStr(), []);
+  const actualMinDate = useMemo(() => {
+    // If ready to ship, allow same day delivery
+    return isPresetReadyToShip ? todayStr : tomorrowStr;
+  }, [isPresetReadyToShip, todayStr, tomorrowStr]);
   const minDateTime = useMemo(() => {
     if (presetProduct?.badge) {
       return getMinDateTimeFromBadge(presetProduct.badge);
@@ -464,7 +484,7 @@ function ArtificialFlowersContent() {
                   id="ipt-date"
                   placeholder="เลือกวันที่"
                   value={state.deliveryDate || undefined}
-                  minDate={tomorrowStr}
+                  minDate={actualMinDate}
                   minDateTime={minDateTime}
                   onChange={handleDeliveryDateChange}
                   style={deliveryInputStyle}
@@ -651,7 +671,15 @@ export default function ArtificialFlowers() {
   );
 }
 
-// Utility function
+// Utility functions
+function getTodayStr(): string {
+  const d = new Date();
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 function getTomorrowStr(): string {
   const d = new Date();
   d.setDate(d.getDate() + 1);
