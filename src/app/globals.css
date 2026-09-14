@@ -3293,6 +3293,14 @@ body::before {
     font-size: .72rem;
   }
 
+  .summary-chip strong {
+    font-size: .75rem;
+  }
+
+  .summary-chip div {
+    font-size: .65rem !important;
+  }
+
   .step-circle {
     width: 36px;
     height: 36px;
