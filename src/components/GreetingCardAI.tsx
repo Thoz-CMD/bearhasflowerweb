@@ -444,6 +444,29 @@ export default function GreetingCardAI({ onSelect }: GreetingCardAIProps) {
           border-radius: 12px;
           margin-bottom: 12px;
         }
+
+        /* Mobile responsive */
+        @media (max-width: 520px) {
+          .greeting-trigger-text h4 {
+            font-size: 0.8rem;
+          }
+          .greeting-trigger-text p {
+            font-size: 0.68rem;
+          }
+          .greeting-badge {
+            font-size: 0.55rem;
+            padding: 2px 6px;
+          }
+          .greeting-trigger-icon {
+            width: 36px;
+            height: 36px;
+            font-size: 1.1rem;
+          }
+          .greeting-trigger-btn {
+            padding: 10px 14px;
+            gap: 10px;
+          }
+        }
       `}</style>
 
       {/* Trigger Button */}
