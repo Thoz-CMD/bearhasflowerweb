@@ -3084,7 +3084,6 @@ body::before {
 
 @media (max-width: 520px) {
   .delivery-datetime-row {
-    display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 12px;
   }
