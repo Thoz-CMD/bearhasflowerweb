@@ -133,13 +133,6 @@ function ArtificialFlowersContent() {
 
   useEffect(() => {
     if (presetProduct && !isLoading) {
-      // Debug: log product data
-      console.log('Preset Product Data:', {
-        name: presetProduct.name,
-        description: presetProduct.description,
-        hasDescription: Boolean(presetProduct.description)
-      });
-      
       // Check stock for ready-to-ship products
       if (presetProduct.readyToShip && Number(presetProduct.stockQuantity || 0) <= 0) {
         showToast('สินค้าหมดชั่วคราว');
@@ -403,7 +396,7 @@ function ArtificialFlowersContent() {
                 {isLoading ? 'กำลังโหลดข้อมูลสินค้า...' : 'กำลังโหลด...'}
               </span>
             ) : (
-              <span className="summary-chip" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span className="summary-chip" style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                 {presetProduct.coverImage ? (
                   <img
                     src={presetProduct.coverImage}
@@ -413,10 +406,13 @@ function ArtificialFlowersContent() {
                 ) : (
                   '🌸'
                 )}
-                <span>
-                  {presetProduct.description && presetProduct.description.trim() 
-                    ? presetProduct.description 
-                    : presetProduct.name || 'ดอกไม้ประดิษฐ์'}
+                <span style={{ flex: 1, minWidth: '150px' }}>
+                  <strong>{presetProduct.name}</strong>
+                  {presetProduct.description && (
+                    <div style={{ fontSize: '0.8rem', color: '#666', marginTop: '2px', lineHeight: '1.4' }}>
+                      {presetProduct.description}
+                    </div>
+                  )}
                 </span>
               </span>
             )}
