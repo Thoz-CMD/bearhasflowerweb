@@ -133,6 +133,13 @@ function ArtificialFlowersContent() {
 
   useEffect(() => {
     if (presetProduct && !isLoading) {
+      // Debug: log product data
+      console.log('Preset Product Data:', {
+        name: presetProduct.name,
+        description: presetProduct.description,
+        hasDescription: Boolean(presetProduct.description)
+      });
+      
       // Check stock for ready-to-ship products
       if (presetProduct.readyToShip && Number(presetProduct.stockQuantity || 0) <= 0) {
         showToast('สินค้าหมดชั่วคราว');
@@ -406,7 +413,11 @@ function ArtificialFlowersContent() {
                 ) : (
                   '🌸'
                 )}
-                <span>{presetProduct.description || presetProduct.name}</span>
+                <span>
+                  {presetProduct.description && presetProduct.description.trim() 
+                    ? presetProduct.description 
+                    : presetProduct.name || 'ดอกไม้ประดิษฐ์'}
+                </span>
               </span>
             )}
           </div>
