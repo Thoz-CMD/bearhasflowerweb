@@ -360,7 +360,7 @@ function VelvetWireContent() {
                 {isLoading ? 'กำลังโหลดข้อมูลสินค้า...' : 'กำลังโหลด...'}
               </span>
             ) : (
-              <span className="summary-chip" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span className="summary-chip" style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                 {presetProduct.coverImage ? (
                   <img
                     src={presetProduct.coverImage}
@@ -370,7 +370,14 @@ function VelvetWireContent() {
                 ) : (
                   '🌸'
                 )}
-                <span>{presetProduct.name}</span>
+                <span style={{ flex: 1, minWidth: '150px' }}>
+                  <strong>{presetProduct.name}</strong>
+                  {presetProduct.description && (
+                    <div style={{ fontSize: '0.8rem', color: '#666', marginTop: '2px', lineHeight: '1.4' }}>
+                      {presetProduct.description}
+                    </div>
+                  )}
+                </span>
               </span>
             )}
           </div>
