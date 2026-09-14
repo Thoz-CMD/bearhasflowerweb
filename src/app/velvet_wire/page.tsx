@@ -591,7 +591,7 @@ function VelvetWireContent() {
       </div>
 
       {/* Sticky Bottom Bar (Mobile) */}
-      <div className="sticky-bottom" id="sticky-bottom">
+      <div className="sticky-bottom" id="sticky-bottom" style={{ display: 'flex' }}>
         <div className="sticky-price">
           <span id="sticky-price-val">{totalPrice.toLocaleString()}</span>
           <small>บาท</small>
