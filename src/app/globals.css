@@ -2615,7 +2615,8 @@ body::before {
   bottom: 0;
   left: 0;
   right: 0;
-  z-index: 80;
+  width: 100%;
+  z-index: 9999;
   background: var(--glass-bg);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
@@ -2625,6 +2626,8 @@ body::before {
   gap: 12px;
   align-items: center;
   justify-content: space-between;
+  visibility: visible;
+  opacity: 1;
 }
 
 .sticky-price {
@@ -3087,10 +3090,6 @@ body::before {
 }
 
 @media (max-width: 520px) {
-  .sticky-bottom {
-    display: flex !important;
-  }
-
   .delivery-datetime-row {
     grid-template-columns: 1fr 1fr;
     gap: 12px;
@@ -3274,13 +3273,9 @@ body::before {
     padding-bottom: 0;
   }
 
+  /* replaced by sticky-bottom (hidden on desktop) */
   .selection-bar {
     display: none;
-  }
-
-  /* replaced by sticky-bottom */
-  .sticky-bottom {
-    display: flex !important;
   }
 
   .page-wrap {
