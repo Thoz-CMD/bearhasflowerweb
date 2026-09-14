@@ -3084,12 +3084,13 @@ body::before {
 
 @media (max-width: 520px) {
   .delivery-datetime-row {
-    grid-template-columns: 1fr;
-    gap: 0;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
   }
 
   .delivery-datetime-row .form-group {
-    margin-bottom: 20px;
+    margin-bottom: 0;
   }
 
   .delivery-datetime-row .form-group:last-child {
