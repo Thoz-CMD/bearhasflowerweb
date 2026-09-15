@@ -424,7 +424,7 @@ function VelvetWireContent() {
                 e.currentTarget.style.boxShadow = '0 4px 16px rgba(248, 187, 208, 0.38)';
               }}
             >
-              <span>💬</span> สอบถามเพิ่มเติม
+              สอบถามเพิ่มเติม
             </button>
             <button
               className="btn-next"
@@ -652,7 +652,7 @@ function VelvetWireContent() {
               gap: '6px'
             }}
           >
-            <span>💬</span> สอบถาม
+            สอบถาม
           </button>
           <button
             className="sticky-next"
