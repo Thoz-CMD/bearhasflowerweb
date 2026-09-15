@@ -430,6 +430,33 @@ function ArtificialFlowersContent() {
           </div>
           <div className="btn-group">
             <button
+              className="btn-inquiry"
+              onClick={() => window.open('https://line.me/R/ti/p/@bearhasflower', '_blank')}
+              style={{ 
+                padding: '10px 24px', 
+                background: '#fff',
+                border: '2px solid var(--rose-gold)',
+                color: 'var(--rose-gold)',
+                borderRadius: '50px',
+                fontWeight: '700',
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}
+              onMouseOver={(e) => {
+                e.currentTarget.style.background = 'var(--rose-gold)';
+                e.currentTarget.style.color = '#fff';
+              }}
+              onMouseOut={(e) => {
+                e.currentTarget.style.background = '#fff';
+                e.currentTarget.style.color = 'var(--rose-gold)';
+              }}
+            >
+              <span>💬</span> สอบถามเพิ่มเติม
+            </button>
+            <button
               className="btn-next"
               onClick={finishOrder}
               disabled={isStoreClosedNow}
@@ -656,10 +683,31 @@ function ArtificialFlowersContent() {
         </div>
         <div className="sticky-btn-row">
           <button
+            className="btn-inquiry-mobile"
+            onClick={() => window.open('https://line.me/R/ti/p/@bearhasflower', '_blank')}
+            style={{ 
+              flex: 1,
+              padding: '14px 16px',
+              background: '#fff',
+              border: '2px solid var(--rose-gold)',
+              color: 'var(--rose-gold)',
+              borderRadius: '50px',
+              fontWeight: '700',
+              fontSize: '0.9rem',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '6px'
+            }}
+          >
+            <span>💬</span> สอบถาม
+          </button>
+          <button
             className="sticky-next"
             onClick={finishOrder}
             disabled={isStoreClosedNow}
-            style={{ width: '100%', opacity: isStoreClosedNow ? 0.5 : 1, cursor: isStoreClosedNow ? 'not-allowed' : 'pointer' }}
+            style={{ flex: 1, opacity: isStoreClosedNow ? 0.5 : 1, cursor: isStoreClosedNow ? 'not-allowed' : 'pointer' }}
           >
             เพิ่มลงตะกร้า
           </button>
