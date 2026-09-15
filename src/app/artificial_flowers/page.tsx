@@ -672,7 +672,8 @@ function ArtificialFlowersContent() {
             style={{ 
               flex: 1,
               background: '#FFB6C1',
-              borderColor: '#FFB6C1'
+              borderColor: '#FFB6C1',
+              fontSize: '0.85rem'
             }}
           >
             สอบถาม
@@ -686,7 +687,8 @@ function ArtificialFlowersContent() {
               opacity: isStoreClosedNow ? 0.5 : 1, 
               cursor: isStoreClosedNow ? 'not-allowed' : 'pointer',
               whiteSpace: 'nowrap',
-              padding: '14px 8px'
+              padding: '14px 8px',
+              fontSize: '0.85rem'
             }}
           >
             เพิ่มลงตะกร้า
