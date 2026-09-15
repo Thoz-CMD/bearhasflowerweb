@@ -433,25 +433,31 @@ function ArtificialFlowersContent() {
               className="btn-inquiry"
               onClick={() => window.open('https://line.me/R/ti/p/@bearhasflower', '_blank')}
               style={{ 
-                padding: '10px 24px', 
-                background: '#fff',
-                border: '2px solid var(--rose-gold)',
-                color: 'var(--rose-gold)',
-                borderRadius: '50px',
-                fontWeight: '700',
+                minWidth: '44px',
+                minHeight: '44px',
+                padding: '0 24px',
+                borderRadius: '12px',
+                border: 'none',
+                background: '#f8bbd0',
+                color: '#fff',
+                fontFamily: "'Noto Sans Thai', sans-serif",
+                fontSize: '0.9rem',
+                fontWeight: '600',
                 cursor: 'pointer',
-                transition: 'all 0.2s',
+                boxShadow: '0 4px 16px rgba(248, 187, 208, 0.38)',
+                transition: 'all 0.3s',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '8px'
+                justifyContent: 'center',
+                gap: '6px'
               }}
               onMouseOver={(e) => {
-                e.currentTarget.style.background = 'var(--rose-gold)';
-                e.currentTarget.style.color = '#fff';
+                e.currentTarget.style.transform = 'translateY(-2px)';
+                e.currentTarget.style.boxShadow = '0 8px 24px rgba(248, 187, 208, 0.5)';
               }}
               onMouseOut={(e) => {
-                e.currentTarget.style.background = '#fff';
-                e.currentTarget.style.color = 'var(--rose-gold)';
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = '0 4px 16px rgba(248, 187, 208, 0.38)';
               }}
             >
               <span>💬</span> สอบถามเพิ่มเติม
@@ -687,14 +693,17 @@ function ArtificialFlowersContent() {
             onClick={() => window.open('https://line.me/R/ti/p/@bearhasflower', '_blank')}
             style={{ 
               flex: 1,
-              padding: '14px 16px',
-              background: '#fff',
-              border: '2px solid var(--rose-gold)',
-              color: 'var(--rose-gold)',
-              borderRadius: '50px',
+              minHeight: '48px',
+              padding: '0 24px',
+              borderRadius: '14px',
+              border: 'none',
+              background: '#f8bbd0',
+              color: '#fff',
+              fontFamily: "'Noto Sans Thai', sans-serif",
+              fontSize: '0.95rem',
               fontWeight: '700',
-              fontSize: '0.9rem',
               cursor: 'pointer',
+              boxShadow: '0 6px 20px rgba(248, 187, 208, 0.4)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
