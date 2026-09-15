@@ -718,7 +718,7 @@ function ArtificialFlowersContent() {
             disabled={isStoreClosedNow}
             style={{ flex: 1, opacity: isStoreClosedNow ? 0.5 : 1, cursor: isStoreClosedNow ? 'not-allowed' : 'pointer' }}
           >
-            เพิ่มลงตะกร้า
+            ตะกร้า
           </button>
         </div>
       </div>
