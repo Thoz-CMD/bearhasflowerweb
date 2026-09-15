@@ -434,8 +434,8 @@ function ArtificialFlowersContent() {
               onClick={() => window.open('https://line.me/R/ti/p/@bearhasflower', '_blank')}
               style={{ 
                 padding: '10px 24px',
-                background: '#fce4ec',
-                borderColor: '#fce4ec'
+                background: '#f8bbd0',
+                borderColor: '#f8bbd0'
               }}
             >
               สอบถามเพิ่มเติม
@@ -671,8 +671,8 @@ function ArtificialFlowersContent() {
             onClick={() => window.open('https://line.me/R/ti/p/@bearhasflower', '_blank')}
             style={{ 
               flex: 1,
-              background: '#fce4ec',
-              borderColor: '#fce4ec'
+              background: '#f8bbd0',
+              borderColor: '#f8bbd0'
             }}
           >
             สอบถาม
