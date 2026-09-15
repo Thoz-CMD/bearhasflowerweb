@@ -394,35 +394,9 @@ function VelvetWireContent() {
           </div>
           <div className="btn-group">
             <button
-              className="btn-inquiry"
+              className="btn-next"
               onClick={() => window.open('https://line.me/R/ti/p/@bearhasflower', '_blank')}
-              style={{ 
-                minWidth: '44px',
-                minHeight: '44px',
-                padding: '0 24px',
-                borderRadius: '12px',
-                border: 'none',
-                background: '#f8bbd0',
-                color: '#fff',
-                fontFamily: "'Noto Sans Thai', sans-serif",
-                fontSize: '0.9rem',
-                fontWeight: '600',
-                cursor: 'pointer',
-                boxShadow: '0 4px 16px rgba(248, 187, 208, 0.38)',
-                transition: 'all 0.3s',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '6px'
-              }}
-              onMouseOver={(e) => {
-                e.currentTarget.style.transform = 'translateY(-2px)';
-                e.currentTarget.style.boxShadow = '0 8px 24px rgba(248, 187, 208, 0.5)';
-              }}
-              onMouseOut={(e) => {
-                e.currentTarget.style.transform = 'translateY(0)';
-                e.currentTarget.style.boxShadow = '0 4px 16px rgba(248, 187, 208, 0.38)';
-              }}
+              style={{ padding: '10px 24px' }}
             >
               สอบถามเพิ่มเติม
             </button>
@@ -631,26 +605,9 @@ function VelvetWireContent() {
         </div>
         <div className="sticky-btn-row">
           <button
-            className="btn-inquiry-mobile"
+            className="sticky-next"
             onClick={() => window.open('https://line.me/R/ti/p/@bearhasflower', '_blank')}
-            style={{ 
-              flex: 1,
-              minHeight: '48px',
-              padding: '0 24px',
-              borderRadius: '14px',
-              border: 'none',
-              background: '#f8bbd0',
-              color: '#fff',
-              fontFamily: "'Noto Sans Thai', sans-serif",
-              fontSize: '0.95rem',
-              fontWeight: '700',
-              cursor: 'pointer',
-              boxShadow: '0 6px 20px rgba(248, 187, 208, 0.4)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '6px'
-            }}
+            style={{ flex: 1 }}
           >
             สอบถาม
           </button>
@@ -660,7 +617,7 @@ function VelvetWireContent() {
             disabled={isStoreClosedNow}
             style={{ flex: 1, opacity: isStoreClosedNow ? 0.5 : 1, cursor: isStoreClosedNow ? 'not-allowed' : 'pointer' }}
           >
-            ตะกร้า
+            เพิ่มลงตะกร้า
           </button>
         </div>
       </div>
