@@ -398,9 +398,8 @@ function VelvetWireContent() {
               onClick={() => window.open('https://line.me/R/ti/p/@bearhasflower', '_blank')}
               style={{ 
                 padding: '10px 24px',
-                background: '#fff',
-                borderColor: '#FFB6C1',
-                color: '#FFB6C1',
+                background: '#E8A4B2',
+                borderColor: '#E8A4B2',
                 outline: 'none'
               }}
             >
@@ -615,9 +614,8 @@ function VelvetWireContent() {
             onClick={() => window.open('https://line.me/R/ti/p/@bearhasflower', '_blank')}
             style={{ 
               flex: 1,
-              background: '#fff',
-              borderColor: '#FFB6C1',
-              color: '#FFB6C1',
+              background: '#E8A4B2',
+              borderColor: '#E8A4B2',
               fontSize: '0.85rem',
               outline: 'none'
             }}
