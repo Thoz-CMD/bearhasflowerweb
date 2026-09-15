@@ -396,7 +396,11 @@ function VelvetWireContent() {
             <button
               className="btn-next"
               onClick={() => window.open('https://line.me/R/ti/p/@bearhasflower', '_blank')}
-              style={{ padding: '10px 24px' }}
+              style={{ 
+                padding: '10px 24px',
+                background: '#FFB6C1',
+                borderColor: '#FFB6C1'
+              }}
             >
               สอบถามเพิ่มเติม
             </button>
@@ -607,7 +611,11 @@ function VelvetWireContent() {
           <button
             className="sticky-next"
             onClick={() => window.open('https://line.me/R/ti/p/@bearhasflower', '_blank')}
-            style={{ flex: 1 }}
+            style={{ 
+              flex: 1,
+              background: '#FFB6C1',
+              borderColor: '#FFB6C1'
+            }}
           >
             สอบถาม
           </button>
