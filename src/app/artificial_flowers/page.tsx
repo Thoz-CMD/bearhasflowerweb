@@ -431,18 +431,6 @@ function ArtificialFlowersContent() {
           <div className="btn-group">
             <button
               className="btn-next"
-              onClick={() => window.open('https://line.me/R/ti/p/@bearhasflower', '_blank')}
-              style={{ 
-                padding: '10px 24px',
-                background: '#E8A4B2',
-                borderColor: '#E8A4B2',
-                outline: 'none'
-              }}
-            >
-              สอบถามเพิ่มเติม
-            </button>
-            <button
-              className="btn-next"
               onClick={finishOrder}
               disabled={isStoreClosedNow}
               style={{ padding: '10px 30px', opacity: isStoreClosedNow ? 0.5 : 1, cursor: isStoreClosedNow ? 'not-allowed' : 'pointer' }}
@@ -669,29 +657,9 @@ function ArtificialFlowersContent() {
         <div className="sticky-btn-row">
           <button
             className="sticky-next"
-            onClick={() => window.open('https://line.me/R/ti/p/@bearhasflower', '_blank')}
-            style={{ 
-              flex: 1,
-              background: '#E8A4B2',
-              borderColor: '#E8A4B2',
-              fontSize: '0.85rem',
-              outline: 'none'
-            }}
-          >
-            สอบถาม
-          </button>
-          <button
-            className="sticky-next"
             onClick={finishOrder}
             disabled={isStoreClosedNow}
-            style={{ 
-              flex: 1, 
-              opacity: isStoreClosedNow ? 0.5 : 1, 
-              cursor: isStoreClosedNow ? 'not-allowed' : 'pointer',
-              whiteSpace: 'nowrap',
-              padding: '14px 8px',
-              fontSize: '0.85rem'
-            }}
+            style={{ opacity: isStoreClosedNow ? 0.5 : 1, cursor: isStoreClosedNow ? 'not-allowed' : 'pointer' }}
           >
             เพิ่มลงตะกร้า
           </button>
