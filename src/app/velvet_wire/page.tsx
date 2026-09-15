@@ -398,8 +398,8 @@ function VelvetWireContent() {
               onClick={() => window.open('https://line.me/R/ti/p/@bearhasflower', '_blank')}
               style={{ 
                 padding: '10px 24px',
-                background: '#f8bbd0',
-                borderColor: '#f8bbd0'
+                background: '#FFD1DC',
+                borderColor: '#FFD1DC'
               }}
             >
               สอบถามเพิ่มเติม
@@ -613,8 +613,8 @@ function VelvetWireContent() {
             onClick={() => window.open('https://line.me/R/ti/p/@bearhasflower', '_blank')}
             style={{ 
               flex: 1,
-              background: '#f8bbd0',
-              borderColor: '#f8bbd0'
+              background: '#FFD1DC',
+              borderColor: '#FFD1DC'
             }}
           >
             สอบถาม
