@@ -627,7 +627,8 @@ function VelvetWireContent() {
               flex: 1, 
               opacity: isStoreClosedNow ? 0.5 : 1, 
               cursor: isStoreClosedNow ? 'not-allowed' : 'pointer',
-              whiteSpace: 'nowrap'
+              whiteSpace: 'nowrap',
+              padding: '14px 8px'
             }}
           >
             เพิ่มลงตะกร้า
