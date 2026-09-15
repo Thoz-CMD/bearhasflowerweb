@@ -400,7 +400,8 @@ function VelvetWireContent() {
                 padding: '10px 24px',
                 background: '#fff',
                 borderColor: '#FFB6C1',
-                color: '#FFB6C1'
+                color: '#FFB6C1',
+                outline: 'none'
               }}
             >
               สอบถามเพิ่มเติม
@@ -617,7 +618,8 @@ function VelvetWireContent() {
               background: '#fff',
               borderColor: '#FFB6C1',
               color: '#FFB6C1',
-              fontSize: '0.85rem'
+              fontSize: '0.85rem',
+              outline: 'none'
             }}
           >
             สอบถาม
