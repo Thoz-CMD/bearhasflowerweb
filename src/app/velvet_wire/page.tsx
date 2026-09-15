@@ -398,8 +398,8 @@ function VelvetWireContent() {
               onClick={() => window.open('https://line.me/R/ti/p/@bearhasflower', '_blank')}
               style={{ 
                 padding: '10px 24px',
-                background: '#FFC1CC',
-                borderColor: '#FFC1CC'
+                background: '#FFB6C1',
+                borderColor: '#FFB6C1'
               }}
             >
               สอบถามเพิ่มเติม
@@ -613,8 +613,8 @@ function VelvetWireContent() {
             onClick={() => window.open('https://line.me/R/ti/p/@bearhasflower', '_blank')}
             style={{ 
               flex: 1,
-              background: '#FFC1CC',
-              borderColor: '#FFC1CC'
+              background: '#FFB6C1',
+              borderColor: '#FFB6C1'
             }}
           >
             สอบถาม
@@ -623,7 +623,12 @@ function VelvetWireContent() {
             className="sticky-next"
             onClick={finishOrder}
             disabled={isStoreClosedNow}
-            style={{ flex: 1, opacity: isStoreClosedNow ? 0.5 : 1, cursor: isStoreClosedNow ? 'not-allowed' : 'pointer' }}
+            style={{ 
+              flex: 1, 
+              opacity: isStoreClosedNow ? 0.5 : 1, 
+              cursor: isStoreClosedNow ? 'not-allowed' : 'pointer',
+              whiteSpace: 'nowrap'
+            }}
           >
             เพิ่มลงตะกร้า
           </button>
