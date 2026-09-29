@@ -667,6 +667,10 @@ export default function CartPage() {
         .total-label { font-size: 1rem; color: #a08a8e; }
         .total-value { font-size: 1.6rem; font-weight: 800; color: #db8a9e; }
         .checkout-btn { width: 100%; padding: 16px; background: #db8a9e; color: #fff; border: none; border-radius: 50px; font-size: 1.1rem; font-weight: 700; cursor: pointer; }
+        
+        @media (max-width: 768px) {
+          .checkout-btn { font-size: 0.95rem; }
+        }
 
         /* History */
         .order-list { display: flex; flex-direction: column; gap: 24px; }

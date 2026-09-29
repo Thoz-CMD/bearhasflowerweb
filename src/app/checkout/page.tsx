@@ -13,6 +13,8 @@ import { STORE_CLOSED_TOAST } from '@/lib/storeHours';
 const STORAGE_CART = 'bear_flower_cart';
 // บัญชี PromptPay ของร้านค้า (สามารถเปลี่ยนเป็นเบอร์โทร หรือ เลขบัตรประชาชนได้)
 const PROMPTPAY_ID = '0656144703'; // TODO: เปลี่ยนเป็นเบอร์พร้อมเพย์ของคุณ
+const SHOP_LINE_URL = 'https://line.me/R/ti/p/@145dmmit';
+type PaymentOption = 'deposit' | 'full' | 'thai_chuay_thai_plus';
 
 // ── Glitter Rose lookup maps ──
 const ROSE_COLORS_MAP: Record<string, string> = {
@@ -35,7 +37,7 @@ export default function CheckoutPage() {
   const [cartItems, setCartItems] = useState<any[]>([]);
   const [total, setTotal] = useState(0);
   const [deposit, setDeposit] = useState(0);
-  const [paymentOption, setPaymentOption] = useState<'deposit' | 'full'>('deposit');
+  const [paymentOption, setPaymentOption] = useState<PaymentOption>('deposit');
   const [isClient, setIsClient] = useState(false);
   const [payload, setPayload] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
@@ -78,6 +80,13 @@ export default function CheckoutPage() {
         const qOrders = query(collection(db, 'orders'), where('userId', '==', userId));
         const orderSnapshot = await getDocs(qOrders);
         const isNewUser = orderSnapshot.empty;
+        const usedCouponCodes = new Set<string>();
+        orderSnapshot.forEach((orderDoc) => {
+          const usedCode = orderDoc.data().discountCode;
+          if (typeof usedCode === 'string' && usedCode.trim()) {
+            usedCouponCodes.add(usedCode.trim().toUpperCase());
+          }
+        });
 
         const qCoupons = query(collection(db, 'coupons'), where('isActive', '==', true));
         const couponSnapshot = await getDocs(qCoupons);
@@ -90,6 +99,7 @@ export default function CheckoutPage() {
           if (data.expiryDate && data.expiryDate < todayStr) return;
           if (data.usageLimit && (data.usedCount || 0) >= data.usageLimit) return;
           if (data.isForNewCustomerOnly && !isNewUser) return;
+          if (data.limitOneUsePerCustomer !== false && data.code && usedCouponCodes.has(String(data.code).trim().toUpperCase())) return;
 
           list.push({
             id: docSnap.id,
@@ -99,6 +109,7 @@ export default function CheckoutPage() {
             minSpend: data.minSpend || 0,
             description: data.description || '',
             isForNewCustomerOnly: Boolean(data.isForNewCustomerOnly),
+            limitOneUsePerCustomer: data.limitOneUsePerCustomer !== false,
             label: data.description || (data.discountType === 'percent' ? `ลด ${data.discountValue}%` : `ลด ${data.discountValue} ฿`)
           });
         });
@@ -149,11 +160,26 @@ export default function CheckoutPage() {
     }
   }, []);
 
-  const handlePaymentOptionChange = (option: 'deposit' | 'full') => {
+  const handlePaymentOptionChange = (option: PaymentOption) => {
     setPaymentOption(option);
+    if (option === 'thai_chuay_thai_plus') {
+      setPayload('');
+      return;
+    }
     const amountToPay = option === 'full' ? total : deposit;
     const qrPayload = generatePayload(PROMPTPAY_ID, { amount: amountToPay });
     setPayload(qrPayload);
+  };
+
+  const hasUserUsedCoupon = async (code: string) => {
+    if (!userId || userId === 'guest') return false;
+    const normalizedCode = code.trim().toUpperCase();
+    const qOrders = query(collection(db, 'orders'), where('userId', '==', userId));
+    const orderSnapshot = await getDocs(qOrders);
+    return orderSnapshot.docs.some((orderDoc) => {
+      const usedCode = orderDoc.data().discountCode;
+      return typeof usedCode === 'string' && usedCode.trim().toUpperCase() === normalizedCode;
+    });
   };
 
   const handleToggleDiscount = async (code: string) => {
@@ -184,6 +210,15 @@ export default function CheckoutPage() {
 
     setIsApplyingDiscount(true);
     try {
+      if (coupon.limitOneUsePerCustomer !== false) {
+        const alreadyUsed = await hasUserUsedCoupon(coupon.code);
+        if (alreadyUsed) {
+          setDiscountError('คูปองนี้ใช้ได้ 1 สิทธิ์ต่อ 1 บัญชี และบัญชีนี้เคยใช้คูปองนี้แล้ว');
+          setIsApplyingDiscount(false);
+          return;
+        }
+      }
+
       if (coupon.isForNewCustomerOnly) {
         const q = query(collection(db, 'orders'), where('userId', '==', userId));
         const querySnapshot = await getDocs(q);
@@ -211,9 +246,13 @@ export default function CheckoutPage() {
       setAppliedCoupon(coupon);
       setDiscountSuccess(`ใช้คูปองส่วนลด "${coupon.code}" สำเร็จ (ลด ${discount.toLocaleString()} ฿)`);
 
-      const amountToPay = paymentOption === 'full' ? newTotal : newDeposit;
-      const qrPayload = generatePayload(PROMPTPAY_ID, { amount: amountToPay });
-      setPayload(qrPayload);
+      if (paymentOption === 'thai_chuay_thai_plus') {
+        setPayload('');
+      } else {
+        const amountToPay = paymentOption === 'full' ? newTotal : newDeposit;
+        const qrPayload = generatePayload(PROMPTPAY_ID, { amount: amountToPay });
+        setPayload(qrPayload);
+      }
     } catch (err) {
       console.error("Error verifying discount:", err);
       setDiscountError('เกิดข้อผิดพลาดในการตรวจสอบโค้ดส่วนลด');
@@ -231,9 +270,13 @@ export default function CheckoutPage() {
     setDiscountCodeInput('');
     setDiscountSuccess('');
     setDiscountError('');
-    const amountToPay = paymentOption === 'full' ? originalTotal : newDeposit;
-    const qrPayload = generatePayload(PROMPTPAY_ID, { amount: amountToPay });
-    setPayload(qrPayload);
+    if (paymentOption === 'thai_chuay_thai_plus') {
+      setPayload('');
+    } else {
+      const amountToPay = paymentOption === 'full' ? originalTotal : newDeposit;
+      const qrPayload = generatePayload(PROMPTPAY_ID, { amount: amountToPay });
+      setPayload(qrPayload);
+    }
   };
 
   const handleSlipUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -348,6 +391,16 @@ export default function CheckoutPage() {
     setIsProcessing(true);
 
     try {
+      if (appliedCoupon?.code && appliedCoupon.limitOneUsePerCustomer !== false) {
+        const alreadyUsed = await hasUserUsedCoupon(appliedCoupon.code);
+        if (alreadyUsed) {
+          handleRemoveDiscount();
+          window.alert('คูปองนี้ใช้ได้ 1 สิทธิ์ต่อ 1 บัญชี และบัญชีนี้เคยใช้คูปองนี้แล้ว');
+          setIsProcessing(false);
+          return;
+        }
+      }
+
       // Upload slip first
       const slipUrl = await uploadSlipToStorage();
       if (!slipUrl) {
@@ -368,7 +421,7 @@ export default function CheckoutPage() {
         }
 
         const itemDeposit = Math.ceil(itemTotal * 0.5);
-        const isFull = paymentOption === 'full';
+        const isFull = paymentOption === 'full' || paymentOption === 'thai_chuay_thai_plus';
         const itemPayAmount = isFull ? itemTotal : itemDeposit;
 
         const orderData = {
@@ -391,7 +444,7 @@ export default function CheckoutPage() {
           discountCode: appliedDiscountCode || null,
           discountAmount: itemDiscount,
           depositPaid: itemPayAmount,
-          paymentType: paymentOption, // 'full' or 'deposit'
+          paymentType: paymentOption,
           paymentSlipUrl: slipUrl,
           status: 'pending_verification', // รอตรวจสอบยอดเงิน
           createdAt: serverTimestamp(),
@@ -438,7 +491,13 @@ export default function CheckoutPage() {
     setIsProcessing(false);
   };
 
-  const currentPayAmount = paymentOption === 'full' ? total : deposit;
+  const currentPayAmount = paymentOption === 'full' || paymentOption === 'thai_chuay_thai_plus' ? total : deposit;
+  const isThaiChuayThaiPlus = paymentOption === 'thai_chuay_thai_plus';
+  const paymentTitle = isThaiChuayThaiPlus
+    ? 'ชำระผ่านไทยช่วยไทยพลัส+'
+    : paymentOption === 'full'
+      ? 'ชำระเงินเต็มจำนวน (100%)'
+      : 'ชำระเงินมัดจำ (50%)';
 
   if (!isClient) return null;
 
@@ -501,6 +560,13 @@ export default function CheckoutPage() {
           animation: fadeUp 0.5s ease-out;
         }
 
+        @media (min-width: 1024px) {
+          .content-wrap {
+            max-width: 960px;
+            padding: 32px 40px;
+          }
+        }
+
         .page-title {
           text-align: center;
           margin-bottom: 24px;
@@ -531,8 +597,13 @@ export default function CheckoutPage() {
         }
         .payment-options-grid {
           display: grid;
-          grid-template-columns: 1fr 1fr;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
           gap: 12px;
+        }
+        @media (max-width: 780px) {
+          .payment-options-grid {
+            grid-template-columns: 1fr 1fr;
+          }
         }
         @media (max-width: 520px) {
           .payment-options-grid {
@@ -627,6 +698,38 @@ export default function CheckoutPage() {
           display: inline-block;
           margin: 20px 0;
           border: 2px solid #fdf5f6;
+        }
+
+        .line-payment-panel {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 12px;
+          margin: 20px 0;
+        }
+
+        .line-payment-button {
+          width: 200px;
+          height: 200px;
+          border-radius: 32px;
+          border: none;
+          background: transparent;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          text-decoration: none;
+          transition: transform 0.2s ease;
+        }
+
+        .line-payment-button:hover {
+          transform: translateY(-3px);
+        }
+
+        .line-payment-icon {
+          width: 100%;
+          height: 100%;
+          object-fit: contain;
+          display: block;
         }
 
         .promptpay-logo {
@@ -998,8 +1101,14 @@ export default function CheckoutPage() {
 
       <div className="content-wrap">
         <div className="page-title">
-          <h1>{paymentOption === 'full' ? 'ชำระเงินเต็มจำนวน (100%)' : 'ชำระเงินมัดจำ (50%)'}</h1>
-          <p>สแกน QR Code เพื่อชำระเงินผ่านแอปธนาคาร<br />ระบบจะระบุจำนวนเงินให้โดยอัตโนมัติ</p>
+          <h1>{paymentTitle}</h1>
+          <p>
+            {isThaiChuayThaiPlus ? (
+              <>กดไอคอน LINE เพื่อทักร้านค้า<br />และขอชำระเงินผ่านไทยช่วยไทยพลัส+</>
+            ) : (
+              <>สแกน QR Code เพื่อชำระเงินผ่านแอปธนาคาร<br />ระบบจะระบุจำนวนเงินให้โดยอัตโนมัติ</>
+            )}
+          </p>
           <StoreClosedNotice />
         </div>
 
@@ -1038,31 +1147,66 @@ export default function CheckoutPage() {
                 </div>
               </div>
             </div>
+
+            <div
+              className={`payment-option-card ${paymentOption === 'thai_chuay_thai_plus' ? 'selected' : ''}`}
+              onClick={() => handlePaymentOptionChange('thai_chuay_thai_plus')}
+            >
+              <div className="payment-option-header">
+                <div className="payment-option-radio">
+                  {paymentOption === 'thai_chuay_thai_plus' && <div className="payment-option-radio-dot" />}
+                </div>
+                <div className="payment-option-label-wrap">
+                  <div className="payment-option-name">ไทยช่วยไทยพลัส+</div>
+                  <div className="payment-option-desc">ทัก LINE ร้านค้าเพื่อขอชำระเงินผ่านไทยช่วยไทยพลัส+</div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
         <div className="payment-card">
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '12px', gap: '4px' }}>
-            <span style={{ color: '#113566', fontWeight: 900, fontStyle: 'italic', fontSize: '1.4rem', fontFamily: 'Arial, sans-serif' }}>Prompt</span>
-            <span style={{ color: '#f47b20', fontWeight: 900, fontStyle: 'italic', fontSize: '1.4rem', fontFamily: 'Arial, sans-serif' }}>Pay</span>
-          </div>
+          {isThaiChuayThaiPlus ? (
+            <div className="line-payment-panel">
+              <a
+                className="line-payment-button"
+                href={SHOP_LINE_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="ทัก LINE ร้านค้าเพื่อขอชำระเงินผ่านไทยช่วยไทยพลัส+"
+              >
+                <img className="line-payment-icon" src="/images/logo/line.png" alt="LINE" />
+              </a>
+            </div>
+          ) : (
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '12px', gap: '4px' }}>
+                <span style={{ color: '#113566', fontWeight: 900, fontStyle: 'italic', fontSize: '1.4rem', fontFamily: 'Arial, sans-serif' }}>Prompt</span>
+                <span style={{ color: '#f47b20', fontWeight: 900, fontStyle: 'italic', fontSize: '1.4rem', fontFamily: 'Arial, sans-serif' }}>Pay</span>
+              </div>
 
-          <div className="qr-container">
-            {payload ? (
-              <QRCodeSVG value={payload} size={200} level="M" includeMargin={false} />
-            ) : (
-              <div style={{ width: 200, height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f5f5f5' }}>กำลังโหลด...</div>
-            )}
-          </div>
+              <div className="qr-container">
+                {payload ? (
+                  <QRCodeSVG value={payload} size={200} level="M" includeMargin={false} />
+                ) : (
+                  <div style={{ width: 200, height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f5f5f5' }}>กำลังโหลด...</div>
+                )}
+              </div>
+            </>
+          )}
 
           <div className="amount-display">
-            <div className="amount-label">{paymentOption === 'full' ? 'ยอดชำระเต็มจำนวน' : 'ยอดชำระมัดจำ'}</div>
+            <div className="amount-label">{isThaiChuayThaiPlus ? 'ยอดสำหรับแจ้งแอดมิน' : paymentOption === 'full' ? 'ยอดชำระเต็มจำนวน' : 'ยอดชำระมัดจำ'}</div>
             <div className="amount-value">{currentPayAmount.toLocaleString()} ฿</div>
           </div>
 
           <div className="info-box">
-            <h3><span style={{ fontSize: '1.2rem' }}>✨</span> เงื่อนไขการชำระเงิน</h3>
-            {paymentOption === 'full' ? (
+            <h3>เงื่อนไขการชำระเงิน</h3>
+            {isThaiChuayThaiPlus ? (
+              <p>
+                แคปหน้าจอ กดไอคอน LINE เพื่อทักร้านค้าและแจ้งว่าต้องการชำระผ่าน <strong>ไทยช่วยไทยพลัส+</strong> แอดมินจะแจ้งขั้นตอนการชำระเงินและตรวจสอบยอดให้ค่ะ
+              </p>
+            ) : paymentOption === 'full' ? (
               <p>
                 ชำระเงินเต็มจำนวน <strong>100% ({total.toLocaleString()} บาท)</strong> เพื่อยืนยันออเดอร์ให้ทางร้านเริ่มจัดเตรียมดอกไม้ของคุณทันที โดยหลังจากดอกไม้จัดเสร็จและพร้อมจัดส่งจะไม่มีค่าใช้จ่ายเพิ่มเติมค่ะ
               </p>
@@ -1178,16 +1322,16 @@ export default function CheckoutPage() {
           <div className="summary-row">
             <span>รูปแบบการชำระเงิน</span>
             <span style={{ fontWeight: 600, color: '#db8a9e' }}>
-              {paymentOption === 'full' ? 'ชำระเต็มจำนวน (100%)' : 'ชำระเงินมัดจำ (50%)'}
+              {isThaiChuayThaiPlus ? 'ไทยช่วยไทยพลัส+' : paymentOption === 'full' ? 'ชำระเต็มจำนวน (100%)' : 'ชำระเงินมัดจำ (50%)'}
             </span>
           </div>
           <div className="summary-row row-highlight">
-            <span>{paymentOption === 'full' ? 'ยอดชำระตอนนี้ (100%)' : 'ยอดมัดจำที่ชำระ (50%)'}</span>
+            <span>{isThaiChuayThaiPlus ? 'ยอดที่ต้องแจ้งแอดมิน' : paymentOption === 'full' ? 'ยอดชำระตอนนี้ (100%)' : 'ยอดมัดจำที่ชำระ (50%)'}</span>
             <span>{currentPayAmount.toLocaleString()} บาท</span>
           </div>
-          <div className="summary-row" style={{ color: paymentOption === 'full' ? '#4caf50' : '#a08a8e', fontSize: '0.85rem' }}>
+          <div className="summary-row" style={{ color: paymentOption === 'full' || isThaiChuayThaiPlus ? '#4caf50' : '#a08a8e', fontSize: '0.85rem' }}>
             <span>ยอดค้างชำระ (จ่ายเมื่อเสร็จ)</span>
-            <span>{paymentOption === 'full' ? '0 บาท' : `${(total - deposit).toLocaleString()} บาท`}</span>
+            <span>{paymentOption === 'full' || isThaiChuayThaiPlus ? '0 บาท' : `${(total - deposit).toLocaleString()} บาท`}</span>
           </div>
         </div>
 
@@ -1256,7 +1400,7 @@ export default function CheckoutPage() {
             <h2 className="modal-title">ขอบคุณสำหรับคำสั่งซื้อ</h2>
             <p className="modal-desc">
               ได้รับออร์เดอร์ของคุณแล้ว!<br />
-              {paymentOption === 'full' ? 'รอแอดมินตรวจสอบยอดเงิน' : 'รอแอดมินตรวจสอบยอดมัดจำ'}<br />
+              {isThaiChuayThaiPlus ? 'รอแอดมินตรวจสอบการชำระผ่านไทยช่วยไทยพลัส+' : paymentOption === 'full' ? 'รอแอดมินตรวจสอบยอดเงิน' : 'รอแอดมินตรวจสอบยอดมัดจำ'}<br />
               เมื่อยืนยันแล้วจะเริ่มจัดช่อดอกไม้ให้ทันที
             </p>
             <button className="modal-btn" onClick={() => window.location.href = '/cart?tab=history'}>

@@ -65,6 +65,21 @@ function ArtificialFlowersContent() {
   const [state, setState] = useState<ArtificialState>(initialState);
   const [isHydrated, setIsHydrated] = useState(false);
   const [openDecorationDropdown, setOpenDecorationDropdown] = useState<string | null>(null);
+  const [isProductImageOpen, setIsProductImageOpen] = useState(false);
+
+  const shareProduct = useCallback(async () => {
+    const shareData = {
+      title: presetProduct?.name || 'Bear has flower',
+      text: presetProduct?.description || 'ดูสินค้าจาก Bear has flower',
+      url: window.location.href,
+    };
+    if (navigator.share) {
+      await navigator.share(shareData).catch(() => undefined);
+      return;
+    }
+    await navigator.clipboard?.writeText(window.location.href);
+    showToast('คัดลอกลิงก์สินค้าแล้ว');
+  }, [presetProduct, showToast]);
 
   // Load saved state after hydration to prevent mismatch
   useEffect(() => {
@@ -136,8 +151,8 @@ function ArtificialFlowersContent() {
       // Check stock for ready-to-ship products
       if (presetProduct.readyToShip && Number(presetProduct.stockQuantity || 0) <= 0) {
         showToast('สินค้าหมดชั่วคราว');
-        setTimeout(() => router.push('/'), 900);
-        return;
+        const t = setTimeout(() => router.push('/'), 900);
+        return () => clearTimeout(t);
       }
       showToast('โหลดแบบสินค้าสำเร็จรูปเสร็จสิ้น!');
     }
@@ -148,17 +163,18 @@ function ArtificialFlowersContent() {
     if (typeof window === 'undefined') return;
     if (sessionStorage.getItem('order_success_toast')) {
       sessionStorage.removeItem('order_success_toast');
-      setTimeout(() => showToast('เพิ่มลงตะกร้าเรียบร้อยแล้ว!'), 300);
+      const t = setTimeout(() => showToast('เพิ่มลงตะกร้าเรียบร้อยแล้ว!'), 300);
+      return () => clearTimeout(t);
     }
   }, [showToast]);
 
-  // Validate delivery date - reset if it's before the minimum allowed date
+  // Validate delivery date - reset only if it's before today
   useEffect(() => {
-    const minAllowedDate = isPresetReadyToShip ? getTodayStr() : getTomorrowStr();
+    const minAllowedDate = getTodayStr();
     if (state.deliveryDate && state.deliveryDate < minAllowedDate) {
       setState(prev => ({ ...prev, deliveryDate: '', deliveryTime: '' }));
     }
-  }, [state.deliveryDate, isPresetReadyToShip]);
+  }, [state.deliveryDate]);
 
   const updateField = useCallback((field: keyof ArtificialState, value: string) => {
     setState(prev => ({ ...prev, [field]: value }));
@@ -242,18 +258,15 @@ function ArtificialFlowersContent() {
     }
     const todayStr = getTodayStr();
     const tomorrowStr = getTomorrowStr();
-    const minAllowedDate = isPresetReadyToShip ? todayStr : tomorrowStr;
     
     if (state.deliveryDate === tomorrowStr && state.deliveryTime < '09:00') {
       showToast('หากจัดส่งวันพรุ่งนี้ กรุณาเลือกเวลารับตั้งแต่ 09:00 น. เป็นต้นไป');
       return;
     }
     
-    // For same-day delivery (ready to ship products), check minimum time
-    if (isPresetReadyToShip && state.deliveryDate === todayStr) {
-      const now = new Date();
-      const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-      const minTimeForToday = minDateTime ? minDateTime.time : '09:00';
+    // For same-day delivery, check minimum time for every product type.
+    if (state.deliveryDate === todayStr) {
+      const minTimeForToday = getMinDeliveryTime(todayStr, minDateTime, tomorrowStr);
       
       if (state.deliveryTime < minTimeForToday) {
         showToast(`หากจัดส่งวันนี้ กรุณาเลือกเวลารับตั้งแต่ ${minTimeForToday} น. เป็นต้นไป`);
@@ -334,9 +347,8 @@ function ArtificialFlowersContent() {
   const tomorrowStr = useMemo(() => getTomorrowStr(), []);
   const todayStr = useMemo(() => getTodayStr(), []);
   const actualMinDate = useMemo(() => {
-    // If ready to ship, allow same day delivery
-    return isPresetReadyToShip ? todayStr : tomorrowStr;
-  }, [isPresetReadyToShip, todayStr, tomorrowStr]);
+    return todayStr;
+  }, [todayStr]);
   const minDateTime = useMemo(() => {
     if (presetProduct?.badge) {
       return getMinDateTimeFromBadge(presetProduct.badge);
@@ -387,9 +399,26 @@ function ArtificialFlowersContent() {
           <StoreClosedNotice />
         </div>
 
+        <div className="product-overview-card">
+          {presetProduct?.coverImage && (
+            <button
+              type="button"
+              className="product-hero-image"
+              aria-label={`ดูรูปภาพสินค้า ${presetProduct.name || ''} แบบเต็มจอ`}
+              onClick={() => setIsProductImageOpen(true)}
+            >
+              <img
+                src={presetProduct.coverImage}
+                alt={presetProduct.name || 'รูปภาพสินค้า'}
+                loading="eager"
+                decoding="async"
+              />
+            </button>
+          )}
+
         {/* Order Summary */}
         <div className="order-summary" id="order-summary" style={{ marginTop: '20px' }}>
-          <span className="summary-label">🛒 สินค้าที่เลือก</span>
+          <span className="summary-label">สินค้าที่เลือก</span>
           <div className="summary-chips" id="summary-chips">
             {!presetProduct ? (
               <span className="summary-empty">
@@ -419,6 +448,22 @@ function ArtificialFlowersContent() {
           </div>
         </div>
 
+        <div className="product-action-row">
+          <a className="product-inquiry-button" href="https://line.me/R/ti/p/@145dmmit" target="_blank" rel="noopener noreferrer">
+            สอบถามเพิ่มเติมเกี่ยวกับสินค้า
+          </a>
+          <button type="button" className="product-share-button" onClick={shareProduct} aria-label="แชร์สินค้า" title="แชร์สินค้า">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <circle cx="18" cy="5" r="3" />
+              <circle cx="6" cy="12" r="3" />
+              <circle cx="18" cy="19" r="3" />
+              <line x1="8.6" y1="13.5" x2="15.4" y2="17.5" />
+              <line x1="15.4" y1="6.5" x2="8.6" y2="10.5" />
+            </svg>
+          </button>
+        </div>
+        </div>
+
         {/* Selection Bar (Desktop/iPad) */}
         <div className="selection-bar">
           <div className="bar-step-info">
@@ -443,7 +488,7 @@ function ArtificialFlowersContent() {
         {/* Main Box - Delivery Form */}
         <div className="main-box" id="main-box" style={{ marginTop: '30px', justifyContent: 'flex-start' }}>
           <div className="qty-header">
-            <h3>📍 ข้อมูลการจัดส่ง</h3>
+            <h3>ข้อมูลการจัดส่ง</h3>
             <p>กรอกข้อมูลสำหรับการจัดส่งดอกไม้</p>
           </div>
 
@@ -665,6 +710,13 @@ function ArtificialFlowersContent() {
           </button>
         </div>
       </div>
+
+      {isProductImageOpen && presetProduct?.coverImage && (
+        <div className="product-image-lightbox" role="dialog" aria-modal="true" aria-label="รูปภาพสินค้าแบบเต็มจอ" onClick={() => setIsProductImageOpen(false)}>
+          <button type="button" className="product-image-lightbox-close" aria-label="ปิดรูปภาพ" onClick={() => setIsProductImageOpen(false)}>×</button>
+          <img src={presetProduct.coverImage} alt={presetProduct.name || 'รูปภาพสินค้าแบบเต็มจอ'} onClick={(event) => event.stopPropagation()} />
+        </div>
+      )}
     </>
   );
 }

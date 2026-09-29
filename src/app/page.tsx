@@ -1,6 +1,5 @@
 import ClientPage from './ClientPage';
 
-export const revalidate = 60; // Revalidate every 60 seconds for SSG cache
 
 function parseFirestoreFields(fields: any): any {
   const result: any = {};
@@ -20,16 +19,40 @@ function parseFirestoreFields(fields: any): any {
   return result;
 }
 
+function isReferenceProduct(product: any): boolean {
+  if (!product) return false;
+  if (product.id === 'UkaRyv67YDnCfTkud7EE') {
+    return true;
+  }
+  if (product.isReference === true || product.reference === true || product.hideFromHome === true) {
+    return true;
+  }
+  const type = String(product.type || product.productType || '').toLowerCase();
+  if (type === 'design_flower' || type === 'reference') {
+    return true;
+  }
+  const category = String(product.category || '').toLowerCase();
+  if (category === 'reference' || category === 'design_flower') {
+    return true;
+  }
+  const name = String(product.name || '').toLowerCase();
+  const desc = String(product.description || '').toLowerCase();
+  if (name.includes('reference') || desc.includes('reference')) {
+    return true;
+  }
+  return false;
+}
+
 async function getSSRProducts(): Promise<any[]> {
   try {
     const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'bearhasflower';
     const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY || 'AIzaSyCDJdBc2FkZTwsQw_gy7sBKRD056IgkM34';
-    const requiredFields = ['name', 'price', 'description', 'type', 'createdAt', 'likes', 'badge', 'readyToShip', 'stockQuantity', 'soldOut', 'coverImage'];
+    const requiredFields = ['name', 'price', 'description', 'type', 'createdAt', 'likes', 'badge', 'readyToShip', 'stockQuantity', 'soldOut', 'coverImage', 'isReference', 'hideFromHome', 'category'];
     const maskQuery = requiredFields.map((f) => `mask.fieldPaths=${f}`).join('&');
-    const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/products?key=${apiKey}&pageSize=100&${maskQuery}`;
+    const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/products?key=${apiKey}&pageSize=24&${maskQuery}`;
 
     const res = await fetch(url, {
-      cache: 'no-store',
+      next: { revalidate: 60 },
     });
 
     if (!res.ok) {
@@ -61,15 +84,16 @@ export default async function HomePage() {
 
   try {
     const products = await getSSRProducts();
+    const visibleProducts = products.filter((p: any) => !isReferenceProduct(p));
 
     // Sort by createdAt desc
-    products.sort((a, b) => {
+    visibleProducts.sort((a, b) => {
       const timeA = typeof a.createdAt === 'number' ? a.createdAt : new Date(a.createdAt || 0).getTime();
       const timeB = typeof b.createdAt === 'number' ? b.createdAt : new Date(b.createdAt || 0).getTime();
       return (timeB || 0) - (timeA || 0);
     });
 
-    initialProductHtml = products.map((p: any, idx: number) => {
+    initialProductHtml = visibleProducts.map((p: any, idx: number) => {
       const currentLikes = Math.max(0, Number(p.likes || 0));
       const priceValue = Number(p.price || 0);
 
@@ -81,7 +105,7 @@ export default async function HomePage() {
         productType = 'velvet';
       } else if (p.type === 'glitter_rose' || name.includes('กลิตเตอร์') || description.includes('กลิตเตอร์')) {
         productType = 'glitter';
-      } else if (name.includes('ดอกไม้ประดิษฐ์') || description.includes('ดอกไม้ประดิษฐ์') || name.includes('ประดิษฐ์') || description.includes('ประดิษฐ์')) {
+      } else if (p.type === 'artificial_flowers' || p.type === 'artificial_flower' || p.Artificial_flowers === true || name.includes('ดอกไม้ประดิษฐ์') || description.includes('ดอกไม้ประดิษฐ์') || name.includes('ประดิษฐ์') || description.includes('ประดิษฐ์')) {
         productType = 'artificial';
       }
 

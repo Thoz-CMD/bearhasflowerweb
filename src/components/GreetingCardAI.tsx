@@ -95,7 +95,11 @@ export default function GreetingCardAI({ onSelect }: GreetingCardAIProps) {
   };
 
   const handleCopy = (text: string, idx: number) => {
-    navigator.clipboard.writeText(text);
+    try {
+      navigator.clipboard.writeText(text);
+    } catch {
+      // Clipboard API unavailable or denied — silent fail
+    }
     setCopiedIdx(idx);
     setTimeout(() => setCopiedIdx(null), 2000);
     if (onSelect) onSelect(text);

@@ -10,7 +10,7 @@ type ProductStudioPageProps = {
   initialProductType?: ProductStudioType;
 };
 
-type ProductStudioType = 'glitter_rose' | 'velvet_flower' | 'artificial_flowers';
+type ProductStudioType = 'glitter_rose' | 'velvet_flower' | 'artificial_flowers' | 'Design_flower' | 'design_flower';
 
 export function ProductStudioPage({ forceManageMode = false, initialProductType }: ProductStudioPageProps) {
   const EDIT_KEY = 'bear_flower_edit_product';
@@ -29,6 +29,23 @@ export function ProductStudioPage({ forceManageMode = false, initialProductType 
       .filter(Boolean)
       .join(' ')
       .toLowerCase();
+
+    if (
+      product.id === 'UkaRyv67YDnCfTkud7EE' ||
+      product.isReference === true ||
+      product.reference === true ||
+      product.hideFromHome === true ||
+      product.type === 'Design_flower' ||
+      product.type === 'design_flower' ||
+      product.productType === 'Design_flower' ||
+      product.productType === 'design_flower' ||
+      product.category === 'reference' ||
+      product.category === 'design_flower' ||
+      searchableText.includes('reference') ||
+      searchableText.includes('ตาม reference')
+    ) {
+      return 'Design_flower';
+    }
 
     if (
       searchableText.includes('velvet') ||
@@ -59,8 +76,8 @@ export function ProductStudioPage({ forceManageMode = false, initialProductType 
     const isEditQuery = params.get('edit') === 'true';
     if (!isEditQuery) return null;
 
-    if (queryType === 'velvet_flower' || queryType === 'glitter_rose' || queryType === 'artificial_flowers') return queryType;
-    if (storedType === 'velvet_flower' || storedType === 'glitter_rose' || storedType === 'artificial_flowers') return storedType;
+    if (queryType === 'velvet_flower' || queryType === 'glitter_rose' || queryType === 'artificial_flowers' || queryType === 'Design_flower' || queryType === 'design_flower') return queryType as ProductStudioType;
+    if (storedType === 'velvet_flower' || storedType === 'glitter_rose' || storedType === 'artificial_flowers' || storedType === 'Design_flower' || storedType === 'design_flower') return storedType as ProductStudioType;
 
     if (editRaw) {
       try {
@@ -92,6 +109,19 @@ export function ProductStudioPage({ forceManageMode = false, initialProductType 
   });
   const [manageProducts, setManageProducts] = useState<any[]>([]);
   const [manageLoading, setManageLoading] = useState(false);
+
+  useEffect(() => {
+    if (forceManageMode) {
+      setViewMode('manage');
+      setSelectedType(null);
+      return;
+    }
+
+    if (initialProductType) {
+      setSelectedType(initialProductType);
+      setViewMode('form');
+    }
+  }, [forceManageMode, initialProductType]);
 
   // Auth & Admin check
   useEffect(() => {
@@ -227,7 +257,20 @@ export function ProductStudioPage({ forceManageMode = false, initialProductType 
         const snap = await getDocs(q);
         const items: any[] = [];
         snap.forEach((docSnap) => {
-          items.push({ id: docSnap.id, ...docSnap.data() });
+          const data: any = docSnap.data();
+          if (docSnap.id === 'UkaRyv67YDnCfTkud7EE' && (!data.isReference || data.type !== 'Design_flower')) {
+            updateDoc(doc(db, 'products', docSnap.id), {
+              type: 'Design_flower',
+              category: 'reference',
+              isReference: true,
+              hideFromHome: true
+            }).catch(console.error);
+            data.type = 'Design_flower';
+            data.category = 'reference';
+            data.isReference = true;
+            data.hideFromHome = true;
+          }
+          items.push({ id: docSnap.id, ...data });
         });
         if (active) setManageProducts(items);
       } catch (e) {
@@ -281,7 +324,8 @@ export function ProductStudioPage({ forceManageMode = false, initialProductType 
 
   // Main interactive logic is loaded when option is selected
   useEffect(() => {
-    if (isAdminUser !== true || (selectedType !== 'glitter_rose' && selectedType !== 'velvet_flower' && selectedType !== 'artificial_flowers') || viewMode !== 'form') return;
+    const isValidType = selectedType === 'glitter_rose' || selectedType === 'velvet_flower' || selectedType === 'artificial_flowers' || selectedType === 'Design_flower' || selectedType === 'design_flower';
+    if (isAdminUser !== true || !isValidType || viewMode !== 'form') return;
 
     const script = document.createElement('script');
     script.innerHTML = `
@@ -522,8 +566,9 @@ export function ProductStudioPage({ forceManageMode = false, initialProductType 
             selectedRibbonJfySolidVariant = cfg.selectedRibbonJfySolidVariant || null;
             selectedMessageCardVariant = cfg.selectedMessageCardVariant || null;
             basePrice = cfg.basePrice || 0;
-            current = PRODUCT_TYPE === 'velvet_flower' || PRODUCT_TYPE === 'artificial_flowers' ? 4 : 0;
-            maxStepReached = PRODUCT_TYPE === 'velvet_flower' || PRODUCT_TYPE === 'artificial_flowers' ? 4 : 4;
+            const isDirectType = PRODUCT_TYPE === 'velvet_flower' || PRODUCT_TYPE === 'artificial_flowers' || PRODUCT_TYPE === 'Design_flower' || PRODUCT_TYPE === 'design_flower';
+            current = isDirectType ? 4 : 0;
+            maxStepReached = isDirectType ? 4 : 4;
             saveState();
           } catch (err) {
             console.error('Failed to parse edit product', err);
@@ -576,8 +621,9 @@ export function ProductStudioPage({ forceManageMode = false, initialProductType 
       }
 
       function resetForm() {
-        current = PRODUCT_TYPE === 'velvet_flower' || PRODUCT_TYPE === 'artificial_flowers' ? 4 : 0;
-        maxStepReached = PRODUCT_TYPE === 'velvet_flower' || PRODUCT_TYPE === 'artificial_flowers' ? 4 : 0;
+        const isDirectType = PRODUCT_TYPE === 'velvet_flower' || PRODUCT_TYPE === 'artificial_flowers' || PRODUCT_TYPE === 'Design_flower' || PRODUCT_TYPE === 'design_flower';
+        current = isDirectType ? 4 : 0;
+        maxStepReached = isDirectType ? 4 : 0;
         selectedQty = null;
         selectedColors = [];
         selectedLayers = [];
@@ -1255,7 +1301,7 @@ export function ProductStudioPage({ forceManageMode = false, initialProductType 
         mainBox.style.justifyContent = 'flex-start';
         mainBox.innerHTML = \`
           <div class="qty-header">
-            <h3>✨ ข้อมูลและการแสดงผลสินค้า</h3>
+            <h3>ข้อมูลและการแสดงผลสินค้า</h3>
             <p>กรอกข้อมูลรายละเอียดของสินค้าที่จะนำไปแสดงบนหน้าแรก Our Products</p>
           </div>
           
@@ -1277,7 +1323,6 @@ export function ProductStudioPage({ forceManageMode = false, initialProductType 
                 <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px;">
                   \${DELIVERY_BADGE_OPTIONS.map((option, index) => \`
                     <button type="button" data-delivery-badge="\${option}" onclick="selectDeliveryBadge('\${option}')" class="badge-choice \${!productReadyToShip && getResolvedProductBadge() === option ? 'selected' : ''}" style="border: 1px solid \${!productReadyToShip && getResolvedProductBadge() === option ? 'var(--rose-gold)' : 'var(--glass-border)'}; background: \${!productReadyToShip && getResolvedProductBadge() === option ? 'rgba(219,138,158,0.13)' : '#fff'}; color: var(--deep-brown); border-radius: 12px; padding: 10px 8px; min-height: 52px; font-size: 0.82rem; font-weight: 700; cursor: \${productReadyToShip ? 'default' : 'pointer'}; box-shadow: \${!productReadyToShip && getResolvedProductBadge() === option ? '0 8px 18px rgba(219,138,158,0.14)' : 'none'}; transition: all 0.18s ease;">
-                      <span style="display: block; color: var(--rose-gold); font-size: 0.68rem; margin-bottom: 2px;">ตัวเลือก \${index + 1}</span>
                       \${option}
                     </button>
                   \`).join('')}
@@ -1328,9 +1373,10 @@ export function ProductStudioPage({ forceManageMode = false, initialProductType 
       }
 
       function updateUI() {
+        const isDirectType = PRODUCT_TYPE === 'velvet_flower' || PRODUCT_TYPE === 'artificial_flowers' || PRODUCT_TYPE === 'Design_flower' || PRODUCT_TYPE === 'design_flower';
         stepEls.forEach((el, i) => {
           el.classList.remove('active', 'done');
-          if (PRODUCT_TYPE === 'velvet_flower') {
+          if (isDirectType) {
             if (i < 4) el.style.display = 'none';
             else el.style.display = '';
           }
@@ -1348,7 +1394,7 @@ export function ProductStudioPage({ forceManageMode = false, initialProductType 
         else if (current === 4) renderStep5();
 
         const isLast = current === steps.length - 1;
-        const isFirst = PRODUCT_TYPE === 'velvet_flower' ? true : current === 0;
+        const isFirst = isDirectType ? true : current === 0;
 
         if (btnPrev) btnPrev.style.visibility = isFirst ? 'hidden' : 'visible';
         const nextBtnEl = document.getElementById('btn-next-step');
@@ -1362,7 +1408,8 @@ export function ProductStudioPage({ forceManageMode = false, initialProductType 
       }
 
       window.nextStep = function() {
-        if (PRODUCT_TYPE === 'velvet_flower') {
+        const isDirectType = PRODUCT_TYPE === 'velvet_flower' || PRODUCT_TYPE === 'artificial_flowers' || PRODUCT_TYPE === 'Design_flower' || PRODUCT_TYPE === 'design_flower';
+        if (isDirectType) {
           if (current === 4) {
             if (!productName.trim() || !productPrice.trim() || !productCoverImage) {
               showToast('กรุณากรอกข้อมูลที่จำเป็นให้ครบถ้วน (ชื่อสินค้า, ราคาสินค้า และรูปหน้าปก)');
@@ -1457,7 +1504,8 @@ export function ProductStudioPage({ forceManageMode = false, initialProductType 
       }
 
       window.prevStep = function() {
-        if (PRODUCT_TYPE === 'velvet_flower') {
+        const isDirectType = PRODUCT_TYPE === 'velvet_flower' || PRODUCT_TYPE === 'artificial_flowers' || PRODUCT_TYPE === 'Design_flower' || PRODUCT_TYPE === 'design_flower';
+        if (isDirectType) {
           return;
         }
         if (current > 0) {
@@ -1476,17 +1524,26 @@ export function ProductStudioPage({ forceManageMode = false, initialProductType 
           
           showToast('กำลังนำเข้าข้อมูลสินค้าเข้าร้าน...');
 
+          const isReference = PRODUCT_TYPE === 'Design_flower' || PRODUCT_TYPE === 'design_flower';
           const productData = {
             name: productName.trim(),
-            description: productDesc.trim() || (PRODUCT_TYPE === 'velvet_flower' ? 'ดอกไม้ลวดกำมะหยี่สั่งทำพิเศษตามแบบ' : PRODUCT_TYPE === 'artificial_flowers' ? 'ดอกไม้ประดิษฐ์สั่งทำพิเศษตามแบบ' : 'ช่อกุหลาบกลิตเตอร์สั่งทำพิเศษตามแบบ'),
+            description: productDesc.trim() || (
+              isReference ? 'ช่อดอกไม้สั่งทำพิเศษตามแบบ Reference' :
+              PRODUCT_TYPE === 'velvet_flower' ? 'ดอกไม้ลวดกำมะหยี่สั่งทำพิเศษตามแบบ' :
+              PRODUCT_TYPE === 'artificial_flowers' ? 'ดอกไม้ประดิษฐ์สั่งทำพิเศษตามแบบ' :
+              'ช่อกุหลาบกลิตเตอร์สั่งทำพิเศษตามแบบ'
+            ),
             price: parseFloat(productPrice),
             badge: getResolvedProductBadge(),
             coverImage: productCoverImage,
             type: PRODUCT_TYPE,
+            category: isReference ? 'reference' : (PRODUCT_TYPE === 'velvet_flower' ? 'velvet' : PRODUCT_TYPE === 'artificial_flowers' ? 'artificial' : 'glitter'),
+            isReference: isReference,
+            hideFromHome: isReference,
             readyToShip: productReadyToShip,
             stockQuantity: productReadyToShip ? parseInt(productStockQuantity, 10) : 0,
             soldOut: productReadyToShip ? parseInt(productStockQuantity, 10) <= 0 : false,
-            Artificial_flowers: productArtificialFlowers,
+            Artificial_flowers: isReference ? false : productArtificialFlowers,
             config: {
               selectedQty,
               selectedColors,
@@ -1637,6 +1694,52 @@ export function ProductStudioPage({ forceManageMode = false, initialProductType 
     return num.toLocaleString();
   };
 
+  const getProductShareUrl = (product: any) => {
+    if (typeof window === 'undefined') return '';
+    const productType = detectProductStudioType(product);
+    const routeByType: Record<ProductStudioType, string> = {
+      glitter_rose: '/glitter_rose',
+      velvet_flower: '/velvet_wire',
+      artificial_flowers: '/artificial_flowers',
+      Design_flower: '/artificial_flowers',
+      design_flower: '/artificial_flowers',
+    };
+    const url = new URL(routeByType[productType] || '/artificial_flowers', window.location.origin);
+    url.searchParams.set('preset', String(product.id || ''));
+    return url.toString();
+  };
+
+  const handleShareProduct = async (product: any) => {
+    if (typeof window === 'undefined') return;
+    const shareUrl = getProductShareUrl(product);
+    const alertFn = (window as any).showBeautifulAlert;
+
+    try {
+      const shareData = {
+        title: product.name || 'Bear has flower',
+        text: product.description || 'ดูสินค้าจาก Bear has flower',
+        url: shareUrl,
+      };
+
+      if (navigator.share) {
+        await navigator.share(shareData);
+        return;
+      }
+
+      if (navigator.clipboard) {
+        await navigator.clipboard.writeText(shareUrl);
+        alertFn?.('คัดลอกลิงก์สินค้าเรียบร้อยแล้ว', 'success', 'แชร์สินค้า');
+        return;
+      }
+
+      window.prompt('คัดลอกลิงก์สินค้า', shareUrl);
+    } catch (err: any) {
+      if (err?.name === 'AbortError') return;
+      console.error('Failed to share product:', err);
+      alertFn?.('ไม่สามารถแชร์สินค้าได้ กรุณาลองใหม่อีกครั้ง', 'error', 'แชร์ไม่สำเร็จ');
+    }
+  };
+
   const handleManageEdit = (product: any) => {
     if (typeof window === 'undefined') return;
     const productType = detectProductStudioType(product);
@@ -1646,6 +1749,8 @@ export function ProductStudioPage({ forceManageMode = false, initialProductType 
     sessionStorage.setItem(EDIT_TYPE_KEY, productType);
     localStorage.removeItem('bear_flower_create_prod_glitter_rose');
     localStorage.removeItem('bear_flower_create_prod_velvet_flower');
+    localStorage.removeItem('bear_flower_create_prod_artificial_flowers');
+    localStorage.removeItem('bear_flower_create_prod_Design_flower');
     window.location.assign(`/admin/create-product/${productType}?edit=true`);
   };
 
@@ -1784,9 +1889,14 @@ export function ProductStudioPage({ forceManageMode = false, initialProductType 
         }
         .options-grid {
           display: grid;
-          grid-template-columns: repeat(3, 1fr);
+          grid-template-columns: repeat(4, 1fr);
           gap: 30px;
           margin-top: 20px;
+        }
+        @media (max-width: 1100px) {
+          .options-grid {
+            grid-template-columns: repeat(2, 1fr);
+          }
         }
         @media (max-width: 600px) {
           .options-grid {
@@ -1820,6 +1930,39 @@ export function ProductStudioPage({ forceManageMode = false, initialProductType 
         .option-icon {
           font-size: 3.5rem;
           margin-bottom: 20px;
+        }
+        .option-image {
+          width: 100%;
+          aspect-ratio: 4 / 3;
+          border-radius: 16px;
+          object-fit: cover;
+          border: 1px solid rgba(219, 138, 158, 0.18);
+        }
+        .reference-option-image {
+          position: relative;
+          width: 100%;
+          aspect-ratio: 4 / 3;
+          margin-bottom: 20px;
+          overflow: hidden;
+          border-radius: 16px;
+        }
+        .reference-option-image .option-image {
+          height: 100%;
+          margin: 0;
+          border: 0;
+        }
+        .reference-option-overlay {
+          position: absolute;
+          inset: 0;
+          display: flex;
+          align-items: flex-end;
+          padding: 18px;
+          background: linear-gradient(to top, rgba(30, 10, 0, .72), transparent 70%);
+          color: #fff;
+          font-size: 1.1rem;
+          font-weight: 700;
+          line-height: 1.25;
+          text-align: left;
         }
         .option-card h3 {
           font-size: 1.3rem;
@@ -1923,47 +2066,7 @@ export function ProductStudioPage({ forceManageMode = false, initialProductType 
           grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
           gap: 22px;
         }
-        @media (max-width: 600px) {
-          .manage-grid {
-            /* Mobile: show product cards as 2 columns */
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 16px;
-          }
-          .manage-desc {
-            display: none;
-          }
-          .manage-footer {
-            /* Mobile: align price to left, buttons to right */
-            flex-direction: row;
-            align-items: center;
-            gap: 6px;
-            flex-wrap: nowrap;
-            justify-content: space-between;
-          }
-          .manage-price {
-            font-size: 0.90rem !important;
-            white-space: nowrap;
-            flex-shrink: 0;
-          }
-          .manage-price span {
-            font-size: 0.56rem !important;
-            margin-left: 2px;
-          }
-          .manage-actions {
-            display: flex;
-            justify-content: flex-end;
-            gap: 4px;
-            flex-shrink: 0;
-            margin-left: auto;
-          }
-          .manage-actions .admin-btn {
-            font-size: 0.65rem !important;
-            padding: 5px 7px;
-            border-radius: 10px;
-            white-space: nowrap;
-            line-height: 1.0;
-          }
-        }
+
         .manage-card {
           background: #fff;
           border-radius: 22px;
@@ -2046,6 +2149,72 @@ export function ProductStudioPage({ forceManageMode = false, initialProductType 
           gap: 6px;
           margin-left: auto;
         }
+        .manage-actions .admin-btn {
+          width: 34px;
+          height: 34px;
+          padding: 0;
+          border-radius: 12px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+        }
+        .manage-actions .admin-btn svg {
+          width: 16px;
+          height: 16px;
+          stroke-width: 2.2;
+        }
+        .manage-actions .admin-btn.share {
+          border-color: rgba(52, 152, 219, 0.38);
+          color: #2f75b5;
+          background: #f4f9ff;
+        }
+        .manage-actions .admin-btn.share:hover {
+          background: #eaf4ff;
+        }
+        @media (max-width: 600px) {
+          .manage-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 16px;
+          }
+          .manage-desc {
+            display: none;
+          }
+          .manage-footer {
+            flex-direction: row;
+            align-items: center;
+            gap: 6px;
+            flex-wrap: nowrap;
+            justify-content: space-between;
+          }
+          .manage-price {
+            font-size: 0.90rem !important;
+            white-space: nowrap;
+            flex-shrink: 0;
+          }
+          .manage-price span {
+            font-size: 0.56rem !important;
+            margin-left: 2px;
+          }
+          .manage-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 3px;
+            flex-shrink: 0;
+            margin-left: auto;
+          }
+          .manage-actions .admin-btn {
+            width: 22px !important;
+            height: 22px !important;
+            padding: 0 !important;
+            border-radius: 7px !important;
+          }
+          .manage-actions .admin-btn svg {
+            width: 13px !important;
+            height: 13px !important;
+            stroke-width: 2 !important;
+          }
+        }
       `}</style>
 
           {viewMode !== 'manage' ? (
@@ -2083,6 +2252,7 @@ export function ProductStudioPage({ forceManageMode = false, initialProductType 
                           <div className="manage-placeholder">🌹</div>
                         )}
                         {product.badge ? <span className={`manage-badge ${product.badge.includes('พร้อมส่ง') ? 'manage-badge-ready' : ''}`}>{product.badge}</span> : null}
+
                       </div>
                       <div className="manage-info">
                         <div className="manage-name">{product.name}</div>
@@ -2092,8 +2262,30 @@ export function ProductStudioPage({ forceManageMode = false, initialProductType 
                             {formatPrice(product.price)} <span>บาท</span>
                           </div>
                           <div className="manage-actions">
-                            <button className="admin-btn edit" onClick={() => handleManageEdit(product)}>แก้ไข</button>
-                            <button className="admin-btn delete" onClick={() => handleManageDelete(product.id)}>ลบ</button>
+                            <button className="admin-btn share" type="button" aria-label="แชร์สินค้า" title="แชร์สินค้า" onClick={() => handleShareProduct(product)}>
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                <circle cx="18" cy="5" r="3" />
+                                <circle cx="6" cy="12" r="3" />
+                                <circle cx="18" cy="19" r="3" />
+                                <path d="M8.59 13.51l6.83 3.98" />
+                                <path d="M15.41 6.51L8.59 10.49" />
+                              </svg>
+                            </button>
+                            <button className="admin-btn edit" type="button" aria-label="แก้ไขสินค้า" title="แก้ไขสินค้า" onClick={() => handleManageEdit(product)}>
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                <path d="M12 20h9" />
+                                <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                              </svg>
+                            </button>
+                            <button className="admin-btn delete" type="button" aria-label="ลบสินค้า" title="ลบสินค้า" onClick={() => handleManageDelete(product.id)}>
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                <path d="M3 6h18" />
+                                <path d="M8 6V4h8v2" />
+                                <path d="M19 6l-1 14H6L5 6" />
+                                <path d="M10 11v5" />
+                                <path d="M14 11v5" />
+                              </svg>
+                            </button>
                           </div>
                         </div>
                       </div>
@@ -2114,8 +2306,10 @@ export function ProductStudioPage({ forceManageMode = false, initialProductType 
                     window.location.href = '/admin/create-product/glitter_rose';
                   }
                 }}>
-                  <div className="option-icon">🌹</div>
-                  <h3>ช่อดอกกุหลาบกลิตเตอร์</h3>
+                  <div className="reference-option-image">
+                    <img className="option-image" src="/images/กุหลาบกลิดเตอร์.webp" alt="ช่อดอกกุหลาบกลิตเตอร์" />
+                    <div className="reference-option-overlay">ช่อดอกกุหลาบ<br />กลิตเตอร์</div>
+                  </div>
                   <p>สร้างช่อดอกกุหลาบกลิตเตอร์สำเร็จรูป โดยกำหนดจำนวนกุหลาบ สีของดอกไม้ รองช่อ กระดาษห่อ ทรงห่อ และของตกแต่ง พร้อมอัปโหลดภาพหน้าปกและตั้งราคาตามต้องการ</p>
                   <span className="option-badge active">เริ่มสร้างตัวเลือกสินค้า</span>
                 </div>
@@ -2125,8 +2319,10 @@ export function ProductStudioPage({ forceManageMode = false, initialProductType 
                     window.location.href = '/admin/create-product/velvet_flower';
                   }
                 }}>
-                  <div className="option-icon">🧸</div>
-                  <h3>ดอกไม้ลวดกำมะหยี่</h3>
+                  <div className="reference-option-image">
+                    <img className="option-image" src="/images/ดอกไม้ลวดกำมะหยี่.webp" alt="ดอกไม้ลวดกำมะหยี่" />
+                    <div className="reference-option-overlay">ดอกไม้ลวด<br />กำมะหยี่</div>
+                  </div>
                   <p>สร้างสินค้ากลุ่มดอกไม้ประดิษฐ์จากลวดกำมะหยี่ เช่น ดอกทานตะวัน ทิวลิป ดอกเดซี่ และการจัดช่อตกแต่งพิเศษ</p>
                   <span className="option-badge active">เริ่มสร้างตัวเลือกสินค้า</span>
                 </div>
@@ -2136,9 +2332,37 @@ export function ProductStudioPage({ forceManageMode = false, initialProductType 
                     window.location.href = '/admin/create-product/artificial_flowers';
                   }
                 }}>
-                  <div className="option-icon">🌸</div>
-                  <h3>ดอกไม้ประดิษฐ์</h3>
+                  <div className="reference-option-image">
+                    <img className="option-image" src="/images/ดอกไม้ประดิษฐ์.webp" alt="ดอกไม้ประดิษฐ์" />
+                    <div className="reference-option-overlay">ดอกไม้<br />ประดิษฐ์</div>
+                  </div>
                   <p>สร้างสินค้าดอกไม้ประดิษฐ์ที่มีตัวเลือกพิเศษ "ติดเพชรดอกไม้" และ "ติดเพชรตัวอักษร" เพื่อตกแต่งเพิ่มความพิเศษให้กับช่อดอกไม้</p>
+                  <span className="option-badge active">เริ่มสร้างตัวเลือกสินค้า</span>
+                </div>
+
+                <div
+                  className="option-card"
+                  data-reference-card="true"
+                  onClick={() => window.location.assign('/admin/create-product/Money_Bouquet')}
+                >
+                  <div className="reference-option-image">
+                    <img className="option-image" src="/images/ดอกไม้ธนบัตร.jpg" alt="ดอกไม้ธนบัตร" />
+                    <div className="reference-option-overlay">ดอกไม้ธนบัตร</div>
+                  </div>
+                  <p>สร้างสินค้ากลุ่มดอกไม้ธนบัตร พร้อมกำหนดชื่อ รายละเอียด ราคา และรูปหน้าปกสินค้า</p>
+                  <span className="option-badge active">เริ่มสร้างตัวเลือกสินค้า</span>
+                </div>
+
+                <div
+                  className="option-card"
+                  data-reference-card="true"
+                  onClick={() => window.location.assign('/admin/create-product/Design_flower')}
+                >
+                  <div className="reference-option-image">
+                    <img className="option-image" src="/images/Reference.jpg" alt="ออกแบบช่อดอกไม้ตาม Reference" />
+                    <div className="reference-option-overlay">ออกแบบช่อดอกไม้<br />ตาม Reference</div>
+                  </div>
+                  <p>สร้างสินค้าช่อดอกไม้ตาม Reference สำหรับงานสั่งทำพิเศษ พร้อมกำหนดชื่อ รายละเอียด ราคา และรูปหน้าปกสินค้า</p>
                   <span className="option-badge active">เริ่มสร้างตัวเลือกสินค้า</span>
                 </div>
               </div>
@@ -2153,19 +2377,19 @@ export function ProductStudioPage({ forceManageMode = false, initialProductType 
             <div class="stepper-outer">
               <div class="stepper-container" id="stepper">
                 <div class="stepper-line"></div>
-                <div class="step active" data-step="1" style="${selectedType === 'velvet_flower' || selectedType === 'artificial_flowers' ? 'display: none;' : ''}">
+                <div class="step active" data-step="1" style="${selectedType === 'velvet_flower' || selectedType === 'artificial_flowers' || selectedType === 'Design_flower' || selectedType === 'design_flower' ? 'display: none;' : ''}">
                   <div class="step-circle">1</div>
                   <span class="step-label">Rose</span>
                 </div>
-                <div class="step" data-step="2" style="${selectedType === 'velvet_flower' || selectedType === 'artificial_flowers' ? 'display: none;' : ''}">
+                <div class="step" data-step="2" style="${selectedType === 'velvet_flower' || selectedType === 'artificial_flowers' || selectedType === 'Design_flower' || selectedType === 'design_flower' ? 'display: none;' : ''}">
                   <div class="step-circle">2</div>
                   <span class="step-label">Secondary Layer</span>
                 </div>
-                <div class="step" data-step="3" style="${selectedType === 'velvet_flower' || selectedType === 'artificial_flowers' ? 'display: none;' : ''}">
+                <div class="step" data-step="3" style="${selectedType === 'velvet_flower' || selectedType === 'artificial_flowers' || selectedType === 'Design_flower' || selectedType === 'design_flower' ? 'display: none;' : ''}">
                   <div class="step-circle">3</div>
                   <span class="step-label">Paper</span>
                 </div>
-                <div class="step" data-step="4" style="${selectedType === 'velvet_flower' || selectedType === 'artificial_flowers' ? 'display: none;' : ''}">
+                <div class="step" data-step="4" style="${selectedType === 'velvet_flower' || selectedType === 'artificial_flowers' || selectedType === 'Design_flower' || selectedType === 'design_flower' ? 'display: none;' : ''}">
                   <div class="step-circle">4</div>
                   <span class="step-label step-label-no-wrap">Decorations</span>
                 </div>
@@ -2178,7 +2402,7 @@ export function ProductStudioPage({ forceManageMode = false, initialProductType 
 
             <!-- Elements Chosen Summary -->
             <div class="order-summary" id="order-summary">
-              <span class="summary-label">📋 องค์ประกอบช่อดอกไม้ที่กำหนด</span>
+              <span class="summary-label">องค์ประกอบช่อดอกไม้ที่กำหนด</span>
               <div class="summary-chips" id="summary-chips">
                 <span class="summary-empty">ยังไม่ได้เลือกองค์ประกอบสินค้า...</span>
               </div>

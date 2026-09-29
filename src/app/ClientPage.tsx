@@ -118,13 +118,18 @@ export default function ClientPage({ initialProductHtml }: { initialProductHtml?
           overlay.innerHTML = `
             <div class="beautiful-alert-modal">
               <div class="beautiful-alert-icon ${type}">${icon}</div>
-              <h3 class="beautiful-alert-title">${title}</h3>
-              <p class="beautiful-alert-message">${message}</p>
+              <h3 class="beautiful-alert-title"></h3>
+              <p class="beautiful-alert-message"></p>
               <div class="beautiful-alert-buttons">
                 <button class="beautiful-alert-btn confirm-btn">ตกลง</button>
               </div>
             </div>
           `;
+          // Set text safely via DOM (prevents XSS from Firestore data)
+          const titleEl = overlay.querySelector('.beautiful-alert-title');
+          const msgEl = overlay.querySelector('.beautiful-alert-message');
+          if (titleEl) titleEl.textContent = title;
+          if (msgEl) msgEl.textContent = message;
 
           document.body.appendChild(overlay);
           document.body.style.overflow = 'hidden';
@@ -160,14 +165,19 @@ export default function ClientPage({ initialProductHtml }: { initialProductHtml?
           overlay.innerHTML = `
             <div class="beautiful-alert-modal">
               <div class="beautiful-alert-icon warning">❓</div>
-              <h3 class="beautiful-alert-title">${title}</h3>
-              <p class="beautiful-alert-message">${message}</p>
+              <h3 class="beautiful-alert-title"></h3>
+              <p class="beautiful-alert-message"></p>
               <div class="beautiful-alert-buttons confirm-layout">
                 <button class="beautiful-alert-btn cancel-btn">ยกเลิก</button>
                 <button class="beautiful-alert-btn confirm-btn">ตกลง</button>
               </div>
             </div>
           `;
+          // Set text safely via DOM (prevents XSS)
+          const titleEl = overlay.querySelector('.beautiful-alert-title');
+          const msgEl = overlay.querySelector('.beautiful-alert-message');
+          if (titleEl) titleEl.textContent = title;
+          if (msgEl) msgEl.textContent = message;
 
           document.body.appendChild(overlay);
           document.body.style.overflow = 'hidden';
@@ -238,8 +248,8 @@ export default function ClientPage({ initialProductHtml }: { initialProductHtml?
     }
 
     const initApp = () => {
-      const PRODUCT_PRICE_MIN = 79;
-      const PRODUCT_PRICE_MAX = 2000;
+      let PRODUCT_PRICE_MIN = 0;
+      let PRODUCT_PRICE_MAX = 2000;
       const productState = (window as any).__homeProductsState || {
         allProducts: [],
         filters: {
@@ -310,6 +320,30 @@ export default function ClientPage({ initialProductHtml }: { initialProductHtml?
         return 0;
       };
 
+      const isReferenceProduct = (product: any) => {
+        if (!product) return false;
+        if (product.id === 'UkaRyv67YDnCfTkud7EE') {
+          return true;
+        }
+        if (product.isReference === true || product.reference === true || product.hideFromHome === true) {
+          return true;
+        }
+        const type = String(product.type || product.productType || '').toLowerCase();
+        if (type === 'design_flower' || type === 'reference') {
+          return true;
+        }
+        const category = String(product.category || '').toLowerCase();
+        if (category === 'reference' || category === 'design_flower') {
+          return true;
+        }
+        const name = String(product.name || '').toLowerCase();
+        const desc = String(product.description || '').toLowerCase();
+        if (name.includes('reference') || desc.includes('reference')) {
+          return true;
+        }
+        return false;
+      };
+
       const getProductTypeKey = (product: any) => {
         const name = String(product?.name || '').toLowerCase();
         const description = String(product?.description || '').toLowerCase();
@@ -323,7 +357,9 @@ export default function ClientPage({ initialProductHtml }: { initialProductHtml?
           || description.includes('กลิตเตอร์');
         if (isGlitter) return 'glitter';
 
-        const isArtificial = product.type === 'artificial_flower'
+        const isArtificial = product.type === 'artificial_flowers'
+          || product.type === 'artificial_flower'
+          || product.Artificial_flowers === true
           || name.includes('ดอกไม้ประดิษฐ์')
           || description.includes('ดอกไม้ประดิษฐ์')
           || name.includes('ประดิษฐ์')
@@ -380,8 +416,16 @@ export default function ClientPage({ initialProductHtml }: { initialProductHtml?
 
         if (minValue) minValue.textContent = formatPriceLabel(productState.filters.minPrice);
         if (maxValue) maxValue.textContent = formatPriceLabel(productState.filters.maxPrice);
-        if (minRange) minRange.value = String(productState.filters.minPrice);
-        if (maxRange) maxRange.value = String(productState.filters.maxPrice);
+        if (minRange) {
+          minRange.min = String(PRODUCT_PRICE_MIN);
+          minRange.max = String(PRODUCT_PRICE_MAX);
+          minRange.value = String(productState.filters.minPrice);
+        }
+        if (maxRange) {
+          maxRange.min = String(PRODUCT_PRICE_MIN);
+          maxRange.max = String(PRODUCT_PRICE_MAX);
+          maxRange.value = String(productState.filters.maxPrice);
+        }
 
         document.querySelectorAll('[data-filter-type]').forEach((button: any) => {
           const isActive = isFilterActive(button.dataset.filterType);
@@ -571,7 +615,9 @@ export default function ClientPage({ initialProductHtml }: { initialProductHtml?
           adminCache[p.id] = p;
 
           const isVelvet = productType === 'velvet';
-          const isArtificial = p.type === 'artificial_flowers';
+          const isArtificial = p.type === 'artificial_flowers'
+            || p.type === 'artificial_flower'
+            || p.Artificial_flowers === true;
           const targetUrl = isArtificial ? '/artificial_flowers?preset=' + p.id : (isVelvet ? '/velvet_wire?preset=' + p.id : '/glitter_rose?preset=' + p.id);
           const isReadyToShip = Boolean(p.readyToShip);
           const stockQuantity = Number(p.stockQuantity || 0);
@@ -584,10 +630,15 @@ export default function ClientPage({ initialProductHtml }: { initialProductHtml?
           const badgeClass = 'product-badge' + (isSoldOut ? ' product-badge-soldout' : (badgeText.includes('พร้อมส่ง') ? ' product-badge-ready' : ''));
           const productNav = `window.location.href='${targetUrl}'`;
 
+          const isImmediate = idx < 6;
+          const placeholderSrc = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+          const imgSrc = isImmediate ? (p.coverImage || placeholderSrc) : placeholderSrc;
+          const lazyAttr = (!isImmediate && p.coverImage) ? `data-lazy-src="${p.coverImage}"` : '';
+
           card.innerHTML = `
             <div class="product-image-wrap" ${isSoldOut ? '' : `onclick="${productNav}"`} style="cursor:${isSoldOut ? 'default' : 'pointer'}; position:relative; overflow:hidden;">
               ${p.coverImage
-              ? `<img src="${p.coverImage}" alt="${p.name}" class="product-image" loading="${idx < 2 ? 'eager' : 'lazy'}" decoding="async" style="width:100%; height:100%; object-fit:cover; position:absolute; top:0; left:0; border-radius:inherit;" />`
+              ? `<img src="${imgSrc}" ${lazyAttr} alt="${p.name}" class="product-image" loading="${idx < 2 ? 'eager' : 'lazy'}" decoding="async" style="width:100%; height:100%; object-fit:cover; position:absolute; top:0; left:0; border-radius:inherit;" />`
               : `<div class="product-placeholder">🌹</div>`
             }
               <span class="${badgeClass}">${badgeText}</span>
@@ -681,6 +732,24 @@ export default function ClientPage({ initialProductHtml }: { initialProductHtml?
           grid.appendChild(card);
         });
 
+        if (typeof window !== 'undefined' && 'IntersectionObserver' in window) {
+          const lazyImages = grid.querySelectorAll('img[data-lazy-src]');
+          const imageObserver = new IntersectionObserver((entries, observer) => {
+            entries.forEach((entry) => {
+              if (entry.isIntersecting) {
+                const img = entry.target as HTMLImageElement;
+                const realSrc = img.getAttribute('data-lazy-src');
+                if (realSrc) {
+                  img.src = realSrc;
+                  img.removeAttribute('data-lazy-src');
+                }
+                observer.unobserve(img);
+              }
+            });
+          }, { rootMargin: '350px 0px' });
+          lazyImages.forEach((img) => imageObserver.observe(img));
+        }
+
         initializeWishlistHearts();
       };
 
@@ -689,6 +758,7 @@ export default function ClientPage({ initialProductHtml }: { initialProductHtml?
 
         const filteredProducts = productState.allProducts
           .filter((product: any) => {
+            if (isReferenceProduct(product)) return false;
             const priceValue = Number(product._priceValue ?? product.price ?? 0);
             const productType = product._productType || getProductTypeKey(product);
             const shippingKey = product._shippingKey || getShippingFilterKey(product);
@@ -806,14 +876,16 @@ export default function ClientPage({ initialProductHtml }: { initialProductHtml?
         const grid = document.getElementById('main-product-grid');
         if (!grid) return;
 
-        if (!products || products.length === 0) {
+        const visibleProducts = (products || []).filter((product: any) => !isReferenceProduct(product));
+
+        if (!visibleProducts || visibleProducts.length === 0) {
           productState.allProducts = [];
           renderProductCards([]);
           syncProductFilterUI(0);
           return;
         }
 
-        productState.allProducts = products.map((product: any, index: number) => ({
+        productState.allProducts = visibleProducts.map((product: any, index: number) => ({
           ...product,
           _originalIndex: index,
           _createdAtMs: getProductCreatedAtMs(product),
@@ -822,6 +894,19 @@ export default function ClientPage({ initialProductHtml }: { initialProductHtml?
           _priceValue: Number(product.price || 0),
           _likesValue: Math.max(0, Number(product.likes || 0))
         }));
+
+        const productPrices = productState.allProducts
+          .map((product: any) => Number(product._priceValue ?? product.price ?? 0))
+          .filter((price: number) => Number.isFinite(price));
+        const highestProductPrice = productPrices.length > 0 ? Math.max(...productPrices) : PRODUCT_PRICE_MAX;
+        PRODUCT_PRICE_MAX = Math.max(2000, Math.ceil(highestProductPrice));
+
+        if (!Number.isFinite(productState.filters.minPrice) || productState.filters.minPrice > productState.filters.maxPrice) {
+          productState.filters.minPrice = PRODUCT_PRICE_MIN;
+        }
+        if (!Number.isFinite(productState.filters.maxPrice) || productState.filters.maxPrice < PRODUCT_PRICE_MAX) {
+          productState.filters.maxPrice = PRODUCT_PRICE_MAX;
+        }
 
         applyProductFilters(false);
       }
@@ -1394,7 +1479,7 @@ export default function ClientPage({ initialProductHtml }: { initialProductHtml?
       <span class="welcome-title">Welcome</span>
     </div>
     <p class="slogan">"ให้ดอกไม้ของเรา แทนความทรงจำที่ไม่มีวันเหี่ยวเฉา"</p>
-    
+    <a href="/design-bouquet" class="order-btn" id="design-btn">ออกแบบช่อดอกไม้</a>
   </section>
 
   <!-- Category Section -->
@@ -1427,6 +1512,14 @@ export default function ClientPage({ initialProductHtml }: { initialProductHtml?
         <div class="cat-deco"></div>
         <div class="cat-overlay">
           <h3 class="cat-title">ดอกไม้<br>ประดิษฐ์</h3>
+        </div>
+      </div>
+
+      <div class="category-card fade-in" id="cat-reference" style="animation-delay:.3s; cursor: pointer;">
+        <div class="cat-bg cat-bg-reference"></div>
+        <div class="cat-deco"></div>
+        <div class="cat-overlay">
+          <h3 class="cat-title">ดอกไม้ธนบัตร</h3>
         </div>
       </div>
 
@@ -1558,7 +1651,7 @@ export default function ClientPage({ initialProductHtml }: { initialProductHtml?
         </svg>
       </button>
       <div style="width: 100%; position: relative;">
-        <img src="/images/advert/ChatGPT Image 10 มิ.ย. 2569 21_10_52.png" alt="Welcome Discount" loading="lazy" decoding="async" style="width: 100%; height: auto; display: block;" />
+        <img src="/images/advert/ChatGPT Image 10 มิ.ย. 2569 21_10_52.webp" alt="Welcome Discount" loading="lazy" decoding="async" style="width: 100%; height: auto; display: block;" />
         <div style="position: absolute; bottom: 24px; left: 0; right: 0; display: flex; justify-content: center; padding: 0 24px; box-sizing: border-box;">
           <button class="welcome-claim-btn" onclick="localStorage.setItem('auto_apply_discount', 'BEAR05'); navigator.clipboard.writeText('BEAR05'); document.getElementById('welcome-popup-overlay').style.display='none'; var t=document.createElement('div'); t.className='coupon-toast'; t.innerHTML='รับคูปองสำเร็จ'; document.body.appendChild(t); setTimeout(function(){t.classList.add('show')},10); setTimeout(function(){t.classList.remove('show'); setTimeout(function(){t.remove()},400)},2500);" style="max-width: 320px; width: 100%;">
             กดรับคูปองส่วนลด

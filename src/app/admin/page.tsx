@@ -283,6 +283,7 @@ function AdminPageContent() {
   const [newCouponExpiry, setNewCouponExpiry] = useState('');
   const [newCouponDesc, setNewCouponDesc] = useState('');
   const [newCouponForNewUser, setNewCouponForNewUser] = useState(false);
+  const [newCouponOneUsePerCustomer, setNewCouponOneUsePerCustomer] = useState(true);
   const [isSavingCoupon, setIsSavingCoupon] = useState(false);
   const [couponSearch, setCouponSearch] = useState('');
   const [couponFilterStatus, setCouponFilterStatus] = useState<'all' | 'active' | 'inactive' | 'expired'>('all');
@@ -873,6 +874,7 @@ function AdminPageContent() {
         expiryDate: newCouponExpiry || null,
         description: newCouponDesc.trim() || (newCouponType === 'percent' ? `ส่วนลด ${numValue}%` : `ส่วนลด ${numValue} บาท`),
         isForNewCustomerOnly: newCouponForNewUser,
+        limitOneUsePerCustomer: newCouponOneUsePerCustomer,
         isActive: true,
         createdAt: serverTimestamp ? serverTimestamp() : new Date().toISOString(),
         createdBy: user?.displayName || user?.email || 'Admin'
@@ -905,6 +907,7 @@ function AdminPageContent() {
       setNewCouponExpiry('');
       setNewCouponDesc('');
       setNewCouponForNewUser(false);
+      setNewCouponOneUsePerCustomer(true);
     } catch (err) {
       console.error('Error saving coupon:', err);
       await (window as any).showBeautifulAlert?.('เกิดข้อผิดพลาดในการบันทึกคูปอง', 'error', 'เกิดข้อผิดพลาด');
@@ -957,6 +960,7 @@ function AdminPageContent() {
     setNewCouponExpiry(coupon.expiryDate || '');
     setNewCouponDesc(coupon.description || '');
     setNewCouponForNewUser(coupon.isForNewCustomerOnly === true);
+    setNewCouponOneUsePerCustomer(coupon.limitOneUsePerCustomer !== false);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -970,6 +974,7 @@ function AdminPageContent() {
     setNewCouponExpiry('');
     setNewCouponDesc('');
     setNewCouponForNewUser(false);
+    setNewCouponOneUsePerCustomer(true);
   };
 
   const handleCopyCouponCode = (code: string) => {
@@ -5197,6 +5202,22 @@ function AdminPageContent() {
             color: #ea678f;
             box-shadow: 0 2px 8px rgba(0,0,0,0.06);
           }
+          @media (max-width: 600px) {
+            .coupon-filter-tabs {
+              width: 100%;
+              gap: 4px;
+              padding: 4px;
+            }
+            .coupon-filter-tab {
+              flex: 1 1 0;
+              min-width: 0;
+              padding: 6px 4px;
+              font-size: 0.68rem;
+              line-height: 1.25;
+              font-weight: 700;
+              text-align: center;
+            }
+          }
           .coupon-ticket-grid {
             display: grid;
             grid-template-columns: 1fr;
@@ -5498,13 +5519,15 @@ function AdminPageContent() {
             </div>
 
             <div className="dashboard-header-actions">
-              <button className="header-icon-btn" type="button" aria-label="Notifications">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M15 17h5l-1.4-1.4A2 2 0 0 1 18 14.2V11a6 6 0 1 0-12 0v3.2a2 2 0 0 1-.6 1.4L4 17h5" />
-                  <path d="M9 17a3 3 0 0 0 6 0" />
-                </svg>
-                {notificationCount > 0 ? <span className="header-icon-badge">{notificationLabel}</span> : null}
-              </button>
+              {adminViewMode !== 'coupon' ? (
+                <button className="header-icon-btn" type="button" aria-label="Notifications">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M15 17h5l-1.4-1.4A2 2 0 0 1 18 14.2V11a6 6 0 1 0-12 0v3.2a2 2 0 0 1-.6 1.4L4 17h5" />
+                    <path d="M9 17a3 3 0 0 0 6 0" />
+                  </svg>
+                  {notificationCount > 0 ? <span className="header-icon-badge">{notificationLabel}</span> : null}
+                </button>
+              ) : null}
 
               <div className="header-date-chip">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -6222,7 +6245,7 @@ function AdminPageContent() {
                   {/* Minimum Spend */}
                   <div className="coupon-form-group">
                     <label className="coupon-form-label">
-                      ยอดสั่งซื้อขั้นต่ำ (บาท) <span style={{ fontSize: '0.75rem', color: '#a08a8e', fontWeight: 'normal' }}>(0 = ไม่มีขั้นต่ำ)</span>
+                      ยอดสั่งซื้อขั้นต่ำ (บาท) <span style={{ fontSize: '0.75rem', color: '#a08a8e', fontWeight: 'normal' }}></span>
                     </label>
                     <input
                       type="number"
@@ -6237,7 +6260,7 @@ function AdminPageContent() {
                   {/* Usage Limit */}
                   <div className="coupon-form-group">
                     <label className="coupon-form-label">
-                      จำกัดจำนวนสิทธิ์ (ครั้ง) <span style={{ fontSize: '0.75rem', color: '#a08a8e', fontWeight: 'normal' }}>(ว่างไว้ = ไม่จำกัด)</span>
+                      จำกัดจำนวนสิทธิ์ (ครั้ง) <span style={{ fontSize: '0.75rem', color: '#a08a8e', fontWeight: 'normal' }}></span>
                     </label>
                     <input
                       type="number"
@@ -6252,7 +6275,7 @@ function AdminPageContent() {
                   {/* Expiry Date */}
                   <div className="coupon-form-group">
                     <label className="coupon-form-label">
-                      วันหมดอายุ <span style={{ fontSize: '0.75rem', color: '#a08a8e', fontWeight: 'normal' }}>(ว่างไว้ = ไม่มีวันหมดอายุ)</span>
+                      วันหมดอายุ <span style={{ fontSize: '0.75rem', color: '#a08a8e', fontWeight: 'normal' }}></span>
                     </label>
                     <DatePicker
                       id="coupon-expiry-date"
@@ -6283,6 +6306,23 @@ function AdminPageContent() {
                         สำหรับลูกค้าใหม่ที่สั่งซื้อครั้งแรกเท่านั้น
                       </span>
                     </label>
+                  </div>
+
+                  {/* One Use Per Customer Toggle */}
+                  <div className="coupon-form-group">
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', userSelect: 'none' }}>
+                      <input
+                        type="checkbox"
+                        checked={newCouponOneUsePerCustomer}
+                        onChange={(e) => setNewCouponOneUsePerCustomer(e.target.checked)}
+                        style={{ width: '18px', height: '18px', accentColor: '#ea678f', cursor: 'pointer' }}
+                      />
+                      <span style={{ fontSize: '0.88rem', fontWeight: 600, color: '#5c4738' }}>
+                        จำกัด 1 บัญชี ต่อ 1 ครั้ง
+                      </span>
+                    </label>
+                    <div style={{ fontSize: '0.74rem', color: '#a08a8e', marginTop: '4px', paddingLeft: '28px', lineHeight: 1.45 }}>
+                    </div>
                   </div>
 
                   {/* Description */}
@@ -6430,6 +6470,10 @@ function AdminPageContent() {
                                         เฉพาะลูกค้าใหม่
                                       </span>
                                     )}
+
+                                    <span className="coupon-new-customer-chip">
+                                      {coupon.limitOneUsePerCustomer === false ? 'ใช้ซ้ำได้' : '1 ครั้ง/บัญชี'}
+                                    </span>
                                   </div>
 
                                   <span className={`coupon-status-chip ${statusClass}`}>
@@ -6448,6 +6492,10 @@ function AdminPageContent() {
 
                                   <div className="coupon-meta-item">
                                     <span>สิทธิ์: <strong>{coupon.usedCount || 0}{coupon.usageLimit ? ` / ${coupon.usageLimit}` : ' (ไม่จำกัด)'}</strong></span>
+                                  </div>
+
+                                  <div className="coupon-meta-item">
+                                    <span>ต่อบัญชี: <strong>{coupon.limitOneUsePerCustomer === false ? 'ใช้ซ้ำได้' : '1 ครั้ง'}</strong></span>
                                   </div>
 
                                   <div className="coupon-meta-item">

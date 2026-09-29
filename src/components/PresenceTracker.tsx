@@ -84,6 +84,8 @@ export default function PresenceTracker() {
 
     // 2. Define presence update function
     const updatePresence = async () => {
+      // Firestore rules require authentication for presence writes.
+      if (!currentUser?.uid) return;
       try {
         const presenceRef = doc(db, 'presence', sessionId);
         await setDoc(presenceRef, {
@@ -105,6 +107,7 @@ export default function PresenceTracker() {
 
     // 4. Cleanup on unmount (tab closed or navigated away)
     const cleanupPresence = async () => {
+      if (!currentUser?.uid) return;
       try {
         const presenceRef = doc(db, 'presence', sessionId);
         await deleteDoc(presenceRef);

@@ -122,6 +122,11 @@ function getTomorrowStr() {
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
 }
 
+function getTodayStr() {
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+
 function getMinDeliveryStr(qty: number | null) {
   const d = new Date();
   let offset = 1;
@@ -195,8 +200,27 @@ function GlitterRoseContent() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     setIsHydrated(true);
-    
-    const isEditMode = window.location.search.includes('edit=true');
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const isEditMode = urlParams.get('edit') === 'true';
+
+    // Restore from shared link (config param)
+    const configParam = urlParams.get('config');
+    if (configParam) {
+      try {
+        const decoded = JSON.parse(decodeURIComponent(atob(configParam)));
+        setState((prev) => ({
+          ...initialState,
+          ...decoded,
+          current: 0,
+          maxStepReached: decoded.maxStepReached ?? 0,
+        }));
+        return;
+      } catch (err) {
+        console.error('Failed to restore shared config', err);
+      }
+    }
+
     if (!isEditMode) {
       window.localStorage.removeItem('editing_cart_id');
       window.localStorage.removeItem(STORAGE_KEY);
@@ -215,6 +239,41 @@ function GlitterRoseContent() {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [openDecorationDropdown, setOpenDecorationDropdown] = useState<string | null>(null);
   const [showReceipt, setShowReceipt] = useState(false);
+  const [isProductImageOpen, setIsProductImageOpen] = useState(false);
+
+  const shareProduct = useCallback(async () => {
+    // Encode current selections into URL
+    const configPayload = {
+      selectedQty: state.selectedQty,
+      selectedColors: state.selectedColors,
+      selectedLayers: state.selectedLayers,
+      selectedPaper: state.selectedPaper,
+      selectedShape: state.selectedShape,
+      selectedDecorations: state.selectedDecorations,
+      selectedRibbonJfyClearVariant: state.selectedRibbonJfyClearVariant,
+      selectedRibbonJfySolidVariant: state.selectedRibbonJfySolidVariant,
+      selectedMessageCardVariant: state.selectedMessageCardVariant,
+      maxStepReached: state.maxStepReached,
+    };
+    const configEncoded = btoa(encodeURIComponent(JSON.stringify(configPayload)));
+    const baseUrl = window.location.origin + window.location.pathname;
+    const existingParams = new URLSearchParams(window.location.search);
+    existingParams.set('config', configEncoded);
+    // Keep preset param if present
+    const shareUrl = baseUrl + '?' + existingParams.toString();
+
+    const shareData = {
+      title: presetProduct?.name || 'Bear has flower',
+      text: presetProduct?.description || 'ดูสินค้าจาก Bear has flower',
+      url: shareUrl,
+    };
+    if (navigator.share) {
+      await navigator.share(shareData).catch(() => undefined);
+      return;
+    }
+    await navigator.clipboard?.writeText(shareUrl);
+    showToast('คัดลอกลิงก์พร้อมตัวเลือกแล้ว');
+  }, [presetProduct, showToast, state]);
 
   // Sync state to localStorage (and auto-update cart if editing)
   useEffect(() => {
@@ -245,7 +304,6 @@ function GlitterRoseContent() {
     } catch (e) {
       console.error('Failed to save state', e);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state, presetProduct]);
 
   // Load preset product configurations if necessary
@@ -293,7 +351,8 @@ function GlitterRoseContent() {
     else if (presetProduct) {
       if (presetProduct.readyToShip && Number(presetProduct.stockQuantity || 0) <= 0) {
         showToast('สินค้าหมดชั่วคราว');
-        setTimeout(() => router.push('/'), 900);
+        const t = setTimeout(() => router.push('/'), 900);
+        return () => clearTimeout(t);
       } else {
         showToast('โหลดแบบสินค้าสำเร็จรูปเสร็จสิ้น!');
       }
@@ -305,16 +364,17 @@ function GlitterRoseContent() {
   useEffect(() => {
     if (typeof window !== 'undefined' && sessionStorage.getItem('order_success_toast')) {
       sessionStorage.removeItem('order_success_toast');
-      setTimeout(() => showToast('เพิ่มลงตะกร้าเรียบร้อยแล้ว!'), 300);
+      const t = setTimeout(() => showToast('เพิ่มลงตะกร้าเรียบร้อยแล้ว!'), 300);
+      return () => clearTimeout(t);
     }
   }, [showToast]);
 
   useEffect(() => {
-    const minDelivery = getMinDeliveryStr(state.selectedQty);
+    const minDelivery = getTodayStr();
     if (state.deliveryDate && state.deliveryDate < minDelivery) {
       setState(prev => ({ ...prev, deliveryDate: '', deliveryTime: '' }));
     }
-  }, [state.selectedQty, state.deliveryDate]);
+  }, [state.deliveryDate]);
 
   // Derived state calculations
   const calculateTotalPrice = useCallback(() => {
@@ -495,19 +555,27 @@ function GlitterRoseContent() {
         return;
       }
     } else if (state.current === 4) {
-      const minDelivery = getMinDeliveryStr(state.selectedQty);
+      const minDelivery = getTodayStr();
       if (!state.customerName.trim() || !state.customerPhone.trim() || !state.customerAddress.trim() || !state.deliveryDate || !state.deliveryTime) {
         showToast('กรุณากรอกข้อมูลที่จำเป็นให้ครบถ้วน');
         return;
       }
       if (state.deliveryDate < minDelivery) {
-        showToast('ต้องเลือกวันจัดส่งล่วงหน้าอย่างน้อย 2 วัน');
+        showToast('กรุณาเลือกวันที่ตั้งแต่วันนี้เป็นต้นไป');
         return;
       }
+      const todayStr = getTodayStr();
       const tomorrowStr = getTomorrowStr();
       if (state.deliveryDate === tomorrowStr && state.deliveryTime < '09:00') {
         showToast('หากจัดส่งวันพรุ่งนี้ กรุณาเลือกเวลารับตั้งแต่ 09:00 น. เป็นต้นไป');
         return;
+      }
+      if (state.deliveryDate === todayStr) {
+        const minTimeForToday = getMinDeliveryTime(todayStr, minDateTime, tomorrowStr);
+        if (state.deliveryTime < minTimeForToday) {
+          showToast(`หากจัดส่งวันนี้ กรุณาเลือกเวลารับตั้งแต่ ${minTimeForToday} น. เป็นต้นไป`);
+          return;
+        }
       }
     }
 
@@ -639,7 +707,7 @@ function GlitterRoseContent() {
     ? ROSE_SHAPES.filter(c => c.id !== 'bouquet_triangle' && c.id !== 'bouquet_rectangle') 
     : ROSE_SHAPES;
 
-  const minDelivery = getMinDeliveryStr(state.selectedQty);
+  const minDelivery = getTodayStr();
   const tomorrowStr = getTomorrowStr();
   const minDateTime = useMemo(() => {
     if (presetProduct?.badge) {
@@ -687,6 +755,23 @@ function GlitterRoseContent() {
           <StoreClosedNotice />
         </div>
 
+        <div className="product-overview-card">
+          {presetProduct?.coverImage && (
+            <button
+              type="button"
+              className="product-hero-image"
+              aria-label={`ดูรูปภาพสินค้า ${presetProduct.name || ''} แบบเต็มจอ`}
+              onClick={() => setIsProductImageOpen(true)}
+            >
+              <img
+                src={presetProduct.coverImage}
+                alt={presetProduct.name || 'รูปภาพสินค้า'}
+                loading="eager"
+                decoding="async"
+              />
+            </button>
+          )}
+
         {/* Stepper */}
         <div className="stepper-outer">
           <div className="stepper-container" id="stepper">
@@ -708,7 +793,7 @@ function GlitterRoseContent() {
 
         {/* Order Summary */}
         <div className="order-summary" id="order-summary">
-          <span className="summary-label">🛒 สินค้าที่เลือก</span>
+          <span className="summary-label">สินค้าที่เลือก</span>
           <div className="summary-chips" id="summary-chips">
             {getSummaryItems().length === 0 ? (
               <span className="summary-empty">ยังไม่ได้เลือกสินค้า...</span>
@@ -721,6 +806,22 @@ function GlitterRoseContent() {
               ))
             )}
           </div>
+        </div>
+
+        <div className="product-action-row">
+          <a className="product-inquiry-button" href="https://line.me/R/ti/p/@145dmmit" target="_blank" rel="noopener noreferrer">
+            สอบถามเพิ่มเติมเกี่ยวกับสินค้า
+          </a>
+          <button type="button" className="product-share-button" onClick={shareProduct} aria-label="แชร์สินค้า" title="แชร์สินค้า">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <circle cx="18" cy="5" r="3" />
+              <circle cx="6" cy="12" r="3" />
+              <circle cx="18" cy="19" r="3" />
+              <line x1="8.6" y1="13.5" x2="15.4" y2="17.5" />
+              <line x1="15.4" y1="6.5" x2="8.6" y2="10.5" />
+            </svg>
+          </button>
+        </div>
         </div>
 
         {/* Selection Bar (Desktop/iPad) */}
@@ -751,7 +852,7 @@ function GlitterRoseContent() {
           {state.current === 0 && (
             <>
               <div className="qty-header">
-                <h3>🌹 เลือกจำนวนดอกกุหลาบ</h3>
+                <h3>เลือกจำนวนดอกกุหลาบ</h3>
                 <p>กรุณาเลือกจำนวนที่ต้องการ</p>
               </div>
 
@@ -785,7 +886,7 @@ function GlitterRoseContent() {
               <div style={{ width: '100%', borderTop: '1px dashed var(--glass-border)', margin: '32px 0 12px' }}></div>
 
               <div className="qty-header">
-                <h3>🎨 เลือกสีดอกกุหลาบ</h3>
+                <h3>เลือกสีดอกกุหลาบ</h3>
                 <p>สามารถเลือกได้มากกว่า 1 สี</p>
               </div>
               <div className="color-grid" id="color-grid">
@@ -812,7 +913,7 @@ function GlitterRoseContent() {
             return (
               <>
                 <div className="qty-header">
-                  <h3>🌿 เลือกรองช่อ</h3>
+                  <h3>เลือกรองช่อ</h3>
                   <p>{priceNote}</p>
                 </div>
                 <div className="color-grid" id="layer-grid" style={{ marginTop: '20px' }}>
@@ -837,7 +938,7 @@ function GlitterRoseContent() {
           {state.current === 2 && (
             <>
               <div className="qty-header">
-                <h3>📜 เลือกกระดาษห่อ</h3>
+                <h3>เลือกกระดาษห่อ</h3>
                 <p>เลือกรูปแบบกระดาษห่อให้ช่อดอกไม้ของคุณ</p>
               </div>
               <div className="color-grid" id="paper-grid" style={{ marginTop: '20px' }}>
@@ -858,7 +959,7 @@ function GlitterRoseContent() {
               <div style={{ width: '100%', borderTop: '1px dashed var(--glass-border)', margin: '32px 0 12px' }}></div>
 
               <div className="qty-header" id="shape-section">
-                <h3>📦 เลือกรูปทรงห่อ</h3>
+                <h3>เลือกรูปทรงห่อ</h3>
                 <p>เลือกรูปทรงในการห่อช่อดอกไม้</p>
               </div>
               <div className="color-grid" id="shape-grid" style={{ marginTop: '20px' }}>
@@ -886,7 +987,7 @@ function GlitterRoseContent() {
             return (
               <>
                 <div className="qty-header">
-                  <h3>✨ เลือกการตกแต่ง</h3>
+                  <h3>เลือกการตกแต่ง</h3>
                   <p>เพิ่มความสวยงามให้ช่อดอกไม้ของคุณ (เลือกได้หลายแบบ หรือไม่รับก็ได้)</p>
                 </div>
                 
@@ -985,7 +1086,7 @@ function GlitterRoseContent() {
           {state.current === 4 && (
             <div id="step5-customer" style={{ width: '100%' }}>
               <div className="qty-header">
-                <h3>📍 ข้อมูลการจัดส่ง</h3>
+                <h3>ข้อมูลการจัดส่ง</h3>
                 <p>กรอกข้อมูลสำหรับการจัดส่งดอกไม้</p>
               </div>
               
@@ -1183,6 +1284,13 @@ function GlitterRoseContent() {
               บันทึกลงตะกร้า
             </button>
           </div>
+        </div>
+      )}
+
+      {isProductImageOpen && presetProduct?.coverImage && (
+        <div className="product-image-lightbox" role="dialog" aria-modal="true" aria-label="รูปภาพสินค้าแบบเต็มจอ" onClick={() => setIsProductImageOpen(false)}>
+          <button type="button" className="product-image-lightbox-close" aria-label="ปิดรูปภาพ" onClick={() => setIsProductImageOpen(false)}>×</button>
+          <img src={presetProduct.coverImage} alt={presetProduct.name || 'รูปภาพสินค้าแบบเต็มจอ'} onClick={(event) => event.stopPropagation()} />
         </div>
       )}
     </>

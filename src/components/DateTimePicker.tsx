@@ -54,16 +54,42 @@ function formatTimePart(date: Date): string {
   return String(date.getHours()).padStart(2, '0') + ':' + String(date.getMinutes()).padStart(2, '0');
 }
 
+function formatCurrentTimeCeilToTen(): string {
+  const now = new Date();
+  now.setMinutes(Math.ceil(now.getMinutes() / 10) * 10, 0, 0);
+  return formatTimePart(now);
+}
+
+function normalizeDateInput(date: string | Date): string {
+  return date instanceof Date ? formatDatePart(date) : date;
+}
+
+function getDateOnlyMinDate(minDate?: string | Date): string {
+  const computedMinDate = normalizeDateInput(minDate || getTomorrowStr());
+  return computedMinDate;
+}
+
 export function getMinDeliveryTime(
   selectedDate: string,
   minDateTime?: string,
   tomorrowStr: string = getTomorrowStr()
 ): string {
+  const todayStr = formatDatePart(new Date());
+
   if (minDateTime && selectedDate) {
     const minDateTimeObj = new Date(minDateTime);
     if (selectedDate === formatDatePart(minDateTimeObj)) {
-      return formatTimePart(minDateTimeObj);
+      const minDateTimePart = formatTimePart(minDateTimeObj);
+      if (selectedDate === todayStr) {
+        const currentTime = formatCurrentTimeCeilToTen();
+        return minDateTimePart > currentTime ? minDateTimePart : currentTime;
+      }
+      return minDateTimePart;
     }
+  }
+
+  if (selectedDate === todayStr) {
+    return formatCurrentTimeCeilToTen();
   }
 
   if (selectedDate === tomorrowStr) {
@@ -130,13 +156,12 @@ export function DatePicker({
   useEffect(() => {
     if (!inputRef.current) return;
 
-    const computedMinDate = minDate || getTomorrowStr();
-    const minDateTimeObj = minDateTime ? new Date(minDateTime) : undefined;
+    const computedMinDate = getDateOnlyMinDate(minDate);
 
     fpRef.current = flatpickr(inputRef.current, {
       enableTime: false,
       dateFormat: 'Y-m-d',
-      minDate: minDateTimeObj || computedMinDate,
+      minDate: computedMinDate,
       locale: Thai,
       disableMobile: true,
       defaultDate: value || undefined,
@@ -157,7 +182,6 @@ export function DatePicker({
       hideOverlay();
       fpRef.current?.destroy();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [minDate, minDateTime]);
 
   useEffect(() => {
@@ -620,14 +644,14 @@ export default function DateTimePicker({
   useEffect(() => {
     if (!inputRef.current) return;
 
-    const computedMinDate = minDate || getTomorrowStr();
+    const computedMinDate = getDateOnlyMinDate(minDate);
     const tomorrowStr = getTomorrowStr();
     const minDateTimeObj = minDateTime ? new Date(minDateTime) : undefined;
 
     fpRef.current = flatpickr(inputRef.current, {
       enableTime: true,
       dateFormat: 'Y-m-d H:i',
-      minDate: minDateTimeObj || computedMinDate,
+      minDate: computedMinDate,
       minTime: minTime || '00:00',
       time_24hr: true,
       locale: Thai,
@@ -683,7 +707,6 @@ export default function DateTimePicker({
       hideOverlay();
       fpRef.current?.destroy();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [minDate, minTime, minDateTime]);
 
   return (
@@ -701,7 +724,7 @@ export default function DateTimePicker({
   );
 }
 
-export function getMinDateTimeFromBadge(badge: string): string {
+export function getMinDateTimeFromBadge(badge: string): string | undefined {
   const now = new Date();
 
   const hourMatch = badge.match(/(\d+)\s*ชั่วโมง/);
@@ -718,8 +741,7 @@ export function getMinDateTimeFromBadge(badge: string): string {
     return now.toISOString();
   }
 
-  now.setDate(now.getDate() + 1);
-  return now.toISOString();
+  return undefined;
 }
 
 export function getDeliveryTimeText(badge: string): string {
