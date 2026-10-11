@@ -1,64 +1,14 @@
 import { NextResponse } from 'next/server';
-import crypto from 'crypto';
+import { v2 as cloudinary } from 'cloudinary';
 
 export const maxDuration = 60;
 
-// Generate a JWT token from service account credentials
-async function getAccessToken(): Promise<string> {
-  const projectId = process.env.FIREBASE_ADMIN_PROJECT_ID!;
-  const clientEmail = process.env.FIREBASE_ADMIN_CLIENT_EMAIL!;
-  const rawPrivateKey = process.env.FIREBASE_ADMIN_PRIVATE_KEY!;
-  let privateKey = rawPrivateKey ? rawPrivateKey.trim() : '';
-  if (privateKey) {
-    if (privateKey.startsWith('"') && privateKey.endsWith('"')) {
-      privateKey = privateKey.substring(1, privateKey.length - 1);
-    } else if (privateKey.startsWith("'") && privateKey.endsWith("'")) {
-      privateKey = privateKey.substring(1, privateKey.length - 1);
-    }
-    privateKey = privateKey.replace(/\\n/g, '\n');
-  }
-
-  const now = Math.floor(Date.now() / 1000);
-  const header = { alg: 'RS256', typ: 'JWT' };
-  const payload = {
-    iss: clientEmail,
-    sub: clientEmail,
-    aud: 'https://oauth2.googleapis.com/token',
-    iat: now,
-    exp: now + 3600,
-    scope: 'https://www.googleapis.com/auth/devstorage.full_control',
-  };
-
-  const encode = (obj: object) =>
-    Buffer.from(JSON.stringify(obj)).toString('base64url');
-
-  const headerB64 = encode(header);
-  const payloadB64 = encode(payload);
-  const signingInput = `${headerB64}.${payloadB64}`;
-
-  // Sign with RS256
-  const sign = crypto.createSign('RSA-SHA256');
-  sign.update(signingInput);
-  const signature = sign.sign(privateKey, 'base64url');
-
-  const jwt = `${signingInput}.${signature}`;
-
-  // Exchange JWT for access token
-  const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
-      assertion: jwt,
-    }),
-  });
-
-  const tokenData = await tokenRes.json();
-  if (!tokenRes.ok) {
-    throw new Error(`Failed to get access token: ${JSON.stringify(tokenData)}`);
-  }
-  return tokenData.access_token as string;
-}
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+  secure: true,
+});
 
 export async function POST(req: Request) {
   try {
@@ -68,59 +18,22 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Missing base64File or path' }, { status: 400 });
     }
 
-    // Extract content type and base64 data
-    const matches = base64File.match(/^data:(.+);base64,(.+)$/);
-    let buffer: Buffer;
-    let contentType = 'image/jpeg';
-
-    if (matches && matches.length === 3) {
-      contentType = matches[1];
-      buffer = Buffer.from(matches[2], 'base64');
-    } else {
-      buffer = Buffer.from(base64File, 'base64');
+    if (!process.env.CLOUDINARY_CLOUD_NAME || !process.env.CLOUDINARY_API_KEY || !process.env.CLOUDINARY_API_SECRET) {
+      return NextResponse.json({ error: 'Cloudinary environment variables are not configured' }, { status: 500 });
     }
 
-    const bucketName = 'bearhasflower.firebasestorage.app';
-    const downloadToken = crypto.randomUUID();
-
-    // Get access token
-    const accessToken = await getAccessToken();
-
-    // Upload via Firebase Storage REST API
-    const encodedPath = encodeURIComponent(path);
-    const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${bucketName}/o?uploadType=media&name=${encodedPath}`;
-
-    const uploadRes = await fetch(uploadUrl, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'Content-Type': contentType,
-        'Content-Length': buffer.length.toString(),
-      },
-      body: new Uint8Array(buffer),
+    const uploadSource = base64File.startsWith('data:')
+      ? base64File
+      : `data:image/jpeg;base64,${base64File}`;
+    const publicId = path.replace(/[^a-zA-Z0-9/_-]/g, '_');
+    const result = await cloudinary.uploader.upload(uploadSource, {
+      public_id: publicId,
+      resource_type: 'image',
+      overwrite: false,
+      unique_filename: true,
     });
 
-    if (!uploadRes.ok) {
-      const err = await uploadRes.json();
-      throw new Error(JSON.stringify(err));
-    }
-
-    // Set the download token metadata so Firebase Storage URLs work
-    const metaUrl = `https://storage.googleapis.com/storage/v1/b/${bucketName}/o/${encodedPath}`;
-    await fetch(metaUrl, {
-      method: 'PATCH',
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        metadata: { firebaseStorageDownloadTokens: downloadToken },
-      }),
-    });
-
-    const url = `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/${encodedPath}?alt=media&token=${downloadToken}`;
-
-    return NextResponse.json({ success: true, url });
+    return NextResponse.json({ success: true, url: result.secure_url });
 
   } catch (error: any) {
     console.error('API Upload error:', error);

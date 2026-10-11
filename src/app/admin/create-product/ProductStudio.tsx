@@ -446,7 +446,7 @@ export function ProductStudioPage({ forceManageMode = false, initialProductType 
       let productDesc = '';
       let productBadge = '';
       let productPrice = '';
-      let productCoverImage = ''; // Base64 data URL
+      let productCoverImage = '';
       let productReadyToShip = false;
       let productStockQuantity = '';
       let productArtificialFlowers = false;
@@ -530,7 +530,8 @@ export function ProductStudioPage({ forceManageMode = false, initialProductType 
         const state = {
           current, maxStepReached, selectedQty, selectedColors, selectedLayers, selectedPaper,
           selectedShape, selectedDecorations, selectedRibbonJfyClearVariant, selectedRibbonJfySolidVariant, selectedMessageCardVariant, basePrice,
-          productName, productDesc, productBadge, productPrice, productCoverImage,
+          productName, productDesc, productBadge, productPrice,
+          productCoverImage: productCoverImage.startsWith('data:') ? '' : productCoverImage,
           productReadyToShip, productStockQuantity, productArtificialFlowers
         };
         localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
@@ -1227,57 +1228,23 @@ export function ProductStudioPage({ forceManageMode = false, initialProductType 
         const file = event.target.files[0];
         if (!file) return;
 
-        const maxDimension = 600;
-        const targetBytes = 200 * 1024;
         const reader = new FileReader();
 
         reader.onload = function(e) {
-          const img = new Image();
-          img.onload = function() {
-            const canvas = document.createElement('canvas');
-            let { width, height } = img;
-            if (width > maxDimension || height > maxDimension) {
-              const scale = Math.min(maxDimension / width, maxDimension / height);
-              width = Math.round(width * scale);
-              height = Math.round(height * scale);
-            }
-            canvas.width = width;
-            canvas.height = height;
-            const ctx = canvas.getContext('2d');
-            if (!ctx) {
-              window.showBeautifulAlert('ไม่สามารถประมวลผลรูปภาพได้ค่ะ', 'error', 'อัปโหลดไม่สำเร็จ');
-              return;
-            }
-            ctx.fillStyle = '#ffffff';
-            ctx.fillRect(0, 0, width, height);
-            ctx.drawImage(img, 0, 0, width, height);
-
-            let quality = 0.7;
-            let dataUrl = canvas.toDataURL('image/jpeg', quality);
-            while (dataUrl.length > targetBytes * 1.37 && quality > 0.2) {
-              quality -= 0.1;
-              dataUrl = canvas.toDataURL('image/jpeg', quality);
-            }
-
-            if (dataUrl.length > 900 * 1024 * 1.37) {
-              window.showBeautifulAlert('ไฟล์รูปยังมีขนาดใหญ่เกินไป กรุณาใช้รูปที่มีความละเอียดต่ำลงค่ะ', 'warning', 'ขนาดรูปใหญ่เกินไป');
-              return;
-            }
-
-            productCoverImage = dataUrl;
-            saveState();
-
-            const previewWrap = document.getElementById('image-preview-wrap');
-            const previewImg = document.getElementById('image-preview');
-            if (previewWrap && previewImg) {
-              previewImg.src = productCoverImage;
-              previewWrap.style.display = 'block';
-            }
-          };
-          img.onerror = function() {
+          if (typeof e.target?.result !== 'string') {
             window.showBeautifulAlert('ไฟล์รูปภาพไม่ถูกต้องค่ะ', 'error', 'อัปโหลดไม่สำเร็จ');
-          };
-          img.src = e.target.result;
+            return;
+          }
+
+          productCoverImage = e.target.result;
+          saveState();
+
+          const previewWrap = document.getElementById('image-preview-wrap');
+          const previewImg = document.getElementById('image-preview');
+          if (previewWrap && previewImg) {
+            previewImg.src = productCoverImage;
+            previewWrap.style.display = 'block';
+          }
         };
 
         reader.readAsDataURL(file);
@@ -1525,6 +1492,23 @@ export function ProductStudioPage({ forceManageMode = false, initialProductType 
           showToast('กำลังนำเข้าข้อมูลสินค้าเข้าร้าน...');
 
           const isReference = PRODUCT_TYPE === 'Design_flower' || PRODUCT_TYPE === 'design_flower';
+          let coverImage = productCoverImage;
+          if (coverImage.startsWith('data:')) {
+            const uploadResponse = await fetch('/api/upload-image', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                base64File: coverImage,
+                path: 'products/' + (editingProductId || crypto.randomUUID()) + '_' + Date.now()
+              })
+            });
+            const uploadData = await uploadResponse.json();
+            if (!uploadResponse.ok || !uploadData.url) {
+              throw new Error(uploadData.error || 'Product image upload failed');
+            }
+            coverImage = uploadData.url;
+          }
+
           const productData = {
             name: productName.trim(),
             description: productDesc.trim() || (
@@ -1535,7 +1519,7 @@ export function ProductStudioPage({ forceManageMode = false, initialProductType 
             ),
             price: parseFloat(productPrice),
             badge: getResolvedProductBadge(),
-            coverImage: productCoverImage,
+            coverImage,
             type: PRODUCT_TYPE,
             category: isReference ? 'reference' : (PRODUCT_TYPE === 'velvet_flower' ? 'velvet' : PRODUCT_TYPE === 'artificial_flowers' ? 'artificial' : 'glitter'),
             isReference: isReference,
@@ -1574,8 +1558,16 @@ export function ProductStudioPage({ forceManageMode = false, initialProductType 
           }
 
         } catch (err) {
-          console.error("Failed to submit product:", err);
-          window.showBeautifulAlert('เกิดข้อผิดพลาดในการสร้างสินค้า กรุณาลองใหม่อีกครั้งนะคะ', 'error', 'บันทึกไม่สำเร็จ');
+          const errorMessage = err instanceof Error ? err.message : String(err);
+          const isBillingDisabled = errorMessage.includes('billing account') || errorMessage.includes('accountDisabled');
+          console.error('Failed to submit product:', errorMessage);
+          window.showBeautifulAlert(
+            isBillingDisabled
+              ? 'Firebase Storage ถูกปิดใช้งานเนื่องจาก billing account ของโปรเจกต์ปิดอยู่ กรุณาเปิดใช้งาน billing แล้วลองใหม่ค่ะ'
+              : 'เกิดข้อผิดพลาดในการสร้างสินค้า กรุณาลองใหม่อีกครั้งนะคะ',
+            'error',
+            isBillingDisabled ? 'ต้องเปิดใช้งาน Billing' : 'บันทึกไม่สำเร็จ'
+          );
           const btn = document.getElementById('btn-next-step');
           const sbtn = document.getElementById('sticky-next-btn');
           if (btn) btn.disabled = false;
