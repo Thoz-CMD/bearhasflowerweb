@@ -385,7 +385,6 @@ export function ProductStudioPage({ forceManageMode = false, initialProductType 
         { id: 'blank_card', name: 'การ์ดเปล่า', price: 0, img: '/images/Glitter Rose/การ์ดเปล่า.png' },
         { id: 'message_card', name: 'การ์ดข้อความ', price: 5, img: '/images/Glitter Rose/การ์ดข้อความ.png' },
         { id: 'stick', name: 'ก้านเสียบ', price: 5, img: '/images/Glitter Rose/ก้านเสียบ.png' },
-        { id: 'fairy_light', name: 'ไฟ', price: 15, img: '/images/Glitter Rose/ไฟ.jpg' },
         { id: 'crown', name: 'มงกุฎ', price: 15, img: '/images/Glitter Rose/มงกุฏ.jpg' },
       ];
 
@@ -430,6 +429,7 @@ export function ProductStudioPage({ forceManageMode = false, initialProductType 
       let selectedRibbonJfyClearVariant = null;
       let selectedRibbonJfySolidVariant = null;
       let selectedMessageCardVariant = null;
+      let openVariantDropdown = null;
       let basePrice = 0;
       let maxStepReached = 0; 
 
@@ -851,7 +851,7 @@ export function ProductStudioPage({ forceManageMode = false, initialProductType 
               \${freeDecors.map(c => \`
                 <div class="color-card\${selectedDecorations.includes(c.id) ? ' selected' : ''}"
                     data-id="\${c.id}"
-                    onclick="selectDecoration('\${c.id}')">
+                  onclick="\${c.id === 'ribbon_jfy_clear' ? \"selectDecoration('\" + c.id + \"'); toggleRibbonJfyClearDropdown()\" : c.id === 'ribbon_jfy_solid' ? \"selectDecoration('\" + c.id + \"'); toggleRibbonJfySolidDropdown()\" : c.id === 'message_card' ? \"selectDecoration('\" + c.id + \"'); toggleMessageCardDropdown()\" : \"selectDecoration('\" + c.id + \"')\"}">
                   <div class="color-swatch" style="overflow:hidden; display:flex; align-items:center; justify-content:center; background:var(--warm-white); border:1px solid var(--glass-border);">
                     \${c.img ? \`<img src="\${c.img}" alt="\${c.name}" style="width:100%; height:100%; object-fit:cover; border-radius:inherit;" />\` : ''}
                   </div>
@@ -872,12 +872,12 @@ export function ProductStudioPage({ forceManageMode = false, initialProductType 
               \${paidDecors.map(c => \`
                 <div class="color-card\${selectedDecorations.includes(c.id) ? ' selected' : ''}"
                     data-id="\${c.id}"
-                    onclick="selectDecoration('\${c.id}')">
+                  onclick="\${c.id === 'ribbon_jfy_clear' || c.id === 'ribbon_jfy_solid' || c.id === 'message_card' ? \"openDecorationVariant('\" + c.id + \"')\" : \"selectDecoration('\" + c.id + \"')\"}">
                   <div class="color-swatch" style="overflow:hidden; display:flex; align-items:center; justify-content:center; background:var(--warm-white); border:1px solid var(--glass-border);">
                     \${c.img ? \`<img src="\${c.img}" alt="\${c.name}" style="width:100%; height:100%; object-fit:cover; border-radius:inherit;" />\` : ''}
                   </div>
                   \${c.id === 'ribbon_jfy_clear' || c.id === 'ribbon_jfy_solid' || c.id === 'message_card' ? \`
-                    <div class="ribbon-variant-dropdown\${selectedDecorations.includes(c.id) ? ' open' : ''}" onclick="event.stopPropagation(); \${c.id === 'ribbon_jfy_clear' ? 'toggleRibbonJfyClearDropdown()' : c.id === 'ribbon_jfy_solid' ? 'toggleRibbonJfySolidDropdown()' : 'toggleMessageCardDropdown()'}">
+                    <div class="ribbon-variant-dropdown\${openVariantDropdown === c.id ? ' open' : ''}" onclick="event.stopPropagation(); \${c.id === 'ribbon_jfy_clear' ? 'toggleRibbonJfyClearDropdown()' : c.id === 'ribbon_jfy_solid' ? 'toggleRibbonJfySolidDropdown()' : 'toggleMessageCardDropdown()'}">
                       <button type="button" class="color-name ribbon-variant-trigger" aria-expanded="\${selectedDecorations.includes(c.id)}">
                         <span>\${selectedDecorations.includes(c.id) ? (
                           c.id === 'ribbon_jfy_clear'
@@ -1092,11 +1092,19 @@ export function ProductStudioPage({ forceManageMode = false, initialProductType 
         saveState();
       }
 
+      window.openDecorationVariant = function(id) {
+        const wasSelected = selectedDecorations.includes(id);
+        selectDecoration(id);
+        openVariantDropdown = wasSelected ? null : id;
+        renderStep4();
+      }
+
       window.toggleRibbonJfyClearDropdown = function() {
         if (!selectedDecorations.includes('ribbon_jfy_clear')) {
           selectedDecorations.push('ribbon_jfy_clear');
           selectedRibbonJfyClearVariant = selectedRibbonJfyClearVariant || RIBBON_JFY_CLEAR_VARIANTS[0].id;
         }
+        openVariantDropdown = openVariantDropdown === 'ribbon_jfy_clear' ? null : 'ribbon_jfy_clear';
         renderStep4();
         saveState();
       }
@@ -1106,6 +1114,7 @@ export function ProductStudioPage({ forceManageMode = false, initialProductType 
           selectedDecorations.push('ribbon_jfy_solid');
           selectedRibbonJfySolidVariant = selectedRibbonJfySolidVariant || RIBBON_JFY_SOLID_VARIANTS[0].id;
         }
+        openVariantDropdown = openVariantDropdown === 'ribbon_jfy_solid' ? null : 'ribbon_jfy_solid';
         renderStep4();
         saveState();
       }
@@ -1115,6 +1124,7 @@ export function ProductStudioPage({ forceManageMode = false, initialProductType 
         if (!selectedDecorations.includes('ribbon_jfy_clear')) {
           selectedDecorations.push('ribbon_jfy_clear');
         }
+        openVariantDropdown = null;
         renderStep4();
         saveState();
       }
@@ -1124,6 +1134,7 @@ export function ProductStudioPage({ forceManageMode = false, initialProductType 
         if (!selectedDecorations.includes('ribbon_jfy_solid')) {
           selectedDecorations.push('ribbon_jfy_solid');
         }
+        openVariantDropdown = null;
         renderStep4();
         saveState();
       }
@@ -1143,6 +1154,7 @@ export function ProductStudioPage({ forceManageMode = false, initialProductType 
           selectedDecorations.push('message_card');
           selectedMessageCardVariant = selectedMessageCardVariant || MESSAGE_CARD_VARIANTS[0].id;
         }
+        openVariantDropdown = openVariantDropdown === 'message_card' ? null : 'message_card';
         renderStep4();
         saveState();
       }
@@ -1152,6 +1164,7 @@ export function ProductStudioPage({ forceManageMode = false, initialProductType 
         if (!selectedDecorations.includes('message_card')) {
           selectedDecorations.push('message_card');
         }
+        openVariantDropdown = null;
         renderStep4();
         saveState();
       }
@@ -1238,13 +1251,7 @@ export function ProductStudioPage({ forceManageMode = false, initialProductType 
 
           productCoverImage = e.target.result;
           saveState();
-
-          const previewWrap = document.getElementById('image-preview-wrap');
-          const previewImg = document.getElementById('image-preview');
-          if (previewWrap && previewImg) {
-            previewImg.src = productCoverImage;
-            previewWrap.style.display = 'block';
-          }
+          renderStep5();
         };
 
         reader.readAsDataURL(file);
@@ -1253,15 +1260,7 @@ export function ProductStudioPage({ forceManageMode = false, initialProductType 
       window.removeUploadedImage = function() {
         productCoverImage = '';
         saveState();
-        
-        const previewWrap = document.getElementById('image-preview-wrap');
-        const previewImg = document.getElementById('image-preview');
-        const fileInput = document.getElementById('ipt-prod-image');
-        if (previewWrap && previewImg) {
-          previewImg.src = '';
-          previewWrap.style.display = 'none';
-        }
-        if (fileInput) fileInput.value = '';
+        renderStep5();
       };
 
       function renderStep5() {
@@ -1326,12 +1325,15 @@ export function ProductStudioPage({ forceManageMode = false, initialProductType 
               <div class="cover-image-uploader-container">
                 <input type="file" id="ipt-prod-image" accept="image/*" onchange="handleCoverImageUpload(event)" style="display: none;">
                 <div class="uploader-box" onclick="document.getElementById('ipt-prod-image').click()" style="border: 2px dashed var(--rose-gold); background: rgba(219, 138, 158, 0.03); border-radius: 16px; padding: 25px; text-align: center; cursor: pointer; transition: all 0.2s;">
-                  <span class="upload-icon" style="font-size: 1.8rem; display: block; margin-bottom: 6px;">📷</span>
-                  <span class="upload-text" style="font-size: 0.85rem; color: var(--mid-brown); font-weight: 600;">คลิกเพื่อเลือกไฟล์รูปภาพหน้าปก</span>
-                </div>
-                <div id="image-preview-wrap" style="margin-top: 15px; display: \${productCoverImage ? 'block' : 'none'}; position: relative; border-radius: 12px; overflow: hidden; border: 1px solid var(--glass-border);">
-                  <img id="image-preview" src="\${productCoverImage}" alt="Preview" style="width: 100%; max-height: 200px; object-fit: contain; background: #fff;">
-                  <button type="button" onclick="removeUploadedImage()" class="remove-preview-btn" style="position: absolute; top: 10px; right: 10px; width: 30px; height: 30px; border-radius: 50%; border: none; background: rgba(0,0,0,0.6); color: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer; font-weight: bold; font-size: 0.8rem; transition: background 0.2s;">✕</button>
+                  \${productCoverImage ? \`
+                    <div style="position: relative; display: inline-block; max-width: 100%;">
+                      <img src="\${productCoverImage}" alt="Preview" style="display: block; max-width: 100%; max-height: 200px; object-fit: contain; background: #fff; border-radius: 10px;">
+                      <button type="button" onclick="event.stopPropagation(); removeUploadedImage()" class="remove-preview-btn" style="position: absolute; top: 8px; right: 8px; width: 30px; height: 30px; border-radius: 50%; border: none; background: rgba(0,0,0,0.6); color: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer; font-weight: bold; font-size: 0.8rem; transition: background 0.2s;">✕</button>
+                    </div>
+                  \` : \`
+                    <span class="upload-icon" style="font-size: 1.8rem; display: block; margin-bottom: 6px;">📷</span>
+                    <span class="upload-text" style="font-size: 0.85rem; color: var(--mid-brown); font-weight: 600;">คลิกเพื่อเลือกไฟล์รูปภาพหน้าปก</span>
+                  \`}
                 </div>
               </div>
             </div>
@@ -1362,15 +1364,18 @@ export function ProductStudioPage({ forceManageMode = false, initialProductType 
 
         const isLast = current === steps.length - 1;
         const isFirst = isDirectType ? true : current === 0;
+        const actionLabel = isLast
+          ? (editingProductId ? 'บันทึก' : 'สร้างสินค้า')
+          : 'ถัดไป';
 
         if (btnPrev) btnPrev.style.visibility = isFirst ? 'hidden' : 'visible';
         const nextBtnEl = document.getElementById('btn-next-step');
         if (nextBtnEl) {
-          nextBtnEl.innerHTML = isLast ? 'สร้างสินค้า' : 'ถัดไป';
+          nextBtnEl.innerHTML = actionLabel;
         }
         if (stickyPrev) stickyPrev.style.visibility = isFirst ? 'hidden' : 'visible';
         if (stickyNext) {
-          stickyNext.innerHTML = isLast ? 'สร้างสินค้า' : 'ถัดไป';
+          stickyNext.innerHTML = actionLabel;
         }
       }
 
@@ -2418,9 +2423,6 @@ export function ProductStudioPage({ forceManageMode = false, initialProductType 
 
           <!-- Sticky Bottom Mobile Bar -->
           <div class="sticky-bottom" id="sticky-bottom">
-            <div class="sticky-price">
-              <span id="sticky-price-val">0</span><small>฿</small>
-            </div>
             <div class="sticky-btn-row">
               <button class="sticky-prev" id="sticky-prev-btn" onclick="prevStep()">←</button>
               <button class="sticky-next" id="sticky-next-btn" onclick="nextStep()">ถัดไป</button>

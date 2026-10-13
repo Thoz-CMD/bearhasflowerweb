@@ -858,6 +858,17 @@ body::before {
   cursor: pointer;
 }
 
+@media (max-width: 600px) {
+  .badge-choice {
+    font-size: 0.64rem !important;
+  }
+
+  #ipt-prod-name,
+  #ipt-prod-desc {
+    font-size: 14px !important;
+  }
+}
+
 .range-min {
   z-index: 2;
 }
@@ -2778,6 +2789,7 @@ body::before {
 .sticky-btn-row {
   display: flex;
   gap: 10px;
+  margin-left: auto;
 }
 
 .sticky-prev {
@@ -3156,6 +3168,27 @@ body::before {
 .ribbon-variant-option:hover,
 .ribbon-variant-option.selected {
   background: #fff4f7;
+}
+
+@media (max-width: 600px) {
+  #decor-paid-grid .color-card:nth-child(3n + 1) .ribbon-variant-menu {
+    left: 0;
+    transform: translate(0, -8px);
+  }
+
+  #decor-paid-grid .color-card:nth-child(3n + 1) .ribbon-variant-dropdown.open .ribbon-variant-menu {
+    transform: translate(0, 0);
+  }
+
+  #decor-paid-grid .color-card:nth-child(3n) .ribbon-variant-menu {
+    left: auto;
+    right: 0;
+    transform: translate(0, -8px);
+  }
+
+  #decor-paid-grid .color-card:nth-child(3n) .ribbon-variant-dropdown.open .ribbon-variant-menu {
+    transform: translate(0, 0);
+  }
 }
 
 /* ===== Form Inputs ===== */
