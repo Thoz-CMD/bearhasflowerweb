@@ -4,7 +4,6 @@ import { useRouter } from 'next/navigation';
 import { usePresetProduct } from '@/hooks/usePresetProduct';
 import { ToastProvider, useToast } from '@/components/Toast';
 import dynamic from 'next/dynamic';
-import GreetingCardAI from '@/components/GreetingCardAI';
 import { getMinDateTimeFromBadge, buildDeliveryHelperText, getDeliveryAdvanceWarningText, getMinDeliveryTime } from '@/components/DateTimePicker';
 import StoreClosedNotice from '@/components/StoreClosedNotice';
 import { useStoreHours } from '@/hooks/useStoreHours';
@@ -158,7 +157,7 @@ interface GlitterState {
   selectedMessageCardVariant: string | null;
   basePrice: number;
   customerName: string;
-  customerPhone: string;
+  customerLineId: string;
   customerAddress: string;
   deliveryDate: string;
   deliveryTime: string;
@@ -179,7 +178,7 @@ const initialState: GlitterState = {
   selectedMessageCardVariant: null,
   basePrice: 0,
   customerName: '',
-  customerPhone: '',
+  customerLineId: '',
   customerAddress: '',
   deliveryDate: '',
   deliveryTime: '',
@@ -556,7 +555,7 @@ function GlitterRoseContent() {
       }
     } else if (state.current === 4) {
       const minDelivery = getTodayStr();
-      if (!state.customerName.trim() || !state.customerPhone.trim() || !state.customerAddress.trim() || !state.deliveryDate || !state.deliveryTime) {
+      if (!state.customerName.trim() || !state.customerLineId.trim() || !state.customerAddress.trim() || !state.deliveryDate || !state.deliveryTime) {
         showToast('กรุณากรอกข้อมูลที่จำเป็นให้ครบถ้วน');
         return;
       }
@@ -1093,12 +1092,12 @@ function GlitterRoseContent() {
               <div style={{ width: '100%', marginTop: '20px' }}>
                 <div className="form-group">
                   <label>ชื่อผู้รับ <span style={{ color: '#e53935' }}>*</span></label>
-                  <input type="text" id="ipt-name" placeholder="ชื่อเล่นหรือนามแฝง" value={state.customerName} onChange={e => updateField('customerName', e.target.value)} style={{ fontSize: '16px' }} />
+                  <input type="text" id="ipt-name" placeholder="ชื่อ" value={state.customerName} onChange={e => updateField('customerName', e.target.value)} style={{ fontSize: '16px' }} />
                 </div>
                 
                 <div className="form-group">
-                  <label>เบอร์โทรติดต่อ <span style={{ color: '#e53935' }}>*</span></label>
-                  <input type="tel" id="ipt-phone" placeholder="06X-XXX-XXXX" value={state.customerPhone} onChange={e => updateField('customerPhone', e.target.value)} style={{ fontSize: '16px' }} />
+                  <label>ไอดีไลน์ <span style={{ color: '#e53935' }}>*</span></label>
+                  <input type="text" id="ipt-line-id" placeholder="กรอกไอดีไลน์สำหรับติดต่อ" value={state.customerLineId} onChange={e => updateField('customerLineId', e.target.value)} style={{ fontSize: '16px' }} />
                 </div>
                 
                 <div className="form-group">
@@ -1156,13 +1155,6 @@ function GlitterRoseContent() {
                 <div className="form-group">
                   <label>รายละเอียดเพิ่มเติม (ถ้ามี)</label>
                   <textarea id="ipt-note" placeholder="เช่น ฝากเขียนการ์ด เขียนว่า..." value={state.additionalNote} onChange={e => updateField('additionalNote', e.target.value)} style={{ fontSize: '16px' }}></textarea>
-                  <div style={{ marginTop: '16px' }}>
-                    <GreetingCardAI onSelect={(text) => {
-                      const currentNote = state.additionalNote.trim();
-                      const newNote = currentNote ? currentNote + '\n\n' + text : text;
-                      updateField('additionalNote', newNote);
-                    }} />
-                  </div>
                 </div>
               </div>
             </div>

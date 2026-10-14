@@ -101,7 +101,9 @@ export default async function HomePage() {
       const name = String(p.name || '').toLowerCase();
       const description = String(p.description || '').toLowerCase();
       let productType = 'all';
-      if (p.type === 'velvet_flower' || name.includes('กำมะหยี่') || description.includes('กำมะหยี่')) {
+      if (p.type === 'Money_Bouquet' || p.productType === 'Money_Bouquet' || p.category === 'money_bouquet' || name.includes('ธนบัตร') || description.includes('ธนบัตร')) {
+        productType = 'money_bouquet';
+      } else if (p.type === 'velvet_flower' || name.includes('กำมะหยี่') || description.includes('กำมะหยี่')) {
         productType = 'velvet';
       } else if (p.type === 'glitter_rose' || name.includes('กลิตเตอร์') || description.includes('กลิตเตอร์')) {
         productType = 'glitter';
@@ -111,7 +113,7 @@ export default async function HomePage() {
 
       const isVelvet = productType === 'velvet';
       const isArtificial = p.type === 'artificial_flowers';
-      const targetUrl = isArtificial ? '/artificial_flowers?preset=' + p.id : (isVelvet ? '/velvet_wire?preset=' + p.id : '/glitter_rose?preset=' + p.id);
+      const targetUrl = productType === 'money_bouquet' ? '/money_bouquet?preset=' + p.id : (isArtificial ? '/artificial_flowers?preset=' + p.id : (isVelvet ? '/velvet_wire?preset=' + p.id : '/glitter_rose?preset=' + p.id));
       
       const isReadyToShip = Boolean(p.readyToShip);
       const stockQuantity = Number(p.stockQuantity || 0);

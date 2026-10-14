@@ -256,7 +256,7 @@ function AdminPageContent() {
   const [coCoverImage, setCoCoverImage] = useState<string>(''); // Base64 cover image
   const [coPrice, setCoPrice] = useState<string>('');
   const [coCustomerName, setCoCustomerName] = useState<string>('');
-  const [coCustomerPhone, setCoCustomerPhone] = useState<string>('');
+  const [coCustomerLineId, setCoCustomerLineId] = useState<string>('');
   const [coCustomerAddress, setCoCustomerAddress] = useState<string>('');
   const [coDeliveryDate, setCoDeliveryDate] = useState<string>('');
   const [coDeliveryTime, setCoDeliveryTime] = useState<string>('');
@@ -359,7 +359,7 @@ function AdminPageContent() {
               selectedShape: coShape,
               selectedDecorations: coDecorations,
               customerName: coCustomerName.trim(),
-              customerPhone: coCustomerPhone.trim(),
+              customerLineId: coCustomerLineId.trim(),
               customerAddress: coCustomerAddress.trim(),
               deliveryDate: coDeliveryDate,
               deliveryTime: coDeliveryTime,
@@ -388,7 +388,7 @@ function AdminPageContent() {
       setCoCoverImage('');
       setCoPrice('');
       setCoCustomerName('');
-      setCoCustomerPhone('');
+      setCoCustomerLineId('');
       setCoCustomerAddress('');
       setCoDeliveryDate('');
       setCoDeliveryTime('');
@@ -5635,7 +5635,7 @@ function AdminPageContent() {
                     const customItem = order.items?.find((i: any) => i.config) || order.items?.[0];
                     const primaryItem = order.items?.[0];
                     const customerName = customItem?.config?.customerName || 'ไม่ระบุ';
-                    const customerPhone = customItem?.config?.customerPhone || '-';
+                    const customerLineId = customItem?.config?.customerLineId || customItem?.config?.customerPhone || '-';
                     const deliveryDate = customItem?.config?.deliveryDate || formatOrderDate(order.createdAt);
                     const deliveryTime = customItem?.config?.deliveryTime ? `${customItem.config.deliveryTime} น.` : 'ไม่ระบุเวลา';
                     const customerAddress = customItem?.config?.customerAddress || 'จัดส่งตามที่อยู่ร้าน / หรือระบุทีหลัง';
@@ -5673,7 +5673,7 @@ function AdminPageContent() {
 
                           <div className="order-middle-meta">
                             <span className="order-customer">{customerName}</span>
-                            <span className="order-phone">{customerPhone}</span>
+                            <span className="order-phone">LINE: {customerLineId}</span>
                           </div>
 
                           <div className="order-delivery-meta">
@@ -6634,7 +6634,7 @@ function AdminPageContent() {
                     const deliveryDate = cfg?.deliveryDate || '';
                     const deliveryTime = cfg?.deliveryTime ? `${cfg.deliveryTime} น.` : 'ไม่ระบุเวลา';
                     const customerName = cfg?.customerName || 'ไม่ระบุ';
-                    const customerPhone = cfg?.customerPhone || 'ไม่ระบุเบอร์';
+                    const customerLineId = cfg?.customerLineId || cfg?.customerPhone || 'ไม่ระบุไอดีไลน์';
                     const customerAddress = cfg?.customerAddress || 'จัดส่งตามที่อยู่ร้าน / หรือระบุทีหลัง';
                     const additionalNote = cfg?.additionalNote?.trim?.() || '';
                     const hasSpecDetails = Boolean(layersTrans || paperTrans || shapeTrans || decorationsTrans || cfg?.customerName || cfg?.deliveryDate || cfg?.additionalNote);
@@ -6711,7 +6711,7 @@ function AdminPageContent() {
                               <div className="florist-detail-card">
                                 <div className="detail-group-title">📍 ข้อมูลการจัดส่ง</div>
                                 <ul className="detail-item-list">
-                                  <li>ผู้รับ: {customerName} ({customerPhone})</li>
+                                  <li>ผู้รับ: {customerName} (LINE: {customerLineId})</li>
                                   <li>ที่อยู่: {customerAddress}</li>
                                   {deliveryDate && <li>ส่ง: {deliveryDate} ({deliveryTime})</li>}
                                   {additionalNote && <li style={{ color: '#db8a9e', fontWeight: 700 }}>โน้ต: "{additionalNote}"</li>}

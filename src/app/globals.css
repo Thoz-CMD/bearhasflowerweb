@@ -1770,22 +1770,24 @@ body::before {
   }
 
   .section-two-content {
-    grid-template-columns: 1fr;
-    gap: 16px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
   }
 
   .category-card {
-    aspect-ratio: 16/9;
-    border-radius: 18px;
+    aspect-ratio: 4/3;
+    border-radius: 14px;
   }
 
 
   .cat-overlay {
-    padding: 20px;
+    padding: 12px;
   }
 
   .cat-title {
-    font-size: 1.8rem;
+    font-size: clamp(1rem, 4.8vw, 1.35rem);
+    line-height: 1.1;
+    letter-spacing: 0;
   }
 
   .product-grid {
@@ -2041,6 +2043,22 @@ body::before {
 
   .section-two {
     padding: 18px 14px 40px;
+  }
+
+  .section-two-content {
+    gap: 10px;
+  }
+
+  .category-card {
+    border-radius: 12px;
+  }
+
+  .cat-overlay {
+    padding: 10px;
+  }
+
+  .cat-title {
+    font-size: clamp(.92rem, 4.6vw, 1.15rem);
   }
 
   .product-filter-shell {

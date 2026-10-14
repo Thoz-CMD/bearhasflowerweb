@@ -44,7 +44,7 @@ export async function POST(req: Request) {
     const firstItem = orderData.items?.[0];
     const config = firstItem?.config || {};
     const customerName = config.customerName || orderData.customerName || '';
-    const customerPhone = config.customerPhone || orderData.customerPhone || '';
+    const customerLineId = config.customerLineId || config.customerPhone || orderData.customerLineId || orderData.customerPhone || '';
     const customerAddress = config.customerAddress || orderData.customerAddress || '';
     const deliveryDate = config.deliveryDate || orderData.deliveryDate || '';
     const deliveryTime = config.deliveryTime || orderData.deliveryTime || '';
@@ -134,14 +134,14 @@ export async function POST(req: Request) {
       });
     }
 
-    if (customerPhone) {
+    if (customerLineId) {
       customerInfoContents.push({
         type: "box",
         layout: "horizontal",
         margin: "sm",
         contents: [
-          { type: "text", text: "📞 เบอร์โทร", size: "xs", color: "#880E4F", flex: 2 },
-          { type: "text", text: customerPhone, size: "xs", color: "#5c4738", flex: 3, align: "end" }
+          { type: "text", text: "LINE ID", size: "xs", color: "#880E4F", flex: 2 },
+          { type: "text", text: customerLineId, size: "xs", color: "#5c4738", flex: 3, align: "end" }
         ]
       });
     }

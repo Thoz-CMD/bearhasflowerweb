@@ -10,7 +10,7 @@ type ProductStudioPageProps = {
   initialProductType?: ProductStudioType;
 };
 
-type ProductStudioType = 'glitter_rose' | 'velvet_flower' | 'artificial_flowers' | 'Design_flower' | 'design_flower';
+type ProductStudioType = 'glitter_rose' | 'velvet_flower' | 'artificial_flowers' | 'Money_Bouquet' | 'Design_flower' | 'design_flower';
 
 export function ProductStudioPage({ forceManageMode = false, initialProductType }: ProductStudioPageProps) {
   const EDIT_KEY = 'bear_flower_edit_product';
@@ -29,6 +29,15 @@ export function ProductStudioPage({ forceManageMode = false, initialProductType 
       .filter(Boolean)
       .join(' ')
       .toLowerCase();
+
+    if (
+      product.type === 'Money_Bouquet' ||
+      product.productType === 'Money_Bouquet' ||
+      product.category === 'money_bouquet' ||
+      searchableText.includes('ธนบัตร')
+    ) {
+      return 'Money_Bouquet';
+    }
 
     if (
       product.id === 'UkaRyv67YDnCfTkud7EE' ||
@@ -76,8 +85,8 @@ export function ProductStudioPage({ forceManageMode = false, initialProductType 
     const isEditQuery = params.get('edit') === 'true';
     if (!isEditQuery) return null;
 
-    if (queryType === 'velvet_flower' || queryType === 'glitter_rose' || queryType === 'artificial_flowers' || queryType === 'Design_flower' || queryType === 'design_flower') return queryType as ProductStudioType;
-    if (storedType === 'velvet_flower' || storedType === 'glitter_rose' || storedType === 'artificial_flowers' || storedType === 'Design_flower' || storedType === 'design_flower') return storedType as ProductStudioType;
+    if (queryType === 'velvet_flower' || queryType === 'glitter_rose' || queryType === 'artificial_flowers' || queryType === 'Money_Bouquet' || queryType === 'Design_flower' || queryType === 'design_flower') return queryType as ProductStudioType;
+    if (storedType === 'velvet_flower' || storedType === 'glitter_rose' || storedType === 'artificial_flowers' || storedType === 'Money_Bouquet' || storedType === 'Design_flower' || storedType === 'design_flower') return storedType as ProductStudioType;
 
     if (editRaw) {
       try {
@@ -324,7 +333,7 @@ export function ProductStudioPage({ forceManageMode = false, initialProductType 
 
   // Main interactive logic is loaded when option is selected
   useEffect(() => {
-    const isValidType = selectedType === 'glitter_rose' || selectedType === 'velvet_flower' || selectedType === 'artificial_flowers' || selectedType === 'Design_flower' || selectedType === 'design_flower';
+    const isValidType = selectedType === 'glitter_rose' || selectedType === 'velvet_flower' || selectedType === 'artificial_flowers' || selectedType === 'Money_Bouquet' || selectedType === 'Design_flower' || selectedType === 'design_flower';
     if (isAdminUser !== true || !isValidType || viewMode !== 'form') return;
 
     const script = document.createElement('script');
@@ -567,7 +576,7 @@ export function ProductStudioPage({ forceManageMode = false, initialProductType 
             selectedRibbonJfySolidVariant = cfg.selectedRibbonJfySolidVariant || null;
             selectedMessageCardVariant = cfg.selectedMessageCardVariant || null;
             basePrice = cfg.basePrice || 0;
-            const isDirectType = PRODUCT_TYPE === 'velvet_flower' || PRODUCT_TYPE === 'artificial_flowers' || PRODUCT_TYPE === 'Design_flower' || PRODUCT_TYPE === 'design_flower';
+            const isDirectType = PRODUCT_TYPE === 'velvet_flower' || PRODUCT_TYPE === 'artificial_flowers' || PRODUCT_TYPE === 'Money_Bouquet' || PRODUCT_TYPE === 'Design_flower' || PRODUCT_TYPE === 'design_flower';
             current = isDirectType ? 4 : 0;
             maxStepReached = isDirectType ? 4 : 4;
             saveState();
@@ -622,7 +631,7 @@ export function ProductStudioPage({ forceManageMode = false, initialProductType 
       }
 
       function resetForm() {
-        const isDirectType = PRODUCT_TYPE === 'velvet_flower' || PRODUCT_TYPE === 'artificial_flowers' || PRODUCT_TYPE === 'Design_flower' || PRODUCT_TYPE === 'design_flower';
+        const isDirectType = PRODUCT_TYPE === 'velvet_flower' || PRODUCT_TYPE === 'artificial_flowers' || PRODUCT_TYPE === 'Money_Bouquet' || PRODUCT_TYPE === 'Design_flower' || PRODUCT_TYPE === 'design_flower';
         current = isDirectType ? 4 : 0;
         maxStepReached = isDirectType ? 4 : 0;
         selectedQty = null;
@@ -1342,7 +1351,7 @@ export function ProductStudioPage({ forceManageMode = false, initialProductType 
       }
 
       function updateUI() {
-        const isDirectType = PRODUCT_TYPE === 'velvet_flower' || PRODUCT_TYPE === 'artificial_flowers' || PRODUCT_TYPE === 'Design_flower' || PRODUCT_TYPE === 'design_flower';
+        const isDirectType = PRODUCT_TYPE === 'velvet_flower' || PRODUCT_TYPE === 'artificial_flowers' || PRODUCT_TYPE === 'Money_Bouquet' || PRODUCT_TYPE === 'Design_flower' || PRODUCT_TYPE === 'design_flower';
         stepEls.forEach((el, i) => {
           el.classList.remove('active', 'done');
           if (isDirectType) {
@@ -1380,7 +1389,7 @@ export function ProductStudioPage({ forceManageMode = false, initialProductType 
       }
 
       window.nextStep = function() {
-        const isDirectType = PRODUCT_TYPE === 'velvet_flower' || PRODUCT_TYPE === 'artificial_flowers' || PRODUCT_TYPE === 'Design_flower' || PRODUCT_TYPE === 'design_flower';
+        const isDirectType = PRODUCT_TYPE === 'velvet_flower' || PRODUCT_TYPE === 'artificial_flowers' || PRODUCT_TYPE === 'Money_Bouquet' || PRODUCT_TYPE === 'Design_flower' || PRODUCT_TYPE === 'design_flower';
         if (isDirectType) {
           if (current === 4) {
             if (!productName.trim() || !productPrice.trim() || !productCoverImage) {
@@ -1476,7 +1485,7 @@ export function ProductStudioPage({ forceManageMode = false, initialProductType 
       }
 
       window.prevStep = function() {
-        const isDirectType = PRODUCT_TYPE === 'velvet_flower' || PRODUCT_TYPE === 'artificial_flowers' || PRODUCT_TYPE === 'Design_flower' || PRODUCT_TYPE === 'design_flower';
+        const isDirectType = PRODUCT_TYPE === 'velvet_flower' || PRODUCT_TYPE === 'artificial_flowers' || PRODUCT_TYPE === 'Money_Bouquet' || PRODUCT_TYPE === 'Design_flower' || PRODUCT_TYPE === 'design_flower';
         if (isDirectType) {
           return;
         }
@@ -1520,13 +1529,14 @@ export function ProductStudioPage({ forceManageMode = false, initialProductType 
               isReference ? 'ช่อดอกไม้สั่งทำพิเศษตามแบบ Reference' :
               PRODUCT_TYPE === 'velvet_flower' ? 'ดอกไม้ลวดกำมะหยี่สั่งทำพิเศษตามแบบ' :
               PRODUCT_TYPE === 'artificial_flowers' ? 'ดอกไม้ประดิษฐ์สั่งทำพิเศษตามแบบ' :
+              PRODUCT_TYPE === 'Money_Bouquet' ? 'ดอกไม้ธนบัตรสั่งทำพิเศษตามแบบ' :
               'ช่อกุหลาบกลิตเตอร์สั่งทำพิเศษตามแบบ'
             ),
             price: parseFloat(productPrice),
             badge: getResolvedProductBadge(),
             coverImage,
             type: PRODUCT_TYPE,
-            category: isReference ? 'reference' : (PRODUCT_TYPE === 'velvet_flower' ? 'velvet' : PRODUCT_TYPE === 'artificial_flowers' ? 'artificial' : 'glitter'),
+            category: isReference ? 'reference' : (PRODUCT_TYPE === 'velvet_flower' ? 'velvet' : PRODUCT_TYPE === 'artificial_flowers' ? 'artificial' : PRODUCT_TYPE === 'Money_Bouquet' ? 'money_bouquet' : 'glitter'),
             isReference: isReference,
             hideFromHome: isReference,
             readyToShip: productReadyToShip,
@@ -1698,6 +1708,7 @@ export function ProductStudioPage({ forceManageMode = false, initialProductType 
       glitter_rose: '/glitter_rose',
       velvet_flower: '/velvet_wire',
       artificial_flowers: '/artificial_flowers',
+      Money_Bouquet: '/money_bouquet',
       Design_flower: '/artificial_flowers',
       design_flower: '/artificial_flowers',
     };
@@ -1747,6 +1758,7 @@ export function ProductStudioPage({ forceManageMode = false, initialProductType 
     localStorage.removeItem('bear_flower_create_prod_glitter_rose');
     localStorage.removeItem('bear_flower_create_prod_velvet_flower');
     localStorage.removeItem('bear_flower_create_prod_artificial_flowers');
+    localStorage.removeItem('bear_flower_create_prod_Money_Bouquet');
     localStorage.removeItem('bear_flower_create_prod_Design_flower');
     window.location.assign(`/admin/create-product/${productType}?edit=true`);
   };

@@ -347,6 +347,13 @@ export default function ClientPage({ initialProductHtml }: { initialProductHtml?
       const getProductTypeKey = (product: any) => {
         const name = String(product?.name || '').toLowerCase();
         const description = String(product?.description || '').toLowerCase();
+        const isMoneyBouquet = product.type === 'Money_Bouquet'
+          || product.productType === 'Money_Bouquet'
+          || product.category === 'money_bouquet'
+          || name.includes('ธนบัตร')
+          || description.includes('ธนบัตร');
+        if (isMoneyBouquet) return 'money_bouquet';
+
         const isVelvet = product.type === 'velvet_flower'
           || name.includes('กำมะหยี่')
           || description.includes('กำมะหยี่');
@@ -618,7 +625,12 @@ export default function ClientPage({ initialProductHtml }: { initialProductHtml?
           const isArtificial = p.type === 'artificial_flowers'
             || p.type === 'artificial_flower'
             || p.Artificial_flowers === true;
-          const targetUrl = isArtificial ? '/artificial_flowers?preset=' + p.id : (isVelvet ? '/velvet_wire?preset=' + p.id : '/glitter_rose?preset=' + p.id);
+          const isMoneyBouquet = p.type === 'Money_Bouquet'
+            || p.productType === 'Money_Bouquet'
+            || p.category === 'money_bouquet'
+            || String(p.name || '').includes('ธนบัตร')
+            || String(p.description || '').includes('ธนบัตร');
+          const targetUrl = isMoneyBouquet ? '/money_bouquet?preset=' + p.id : (isArtificial ? '/artificial_flowers?preset=' + p.id : (isVelvet ? '/velvet_wire?preset=' + p.id : '/glitter_rose?preset=' + p.id));
           const isReadyToShip = Boolean(p.readyToShip);
           const stockQuantity = Number(p.stockQuantity || 0);
           const hasReadyStock = isReadyToShip && stockQuantity > 0;
@@ -793,6 +805,7 @@ export default function ClientPage({ initialProductHtml }: { initialProductHtml?
       (window as any).applyProductFilters = applyProductFilters;
       const isArtificialProduct = (product: any) => {
         const productType = product._productType || getProductTypeKey(product);
+        if (productType === 'money_bouquet') return false;
         if (productType === 'artificial') return true;
         const name = String(product?.name || '').toLowerCase();
         const description = String(product?.description || '').toLowerCase();
@@ -803,7 +816,7 @@ export default function ClientPage({ initialProductHtml }: { initialProductHtml?
       };
 
       (window as any).filterProducts = function (type: string) {
-        const valid = ['velvet', 'glitter', 'artificial'];
+        const valid = ['velvet', 'glitter', 'artificial', 'money_bouquet'];
         if (!valid.includes(type)) {
           productState.filters.type = 'all';
         } else {
@@ -1515,7 +1528,7 @@ export default function ClientPage({ initialProductHtml }: { initialProductHtml?
         </div>
       </div>
 
-      <div class="category-card fade-in" id="cat-reference" style="animation-delay:.3s; cursor: pointer;">
+      <div class="category-card fade-in" id="cat-reference" onclick="filterProducts('money_bouquet')" style="animation-delay:.3s; cursor: pointer;">
         <div class="cat-bg cat-bg-reference"></div>
         <div class="cat-deco"></div>
         <div class="cat-overlay">

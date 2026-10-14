@@ -3,7 +3,6 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { usePresetProduct } from '@/hooks/usePresetProduct';
 import { ToastProvider, useToast } from '@/components/Toast';
-import GreetingCardAI from '@/components/GreetingCardAI';
 import dynamic from 'next/dynamic';
 import { getMinDateTimeFromBadge, buildDeliveryHelperText, getDeliveryAdvanceWarningText, getMinDeliveryTime } from '@/components/DateTimePicker';
 import StoreClosedNotice from '@/components/StoreClosedNotice';
@@ -28,7 +27,7 @@ const MESSAGE_CARD_VARIANTS = [
 
 interface ArtificialState {
   customerName: string;
-  customerPhone: string;
+  customerLineId: string;
   customerAddress: string;
   deliveryDate: string;
   deliveryTime: string;
@@ -43,7 +42,7 @@ interface ArtificialState {
 
 const initialState: ArtificialState = {
   customerName: '',
-  customerPhone: '',
+  customerLineId: '',
   customerAddress: '',
   deliveryDate: '',
   deliveryTime: '',
@@ -91,7 +90,7 @@ function ArtificialFlowersContent() {
         const s = JSON.parse(saved);
         setState({
           customerName: s.customerName || '',
-          customerPhone: s.customerPhone || '',
+          customerLineId: s.customerLineId || s.customerPhone || '',
           customerAddress: s.customerAddress || '',
           deliveryDate: s.deliveryDate || '',
           deliveryTime: s.deliveryTime || '',
@@ -248,7 +247,7 @@ function ArtificialFlowersContent() {
     }
     if (
       !state.customerName.trim() ||
-      !state.customerPhone.trim() ||
+      !state.customerLineId.trim() ||
       !state.customerAddress.trim() ||
       !state.deliveryDate ||
       !state.deliveryTime
@@ -293,7 +292,7 @@ function ArtificialFlowersContent() {
       stockQuantity: Number(presetProduct.stockQuantity || 0),
       config: {
         customerName: state.customerName,
-        customerPhone: state.customerPhone,
+        customerLineId: state.customerLineId,
         customerAddress: state.customerAddress,
         deliveryDate: state.deliveryDate,
         deliveryTime: state.deliveryTime,
@@ -498,7 +497,7 @@ function ArtificialFlowersContent() {
               <input
                 type="text"
                 id="ipt-name"
-                placeholder="ชื่อ-นามสกุล"
+                placeholder="ชื่อ"
                 value={state.customerName}
                 onChange={e => updateField('customerName', e.target.value)}
                 style={{ fontSize: '16px' }}
@@ -506,13 +505,13 @@ function ArtificialFlowersContent() {
             </div>
 
             <div className="form-group">
-              <label>เบอร์โทรติดต่อ <span style={{ color: '#e53935' }}>*</span></label>
+              <label>ไอดีไลน์ <span style={{ color: '#e53935' }}>*</span></label>
               <input
                 type="tel"
-                id="ipt-phone"
-                placeholder="06X-XXX-XXXX"
-                value={state.customerPhone}
-                onChange={e => updateField('customerPhone', e.target.value)}
+                id="ipt-line-id"
+                placeholder="กรอกไอดีไลน์สำหรับติดต่อ"
+                value={state.customerLineId}
+                onChange={e => updateField('customerLineId', e.target.value)}
                 style={{ fontSize: '16px' }}
               />
             </div>
@@ -687,7 +686,6 @@ function ArtificialFlowersContent() {
                 onChange={e => updateField('additionalNote', e.target.value)}
                 style={{ fontSize: '16px' }}
               />
-              <GreetingCardAI onSelect={(text) => updateField('additionalNote', text)} />
             </div>
           </div>
         </div>

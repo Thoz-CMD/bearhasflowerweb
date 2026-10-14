@@ -166,7 +166,7 @@ const renderDesktopConfig = (item: any) => {
           <div>
             <div className="config-group-title">ข้อมูลการจัดส่ง</div>
             <ul className="config-item-list">
-              {config.customerName && <li>ผู้รับ: {config.customerName} ({config.customerPhone || 'ไม่ระบุเบอร์'})</li>}
+              {config.customerName && <li>ผู้รับ: {config.customerName} (LINE: {config.customerLineId || config.customerPhone || 'ไม่ระบุไอดีไลน์'})</li>}
               {config.customerAddress && <li>ที่อยู่: {config.customerAddress}</li>}
               {config.deliveryDate && <li>ส่ง: {config.deliveryDate} ({config.deliveryTime || 'ไม่ระบุเวลา'})</li>}
               {config.additionalNote && <li>โน๊ต: "{config.additionalNote}"</li>}
@@ -210,7 +210,7 @@ const renderDesktopConfig = (item: any) => {
         <div>
           <div className="config-group-title">ข้อมูลการจัดส่ง</div>
           <ul className="config-item-list">
-            {config.customerName && <li>ผู้รับ: {config.customerName} ({config.customerPhone || 'ไม่ระบุเบอร์'})</li>}
+              {config.customerName && <li>ผู้รับ: {config.customerName} (LINE: {config.customerLineId || config.customerPhone || 'ไม่ระบุไอดีไลน์'})</li>}
             {config.customerAddress && <li>ที่อยู่: {config.customerAddress}</li>}
             {config.deliveryDate && <li>ส่ง: {config.deliveryDate} ({config.deliveryTime || 'ไม่ระบุเวลา'})</li>}
             {config.additionalNote && <li>โน๊ต: "{config.additionalNote}"</li>}
@@ -996,7 +996,7 @@ export default function CartPage() {
                                     <div>
                                       <div className="mobile-detail-group-title">การจัดส่ง</div>
                                       <ul className="mobile-detail-list">
-                                        {cfg.customerName && <li>ผู้รับ: {cfg.customerName} ({cfg.customerPhone || 'ไม่ระบุเบอร์'})</li>}
+                                        {cfg.customerName && <li>ผู้รับ: {cfg.customerName} (LINE: {cfg.customerLineId || cfg.customerPhone || 'ไม่ระบุไอดีไลน์'})</li>}
                                         {cfg.customerAddress && <li>ที่อยู่: {cfg.customerAddress}</li>}
                                         {cfg.deliveryDate && <li>ส่ง: {cfg.deliveryDate} ({cfg.deliveryTime || 'ไม่ระบุเวลา'})</li>}
                                         {cfg.additionalNote && <li>โน๊ต: "{cfg.additionalNote}"</li>}
